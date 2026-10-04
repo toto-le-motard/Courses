@@ -1,6 +1,6 @@
 // sw.js — service worker de l'Appli Courses.
 // À CHAQUE PUBLICATION : augmenter CACHE_VERSION (DoD1).
-const CACHE_VERSION = 'v3';
+const CACHE_VERSION = 'v4';
 const CACHE_NAME = 'appli-courses-' + CACHE_VERSION;
 
 // Tout fichier ajouté au projet doit être inscrit ici (DoD1). Chemins relatifs.
@@ -9,14 +9,25 @@ const FICHIERS = [
   'index.html',
   'styles.css',
   'app.js',
+  'db.js',
   'manifest.webmanifest',
   'icon-192.png',
   'icon-512.png'
 ];
 
+// Polices : pré-cachées si le fichier est déposé ; leur absence ne bloque pas l'installation.
+const FICHIERS_OPTIONNELS = [
+  'bricolage-grotesque.woff2',
+  'dm-sans.woff2'
+];
+
 self.addEventListener('install', (event) => {
   // Pas de skipWaiting : la nouvelle version s'active au lancement suivant.
-  event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(FICHIERS)));
+  event.waitUntil((async () => {
+    const cache = await caches.open(CACHE_NAME);
+    await cache.addAll(FICHIERS);
+    await Promise.all(FICHIERS_OPTIONNELS.map((f) => cache.add(f).catch(() => {})));
+  })());
 });
 
 self.addEventListener('activate', (event) => {
