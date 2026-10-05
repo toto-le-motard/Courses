@@ -10,7 +10,7 @@ import { extname, join } from 'node:path';
 const lignes = [];
 let echecs = 0;
 function ok(msg) { lignes.push('OK     ' + msg); }
-function ko(msg) { lignes.push('ECHEC  ' + msg); echecs++; }
+function ko(msg) { lignes.push('ECHEC  ' + msg); echecs++; console.log('::error title=Vérification::' + String(msg).replace(/\n/g, ' ')); }
 function info(msg) { lignes.push('INFO   ' + msg); }
 
 const racine = process.cwd();
@@ -122,6 +122,78 @@ if (playwright) {
       await page.waitForFunction(() => /ouverte/.test(document.getElementById('vue').textContent), null, { timeout: 8000 });
       const diag = await page.evaluate(() => document.getElementById('vue').textContent);
       ok('base IndexedDB ouverte (' + (diag.match(/Lancements enregistrés : (\d+)/) || [])[0] + ')');
+
+      // ---- Épic E2 : catalogue de types de produits (FR1, FR2) ----
+      const aller = async (h) => { await page.evaluate((x) => { location.hash = x; }, h); };
+      await aller('#/magasin');
+      await page.waitForFunction(() => /Ajouter mon premier type/.test(document.getElementById('vue').textContent), null, { timeout: 8000 });
+      ok('E2 premier lancement : bouton « Ajouter mon premier type »');
+      const creer = async (nomType, unite) => {
+        await aller('#/type-nouveau');
+        await page.waitForSelector('#champ-nom');
+        await page.fill('#champ-nom', nomType);
+        await page.click('.segment[data-unite="' + unite + '"]');
+        await page.click('button[type="submit"]');
+      };
+      await creer('Café moulu', 'kg');
+      await page.waitForFunction(() => location.hash === '#/types' && /Café moulu/.test(document.getElementById('vue').textContent), null, { timeout: 5000 });
+      ok('E2 création d\u2019un type et affichage dans la liste');
+      await creer('cafe  MOULU', 'kg');
+      await page.waitForFunction(() => /porte déjà ce nom/.test(document.querySelector('.erreur')?.textContent || ''), null, { timeout: 5000 });
+      ok('E2 nom en double refusé (casse, accents et espaces ignorés)');
+      await creer('Lessive liquide', 'l');
+      await page.waitForFunction(() => location.hash === '#/types' && /Lessive liquide/.test(document.getElementById('vue').textContent), null, { timeout: 5000 });
+      await page.fill('input[type="search"]', 'cafe');
+      await page.waitForFunction(() => document.querySelectorAll('#liste-types .ligne').length === 1 && /Café moulu/.test(document.getElementById('liste-types').textContent), null, { timeout: 3000 });
+      await page.fill('input[type="search"]', '');
+      ok('E2 recherche sans accents ni casse');
+      await page.click('button[aria-label="Actions pour Café moulu"]');
+      await page.click('dialog button:has-text("Archiver")');
+      await page.waitForFunction(() => !/Café moulu/.test(document.getElementById('liste-types').textContent) && /Café moulu/.test(document.getElementById('types-archives').textContent), null, { timeout: 5000 });
+      ok('E2 archivage : le type quitte la liste et apparaît dans « Archivés »');
+      await page.click('#types-archives summary');
+      await page.click('#types-archives button:has-text("Restaurer")');
+      await page.waitForFunction(() => /Café moulu/.test(document.getElementById('liste-types').textContent), null, { timeout: 5000 });
+      ok('E2 restauration d\u2019un type archivé');
+      // Un relevé existe : le changement d'unité doit être refusé.
+      await page.evaluate(() => new Promise((res, rej) => {
+        const rq = indexedDB.open('appli-courses');
+        rq.onsuccess = () => {
+          const db = rq.result;
+          const t = db.transaction(['ProductType', 'Observation'], 'readwrite');
+          const g = t.objectStore('ProductType').getAll();
+          g.onsuccess = () => {
+            const cafe = g.result.find((x) => x.nomNormalise === 'cafe moulu');
+            window.__idCafe = cafe.id;
+            t.objectStore('Observation').add({ type: cafe.id, magasin: 'leclerc', date: '2026-10-01', prixCentimes: 500, format: 250, promo: 0 });
+          };
+          t.oncomplete = () => { db.close(); res(); };
+          t.onerror = () => rej(t.error);
+        };
+        rq.onerror = () => rej(rq.error);
+      }));
+      const idCafe = await page.evaluate(() => window.__idCafe);
+      await aller('#/type-edit/' + idCafe);
+      await page.waitForFunction(() => document.querySelectorAll('.segment:disabled').length === 3, null, { timeout: 5000 });
+      ok('E2 changement d\u2019unité refusé quand des relevés existent');
+      await aller('#/types');
+      await page.waitForSelector('button[aria-label="Actions pour Café moulu"]');
+      await page.click('button[aria-label="Actions pour Café moulu"]');
+      await page.click('dialog button:has-text("Supprimer")');
+      await page.waitForFunction(() => /définitivement/.test(document.querySelector('dialog')?.textContent || ''), null, { timeout: 5000 });
+      await page.click('dialog button:has-text("Supprimer")');
+      await page.waitForFunction(() => !/Café moulu/.test(document.getElementById('vue').textContent), null, { timeout: 5000 });
+      const restants = await page.evaluate(() => new Promise((res) => {
+        const rq = indexedDB.open('appli-courses');
+        rq.onsuccess = () => { const c = rq.result.transaction('Observation').objectStore('Observation').count(); c.onsuccess = () => res(c.result); };
+      }));
+      if (restants === 0) ok('E2 suppression d\u2019un type et de son historique'); else ko('E2 suppression : ' + restants + ' relevé(s) orphelin(s)');
+      await page.click('button[aria-label="Actions pour Lessive liquide"]');
+      await page.click('dialog button:has-text("Supprimer")');
+      await page.waitForSelector('dialog:has-text("définitive")');
+      await page.click('dialog button:has-text("Supprimer")');      await page.waitForFunction(() => /Aucun type pour/.test(document.getElementById('vue').textContent), null, { timeout: 5000 });
+      ok('E2 liste vide : phrase d\u2019explication et lien d\u2019action');
+      await aller('#/reglages');
       // service worker actif et page contrôlée, puis test hors ligne
       await page.evaluate(() => navigator.serviceWorker.ready);
       if (!(await page.evaluate(() => !!navigator.serviceWorker.controller))) { await page.reload(); await page.waitForSelector('#vue .carte'); }
@@ -148,5 +220,5 @@ serveur.close();
 const titre = echecs ? 'ÉCHEC : ' + echecs + ' contrôle(s) en échec' : 'SUCCÈS : tous les contrôles passent';
 const rapport = [titre, '', ...lignes].join('\n');
 console.log(rapport);
-if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, '\x60\x60\x60\n' + rapport + '\n\x60\x60\x60\n');
+if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, '```\n' + rapport + '\n```\n');
 process.exit(echecs ? 1 : 0);

@@ -100,3 +100,51 @@ svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width:
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+
+/* ---- Formulaires, boutons, listes (épic E2) ---- */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-height: 52px; padding: 0 20px; border-radius: 18px; border: 1px solid var(--bordure);
+  background: transparent; color: var(--texte); font: 600 16px var(--police-texte); text-decoration: none; cursor: pointer;
+}
+.btn-bloc { display: flex; width: 100%; margin-bottom: 12px; }
+.btn-primaire { background: var(--lime); border-color: var(--lime); color: var(--fond); font-family: var(--police-titre); font-weight: 700; }
+.btn-secondaire { background: var(--surface); }
+.btn-danger { border-color: var(--intermarche); color: var(--intermarche); }
+.btn-icone {
+  width: 48px; height: 48px; flex: none; border-radius: 50%; border: 1px solid var(--bordure);
+  background: var(--surface); color: var(--texte); font-size: 22px; cursor: pointer;
+}
+.champ {
+  display: block; width: 100%; min-height: 52px; margin: 0 0 12px; padding: 0 16px; border-radius: 18px;
+  border: 1px solid var(--bordure); background: var(--surface); color: var(--texte); font: 17px var(--police-texte);
+}
+.champ:focus-visible, .btn:focus-visible, .btn-icone:focus-visible, .segment:focus-visible { outline: 2px solid var(--lime); outline-offset: 2px; }
+.etiquette { display: block; margin: 12px 0 6px; color: var(--texte2); font-size: 14px; }
+.segments { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 12px; }
+.segment {
+  min-height: 52px; border-radius: 18px; border: 1px solid var(--bordure);
+  background: var(--surface); color: var(--texte); font: 600 16px var(--police-texte); cursor: pointer;
+}
+.segment[aria-pressed="true"] { background: var(--lime); border-color: var(--lime); color: var(--fond); }
+.segment:disabled { opacity: 0.5; cursor: not-allowed; }
+.erreur { color: var(--ambre); margin: 8px 0 12px; }
+.erreur[hidden], .archives[hidden] { display: none; }
+.aide { color: var(--texte2); font-size: 14px; margin: 8px 0 12px; }
+.lien { color: var(--lime); font-weight: 600; }
+.ligne {
+  display: flex; align-items: center; gap: 8px; padding: 8px 8px 8px 16px; margin-bottom: 8px;
+  background: var(--surface); border: 1px solid var(--bordure); border-radius: 22px;
+}
+.ligne-texte { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.puce { padding: 2px 10px; border-radius: 999px; background: rgba(255, 255, 255, 0.10); color: var(--texte2); font-size: 13px; }
+.archives { margin-top: 16px; }
+.archives summary, .plus summary { min-height: 48px; display: flex; align-items: center; color: var(--texte2); cursor: pointer; }
+.feuille {
+  width: calc(100% - 32px); max-width: 420px; padding: 20px; border-radius: 26px; border: 1px solid var(--bordure);
+  background: #151821; color: var(--texte);
+}
+.feuille::backdrop { background: rgba(0, 0, 0, 0.6); }
+.feuille h2 { margin: 0 0 8px; font-family: var(--police-titre); font-size: 20px; }
+.feuille p { margin: 0 0 12px; color: var(--texte2); }
+.feuille-actions { display: grid; gap: 8px; margin-top: 12px; }

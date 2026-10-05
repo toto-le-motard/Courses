@@ -11,6 +11,8 @@
 //                   prixHabituelMemeMagasinCentimes|null (prix habituel hors promo du MÊME magasin, figé à la date) }
 //   Settings    : { cle (clé), valeur }
 
+import { normaliserNom } from './domain.js';
+
 export const NOM_BASE = 'appli-courses';
 export const VERSION_SCHEMA = 1;
 export const STORES = ['ProductType', 'Article', 'Observation', 'Purchase', 'Settings'];
@@ -38,6 +40,10 @@ const MIGRATIONS = {
 };
 
 let _db = null;
+let _ok, _ko;
+// Résolue quand la base est ouverte ; les écrans l'attendent avant de lire.
+export const dbPrete = new Promise((a, b) => { _ok = a; _ko = b; });
+dbPrete.catch(() => {});
 
 function ouvrir() {
   return new Promise((resolve, reject) => {
@@ -59,9 +65,11 @@ function requete(store, mode, action) {
   return new Promise((resolve, reject) => {
     const t = _db.transaction(store, mode);
     const r = action(t.objectStore(store));
+    let echec = null;
+    if (r) r.onerror = () => { echec = r.error; };
     t.oncomplete = () => resolve(r ? r.result : undefined);
-    t.onerror = () => reject(t.error);
-    t.onabort = () => reject(t.error);
+    t.onerror = () => reject(echec || t.error);
+    t.onabort = () => reject(echec || t.error);
   });
 }
 
@@ -97,7 +105,63 @@ export async function demanderStockagePersistant() {
 }
 
 export async function initDb() {
-  _db = await ouvrir();
-  await reglagesParDefaut();
-  return _db;
+  try {
+    _db = await ouvrir();
+    await reglagesParDefaut();
+    _ok(_db);
+    return _db;
+  } catch (e) { _ko(e); throw e; }
+}
+
+// ---- Types de produits (FR1, FR2) ------------------------------------------------------------
+const ERREUR_DOUBLON = 'Un type porte déjà ce nom.';
+
+export const listerTypes = () => toutLire('ProductType');
+export const lireType = (id) => lire('ProductType', id);
+export const compterReleves = (typeId) => requete('Observation', 'readonly', (s) => s.index('type').count(typeId));
+
+export async function ajouterType({ nom, unite, marque = '', nomArticle = '' }) {
+  const n = String(nom).trim();
+  try {
+    return await ajouter('ProductType', { nom: n, nomNormalise: normaliserNom(n), unite, marque: marque.trim(), nomArticle: nomArticle.trim(), archive: 0 });
+  } catch (e) {
+    if (e && e.name === 'ConstraintError') throw new Error(ERREUR_DOUBLON);
+    throw e;
+  }
+}
+
+// Le changement d'unité de comparaison est refusé si des relevés existent (prix normalisés cohérents).
+export async function modifierType(id, { nom, unite, marque = '', nomArticle = '' }) {
+  const actuel = await lireType(id);
+  if (!actuel) throw new Error('Type introuvable.');
+  if (unite !== actuel.unite && (await compterReleves(id)) > 0) {
+    throw new Error('Changement d\u2019unité impossible : des relevés existent pour ce type.');
+  }
+  const n = String(nom).trim();
+  try {
+    await mettre('ProductType', { ...actuel, nom: n, nomNormalise: normaliserNom(n), unite, marque: marque.trim(), nomArticle: nomArticle.trim() });
+  } catch (e) {
+    if (e && e.name === 'ConstraintError') throw new Error(ERREUR_DOUBLON);
+    throw e;
+  }
+}
+
+export async function archiverType(id, archive) {
+  const t = await lireType(id);
+  if (t) await mettre('ProductType', { ...t, archive: archive ? 1 : 0 });
+}
+
+// Supprime le type et tout son historique (relevés, achats, codes-barres) en une seule transaction.
+export function supprimerType(id) {
+  return new Promise((resolve, reject) => {
+    const t = _db.transaction(['ProductType', 'Observation', 'Purchase', 'Article'], 'readwrite');
+    t.objectStore('ProductType').delete(id);
+    for (const nom of ['Observation', 'Purchase', 'Article']) {
+      const rq = t.objectStore(nom).index('type').openCursor(IDBKeyRange.only(id));
+      rq.onsuccess = () => { const c = rq.result; if (c) { c.delete(); c.continue(); } };
+    }
+    t.oncomplete = () => resolve();
+    t.onerror = () => reject(t.error);
+    t.onabort = () => reject(t.error);
+  });
 }

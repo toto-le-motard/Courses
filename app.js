@@ -1,5 +1,6 @@
 // app.js — interface et navigation (stories 1.2 à 1.4).
-import { initDb, demanderStockagePersistant, lireReglage, ecrireReglage, compter, STORES, VERSION_SCHEMA } from './db.js';
+import { initDb, dbPrete, listerTypes, demanderStockagePersistant, lireReglage, ecrireReglage, compter, STORES, VERSION_SCHEMA } from './db.js';
+import { accueilVide, vueTypes, vueTypeForm } from './types-ui.js';
 
 const vue = document.getElementById('vue');
 const titre = document.getElementById('titre-ecran');
@@ -55,23 +56,37 @@ function vueReglages() {
   return d;
 }
 
+function vueMagasin() {
+  const c = document.createElement('div');
+  c.appendChild(carte('Magasin', 'Chargement\u2026'));
+  (async () => {
+    await dbPrete;
+    const types = await listerTypes();
+    if (c.isConnected) c.replaceChildren(types.length ? carte('Relevé et verdict', 'Cet écran arrive avec l\u2019épic E3.') : accueilVide());
+  })().catch(() => { if (c.isConnected) c.replaceChildren(carte('Magasin', 'Base de données indisponible.')); });
+  return c;
+}
+
+// `onglet` : onglet mis en avant (les écrans de saisie dépendent de l'onglet Types).
 const ROUTES = {
-  magasin: { titre: 'Magasin', vue: () => carte('Relevé et verdict', 'Cet écran arrive avec l\u2019épic E3.') },
-  liste:   { titre: 'Liste', vue: () => carte('Avant les courses', 'Cet écran arrive avec l\u2019épic E5.') },
-  types:   { titre: 'Types', vue: () => carte('Types de produits', 'Cet écran arrive avec l\u2019épic E2.') },
-  bilan:   { titre: 'Bilan', vue: () => carte('Économies réalisées', 'Cet écran arrive avec l\u2019épic E7.') },
-  reglages: { titre: 'Réglages', vue: vueReglages }
+  magasin: { titre: 'Magasin', onglet: 'magasin', vue: vueMagasin },
+  liste:   { titre: 'Liste', onglet: 'liste', vue: () => carte('Avant les courses', 'Cet écran arrive avec l\u2019épic E5.') },
+  types:   { titre: 'Types', onglet: 'types', vue: vueTypes },
+  'type-nouveau': { titre: 'Nouveau type', onglet: 'types', vue: () => vueTypeForm(null) },
+  'type-edit': { titre: 'Modifier le type', onglet: 'types', vue: (p) => vueTypeForm(Number(p)) },
+  bilan:   { titre: 'Bilan', onglet: 'bilan', vue: () => carte('Économies réalisées', 'Cet écran arrive avec l\u2019épic E7.') },
+  reglages: { titre: 'Réglages', onglet: null, vue: vueReglages }
 };
 
 function afficher() {
-  const nom = location.hash.replace('#/', '') || 'magasin';
+  const [nom, param] = (location.hash.replace('#/', '') || 'magasin').split('/');
   const r = ROUTES[nom] || ROUTES.magasin;
   titre.textContent = r.titre;
-  document.title = r.titre + ' · Appli Courses';
-  vue.replaceChildren(r.vue());
+  document.title = r.titre + ' \u00b7 Appli Courses';
+  vue.replaceChildren(r.vue(param));
   vue.style.animation = 'none'; void vue.offsetWidth; vue.style.animation = '';
   onglets.forEach((a) => {
-    if (a.dataset.route === nom) a.setAttribute('aria-current', 'page');
+    if (a.dataset.route === r.onglet) a.setAttribute('aria-current', 'page');
     else a.removeAttribute('aria-current');
   });
   window.scrollTo(0, 0);

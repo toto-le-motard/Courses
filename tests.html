@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tests du domaine</title>
+<style>
+  body { margin:0; padding:16px; background:#0B0D12; color:#F4F6FA; font-family:system-ui,sans-serif; font-size:15px; }
+  h1 { font-size:22px; margin:0 0 8px; }
+  #bilan { font-size:20px; font-weight:700; margin:8px 0 16px; }
+  li { margin:4px 0; list-style:none; }
+  .ok { color:#C6FF3D; } .ko { color:#FF6B5E; }
+</style>
+</head>
+<body>
+<h1>Tests du domaine</h1>
+<div id="bilan">En cours…</div>
+<ul id="liste"></ul>
+<script type="module">
+import { normaliserNom, nomTypeValide, UNITES } from './domain.js';
+
+const resultats = { reussis: 0, echecs: 0, details: [] };
+const liste = document.getElementById('liste');
+function test(exigence, nom, fn) {
+  let erreur = null;
+  try { fn(); } catch (e) { erreur = e.message; }
+  const li = document.createElement('li');
+  li.className = erreur ? 'ko' : 'ok';
+  li.textContent = (erreur ? 'ECHEC ' : 'OK ') + exigence + ' · ' + nom + (erreur ? ' : ' + erreur : '');
+  liste.appendChild(li);
+  if (erreur) { resultats.echecs++; resultats.details.push(exigence + ' ' + nom + ' : ' + erreur); } else resultats.reussis++;
+}
+function egal(a, b) { if (a !== b) throw new Error('attendu ' + JSON.stringify(b) + ', obtenu ' + JSON.stringify(a)); }
+
+// FR1 : normalisation du nom
+test('FR1', 'casse ignorée', () => egal(normaliserNom('CAFÉ Moulu'), 'cafe moulu'));
+test('FR1', 'accents ignorés', () => egal(normaliserNom('Crème fraîche'), 'creme fraiche'));
+test('FR1', 'espaces multiples et bords réduits', () => egal(normaliserNom('  café   moulu '), 'cafe moulu'));
+test('FR1', 'deux écritures du même nom sont égales', () => egal(normaliserNom('Café moulu'), normaliserNom('cafe  MOULU')));
+test('FR1', 'valeur vide ou absente', () => { egal(normaliserNom(''), ''); egal(normaliserNom(null), ''); });
+test('FR1', 'nom valide : non vide et 60 caractères au plus', () => {
+  egal(nomTypeValide('Café'), true); egal(nomTypeValide('   '), false); egal(nomTypeValide(''), false);
+  egal(nomTypeValide('a'.repeat(60)), true); egal(nomTypeValide('a'.repeat(61)), false);
+});
+test('FR1', 'unités de comparaison : kg, l, unité', () => egal(UNITES.join(','), 'kg,l,unit'));
+
+document.getElementById('bilan').textContent = resultats.echecs
+  ? resultats.echecs + ' échec(s) sur ' + (resultats.reussis + resultats.echecs)
+  : 'Tous les tests passent (' + resultats.reussis + ')';
+window.__resultats = resultats;
+</script>
+</body>
+</html>
