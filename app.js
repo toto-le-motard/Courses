@@ -1,5 +1,5 @@
 // app.js — interface et navigation (stories 1.2 à 3-2).
-import { initDb, dbPrete, listerTypes, lireDernierReleve, ajouterObservation, demanderStockagePersistant, lireReglage, ecrireReglage, compter, STORES, VERSION_SCHEMA } from './db.js';
+import { initDb, dbPrete, listerTypes, lireDernierReleve, ajouterObservations, demanderStockagePersistant, lireReglage, ecrireReglage, compter, STORES, VERSION_SCHEMA } from './db.js';
 import { MAGASIN, UNITES, LIBELLE_UNITE, analyserPrixSaisie, verifierFormat, prixNormalise, formaterPrixEuros, formaterPrixNormalise, calculerVerdict } from './domain.js';
 import { accueilVide, vueTypes, vueTypeForm } from './types-ui.js';
 
@@ -109,6 +109,12 @@ function vueMagasin() {
   const dateInput = el('input', { type: 'date', class: 'date-cache', value: date, 'aria-label': 'Date du relevé' });
   const dateTexte = el('span', { class: 'date-texte', text: dateAffichee(date) });
   const promo = el('input', { type: 'checkbox', class: 'interrupteur', id: 'champ-promo' });
+  const prixHorsPromo = el('input', { type: 'text', class: 'champ', id: 'champ-prix-hors-promo', inputmode: 'decimal', autocomplete: 'off', 'aria-label': 'Prix hors promo en rayon', placeholder: '0,00' });
+  const prixHorsPromoBloc = el('div', { class: 'hors-promo-bloc', hidden: true },
+    el('label', { class: 'etiquette', for: 'champ-prix-hors-promo', text: 'Prix hors promo en rayon' }),
+    prixHorsPromo
+  );
+
   const message = el('p', { class: 'message-succes', role: 'status', hidden: true });
   const bouton = el('button', { type: 'button', class: 'btn btn-primaire btn-bloc btn-enregistrer', id: 'btn-enregistrer', text: 'Enregistrer', disabled: true });
 
@@ -133,16 +139,26 @@ function vueMagasin() {
   valeurFormat.addEventListener('input', verifier);
   uniteFormat.addEventListener('change', verifier);
   dateInput.addEventListener('change', () => { date = dateInput.value || aujourdHui(); dateTexte.textContent = dateAffichee(date); });
-  promo.addEventListener('change', verifier);
+  promo.addEventListener('change', () => { prixHorsPromoBloc.hidden = !promo.checked; if (!promo.checked) prixHorsPromo.value = ''; verifier(); });
+  prixHorsPromo.addEventListener('input', verifier);
   bouton.addEventListener('click', async () => {
     const prixCentimes = prixValide();
     const format = verifierFormat(typeChoisi.unite, Number(valeurFormat.value), uniteFormat.value);
     if (!typeChoisi || !prixCentimes || !format.ok) return;
     bouton.disabled = true;
     try {
-      await ajouterObservation({ type: typeChoisi.id, magasin: magasinCourant, date, prixCentimes, format: format.formatBase, promo: promo.checked });
+      const observations = [{ type: typeChoisi.id, magasin: magasinCourant, date, prixCentimes, format: format.formatBase, promo: promo.checked }];
+      const horsPromoCentimes = prixHorsPromo.value.trim() ? analyserPrixSaisie(prixHorsPromo.value) : null;
+      if (promo.checked && prixHorsPromo.value.trim() && !horsPromoCentimes) {
+        throw new Error('Le prix hors promo doit être supérieur à 0.');
+      }
+      if (promo.checked && horsPromoCentimes) {
+        if (horsPromoCentimes < prixCentimes) horsPromoAvertissement.hidden = false;
+        observations.push({ type: typeChoisi.id, magasin: magasinCourant, date, prixCentimes: horsPromoCentimes, format: format.formatBase, promo: false });
+      }
+      await ajouterObservations(observations);
       recherche.value = ''; typeChoisi = null; dernier = null; prix.value = ''; valeurFormat.value = ''; date = aujourdHui(); dateInput.value = date; dateTexte.textContent = dateAffichee(date); promo.checked = false;
-      suggestions.replaceChildren(); chargerFormulaire();
+      suggestions.replaceChildren(); prixHorsPromoBloc.hidden = true; prixHorsPromo.value = ''; horsPromoAvertissement.hidden = true; chargerFormulaire();
       message.textContent = 'Enregistré chez ' + libelleMagasin(magasinCourant);
       message.hidden = false;
       recherche.focus();
@@ -194,6 +210,7 @@ function vueMagasin() {
     }
   }
 
+  const horsPromoAvertissement = el('p', { class: 'erreur', text: 'Prix hors promo inférieur au prix promo', hidden: true });
   const prixNormaliseAffiche = el('p', { class: 'prix-normalise' });
   const formatBloc = el('div', { class: 'format-ligne' }, valeurFormat, uniteFormat);
   formulaire.append(
@@ -202,7 +219,7 @@ function vueMagasin() {
     el('label', { class: 'etiquette', text: 'Format' }), formatBloc, formatErreur, prixNormaliseAffiche,
     el('div', { class: 'date-ligne' }, dateLien, dateTexte, dateInput),
     el('label', { class: 'promo-ligne' }, promo, el('span', { text: 'Promo' })),
-    message, bouton
+    prixHorsPromoBloc, horsPromoAvertissement, message, bouton
   );
 
   async function chargerFormulaire() {
