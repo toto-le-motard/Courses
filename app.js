@@ -273,6 +273,12 @@ function vueMagasin() {
   async function chargerFormulaire() {
     types = await lireTypesAvecDerniers();
     if (racine.isConnected) {
+      if (!types.length) {
+        entete.hidden = true;
+        formulaire.replaceChildren(accueilVide());
+        return;
+      }
+      entete.hidden = false;
       entete.className = 'selecteur-magasin ' + classeMagasin(magasinCourant);
       boutonsMagasin.forEach((b) => { b.setAttribute('aria-pressed', String(b.textContent === libelleMagasin(magasinCourant))); });
       suggestions.replaceChildren();
