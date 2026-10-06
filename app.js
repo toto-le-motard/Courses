@@ -240,6 +240,8 @@ function vueMagasin() {
     erreur('');
     formatErreur.hidden = true;
     const p = prixValide();
+    const pHorsPromo = promo.checked && prixHorsPromo.value.trim() ? analyserPrixSaisie(prixHorsPromo.value) : null;
+    horsPromoAvertissement.hidden = !(promo.checked && pHorsPromo && p && pHorsPromo < p);
     if (typeChoisi) {
       const f = verifierFormat(typeChoisi.unite, Number(valeurFormat.value), uniteFormat.value);
       if (!f.ok) {
