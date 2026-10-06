@@ -174,3 +174,22 @@ svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width:
 .btn-enregistrer { position:sticky; bottom:calc(88px + env(safe-area-inset-bottom,0px)); z-index:4; margin-top:12px; }
 .message-succes { min-height:22px; margin:8px 0; color:var(--lime); font-weight:700; }
 .message-succes[hidden] { display:none; }
+
+/* ---- E3 carte verdict ---------------------------------------------------------------- */
+.verdict-carte { position:relative; margin-top:10px; border-width:2px; animation:verdict-entree .16s ease-out; }
+.verdict-carte[hidden] { display:none; }
+@keyframes verdict-entree { from{opacity:0;transform:translateY(5px) scale(.99)} to{opacity:1;transform:none} }
+.verdict-ligne1 { display:flex; align-items:center; gap:12px; }
+.verdict-ligne1 strong { font:700 32px/1.1 var(--police-titre); }
+.verdict-icone { width:44px; height:44px; flex:none; display:grid; place-items:center; border-radius:50%; font:800 25px var(--police-titre); }
+.verdict-economie { margin-top:12px !important; color:var(--texte) !important; font:600 17px var(--police-titre) !important; }
+.verdict-rappel,.verdict-habituel { margin-top:8px !important; color:var(--texte2) !important; }
+.verdict-acheter { border-color:var(--lime); background:rgba(198,255,61,.10); }
+.verdict-acheter .verdict-icone { background:var(--lime); color:var(--fond); }
+.verdict-attendre { border-color:var(--ambre); background:rgba(255,181,71,.10); }
+.verdict-attendre .verdict-icone { background:var(--ambre); color:var(--fond); }
+.verdict-indifferent { border-color:#B4BCCD; background:rgba(180,188,205,.10); }
+.verdict-indifferent .verdict-icone { background:#B4BCCD; color:var(--fond); }
+.verdict-insuffisant { border-color:#B4BCCD; border-style:dashed; }
+.verdict-insuffisant .verdict-icone { border:2px solid #B4BCCD; color:#B4BCCD; background:transparent; }
+.badge-promo { display:inline-flex; min-height:32px; align-items:center; padding:4px 12px; margin-top:12px; border-radius:999px; background:var(--lime); color:var(--fond); font-weight:800; }

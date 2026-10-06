@@ -1,6 +1,6 @@
 // app.js — interface et navigation (stories 1.2 à 3-2).
-import { initDb, dbPrete, listerTypes, lireDernierReleve, ajouterObservations, demanderStockagePersistant, lireReglage, ecrireReglage, compter, STORES, VERSION_SCHEMA } from './db.js';
-import { MAGASIN, UNITES, LIBELLE_UNITE, analyserPrixSaisie, verifierFormat, prixNormalise, formaterPrixEuros, formaterPrixNormalise, calculerVerdict } from './domain.js';
+import { initDb, dbPrete, listerTypes, lireDernierReleve, lireObservations, ajouterObservations, demanderStockagePersistant, lireReglage, ecrireReglage, compter, STORES, VERSION_SCHEMA } from './db.js';
+import { MAGASIN, UNITES, LIBELLE_UNITE, VERDICT, analyserPrixSaisie, verifierFormat, prixNormalise, formaterPrixEuros, formaterPrixNormalise, calculerVerdict, prixHabituel } from './domain.js';
 import { accueilVide, vueTypes, vueTypeForm } from './types-ui.js';
 
 const vue = document.getElementById('vue');
@@ -138,7 +138,7 @@ function vueMagasin() {
   prix.addEventListener('input', verifier);
   valeurFormat.addEventListener('input', verifier);
   uniteFormat.addEventListener('change', verifier);
-  dateInput.addEventListener('change', () => { date = dateInput.value || aujourdHui(); dateTexte.textContent = dateAffichee(date); });
+  dateInput.addEventListener('change', () => { date = dateInput.value || aujourdHui(); dateTexte.textContent = dateAffichee(date); void actualiserVerdict(); });
   promo.addEventListener('change', () => { prixHorsPromoBloc.hidden = !promo.checked; if (!promo.checked) prixHorsPromo.value = ''; verifier(); });
   prixHorsPromo.addEventListener('input', verifier);
   bouton.addEventListener('click', async () => {
@@ -191,6 +191,51 @@ function vueMagasin() {
     return Boolean(p && f.ok);
   }
 
+  async function actualiserVerdict() {
+    if (!typeChoisi || !estFormulaireValide()) { verdictCarte.hidden = true; return; }
+    const p = prixValide();
+    const f = verifierFormat(typeChoisi.unite, Number(valeurFormat.value), uniteFormat.value);
+    if (!p || !f.ok) { verdictCarte.hidden = true; return; }
+    try {
+      const observations = await lireObservations(typeChoisi.id);
+      const seuilPct = await lireReglage('seuilIndifference', 5);
+      const v = calculerVerdict({ prixCentimes:p, formatBase:f.formatBase, typeUnit:typeChoisi.unite, magasin:magasinCourant, observations, aujourdhui:date, seuilPct, promo:promo.checked });
+      dessinerVerdict(v, observations);
+    } catch { verdictCarte.hidden = true; }
+  }
+
+  function dessinerVerdict(v, observations) {
+    verdictCarte.hidden = false;
+    const classe = v.resultat === VERDICT.ACHETER_ICI ? 'acheter' : v.resultat === VERDICT.ATTENDRE ? 'attendre' : v.resultat === VERDICT.INDIFFERENT ? 'indifferent' : 'insuffisant';
+    verdictCarte.className = 'carte verdict-carte verdict-' + classe;
+    verdictCarte.replaceChildren();
+    const autre = libelleMagasin(v.autreMagasin);
+    let libelle='Données insuffisantes', icone='?';
+    if(v.resultat===VERDICT.ACHETER_ICI){libelle='Acheter ici';icone='✓';}
+    else if(v.resultat===VERDICT.ATTENDRE){libelle='Attendre '+autre;icone='…';}
+    else if(v.resultat===VERDICT.INDIFFERENT){libelle='Indifférent';icone='=';}
+    verdictCarte.append(el('div',{class:'verdict-ligne1'},el('span',{class:'verdict-icone',text:icone}),el('strong',{text:libelle})));
+    if(v.resultat!==VERDICT.INSUFFISANT){
+      const signe=v.differenceFormatCentimes<0?'−':v.differenceFormatCentimes>0?'+':'';
+      const uniteTexte=typeChoisi.unite==='unit'?'pour cette unité':'le '+LIBELLE_UNITE[typeChoisi.unite];
+      verdictCarte.append(el('p',{class:'verdict-economie',text:signe+formaterPrixEuros(Math.abs(v.differenceUniteCentimes))+' '+uniteTexte+' · '+signe+formaterPrixEuros(Math.abs(v.differenceFormatCentimes))+' pour ce format'}));
+      const h=v.habituelAutre;
+      if(h){
+        const prixRef=formaterPrixNormalise(h.valeur,typeChoisi.unite);
+        const rappel=h.type==='mediane'?prixRef+', médiane de '+h.nbReleves+' relevé'+(h.nbReleves>1?'s':'')+' sur 8 semaines':prixRef+', relevé le '+dateAffichee(h.date);
+        verdictCarte.append(el('p',{class:'verdict-rappel',text:autre+' : '+rappel}));
+      }
+    } else {
+      const d=v.dernierConnu;
+      verdictCarte.append(el('p',{class:'verdict-rappel',text:autre+' : '+(d?'dernier prix connu le '+dateAffichee(d.date):'aucun relevé')}));
+    }
+    if(promo.checked){
+      verdictCarte.append(el('span',{class:'badge-promo',text:'Promo'}));
+      const h=prixHabituel(observations,magasinCourant,typeChoisi.unite,date);
+      if(h.ok) verdictCarte.append(el('p',{class:'verdict-habituel',text:'Habituel chez '+libelleMagasin(magasinCourant)+' : '+formaterPrixNormalise(h.valeur,typeChoisi.unite)}));
+    }
+  }
+
   function verifier() {
     erreur('');
     formatErreur.hidden = true;
@@ -204,13 +249,16 @@ function vueMagasin() {
       const n = f.ok && p ? prixNormalise(p, f.formatBase, typeChoisi.unite) : null;
       prixNormaliseAffiche.textContent = n?.ok ? formaterPrixNormalise(n.centimesParUnite, typeChoisi.unite) : '';
       bouton.disabled = !(p && f.ok);
+      void actualiserVerdict();
     } else {
       prixNormaliseAffiche.textContent = '';
       bouton.disabled = true;
+      verdictCarte.hidden = true;
     }
   }
 
   const horsPromoAvertissement = el('p', { class: 'erreur', text: 'Prix hors promo inférieur au prix promo', hidden: true });
+  const verdictCarte = el('section', { class: 'carte verdict-carte verdict-insuffisant', id: 'carte-verdict', hidden: true, 'aria-live': 'polite' });
   const prixNormaliseAffiche = el('p', { class: 'prix-normalise' });
   const formatBloc = el('div', { class: 'format-ligne' }, valeurFormat, uniteFormat);
   formulaire.append(
@@ -219,7 +267,7 @@ function vueMagasin() {
     el('label', { class: 'etiquette', text: 'Format' }), formatBloc, formatErreur, prixNormaliseAffiche,
     el('div', { class: 'date-ligne' }, dateLien, dateTexte, dateInput),
     el('label', { class: 'promo-ligne' }, promo, el('span', { text: 'Promo' })),
-    prixHorsPromoBloc, horsPromoAvertissement, message, bouton
+    prixHorsPromoBloc, horsPromoAvertissement, verdictCarte, message, bouton
   );
 
   async function chargerFormulaire() {
