@@ -86,7 +86,7 @@ function vueMagasin() {
   entete.append(...boutonsMagasin);
   racine.append(entete);
 
-  const formulaire = el('div', { id: 'formulaire-releve' });
+  const formulaire = el('section', { id: 'formulaire-releve', class: 'carte formulaire-releve' });
   racine.append(formulaire);
 
   let types = [];
