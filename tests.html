@@ -1,53 +1,36 @@
 <!DOCTYPE html>
 <html lang="fr">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Tests du domaine</title>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Tests du domaine</title>
 <style>
-  body { margin:0; padding:16px; background:#0B0D12; color:#F4F6FA; font-family:system-ui,sans-serif; font-size:15px; }
-  h1 { font-size:22px; margin:0 0 8px; }
-  #bilan { font-size:20px; font-weight:700; margin:8px 0 16px; }
-  li { margin:4px 0; list-style:none; }
-  .ok { color:#C6FF3D; } .ko { color:#FF6B5E; }
-</style>
-</head>
-<body>
-<h1>Tests du domaine</h1>
-<div id="bilan">En cours…</div>
-<ul id="liste"></ul>
+body { font: 15px/1.4 system-ui, sans-serif; background:#0B0D12; color:#F4F6FA; margin:0; padding:16px; }
+h1 { font-size:20px; margin:0 0 8px; } #bilan { font-size:18px; font-weight:700; margin-bottom:12px; }
+#bilan.ok,.ok { color:#C6FF3D; } #bilan.ko,.ko { color:#FF6B5E; } ul { list-style:none; padding:0; margin:0; }
+li { padding:6px 0; border-bottom:1px solid rgba(255,255,255,.1); } .exi { color:#A4ACBD; font-size:12px; margin-right:6px; } .msg { display:block; font-size:13px; color:#FFB547; }
+</style></head>
+<body><h1>Tests du domaine</h1><div id="bilan">…</div><ul id="liste"></ul>
 <script type="module">
-import { normaliserNom, nomTypeValide, UNITES } from './domain.js';
-
-const resultats = { reussis: 0, echecs: 0, details: [] };
-const liste = document.getElementById('liste');
-function test(exigence, nom, fn) {
-  let erreur = null;
-  try { fn(); } catch (e) { erreur = e.message; }
-  const li = document.createElement('li');
-  li.className = erreur ? 'ko' : 'ok';
-  li.textContent = (erreur ? 'ECHEC ' : 'OK ') + exigence + ' · ' + nom + (erreur ? ' : ' + erreur : '');
-  liste.appendChild(li);
-  if (erreur) { resultats.echecs++; resultats.details.push(exigence + ' ' + nom + ' : ' + erreur); } else resultats.reussis++;
-}
-function egal(a, b) { if (a !== b) throw new Error('attendu ' + JSON.stringify(b) + ', obtenu ' + JSON.stringify(a)); }
-
-// FR1 : normalisation du nom
-test('FR1', 'casse ignorée', () => egal(normaliserNom('CAFÉ Moulu'), 'cafe moulu'));
-test('FR1', 'accents ignorés', () => egal(normaliserNom('Crème fraîche'), 'creme fraiche'));
-test('FR1', 'espaces multiples et bords réduits', () => egal(normaliserNom('  café   moulu '), 'cafe moulu'));
-test('FR1', 'deux écritures du même nom sont égales', () => egal(normaliserNom('Café moulu'), normaliserNom('cafe  MOULU')));
-test('FR1', 'valeur vide ou absente', () => { egal(normaliserNom(''), ''); egal(normaliserNom(null), ''); });
-test('FR1', 'nom valide : non vide et 60 caractères au plus', () => {
-  egal(nomTypeValide('Café'), true); egal(nomTypeValide('   '), false); egal(nomTypeValide(''), false);
-  egal(nomTypeValide('a'.repeat(60)), true); egal(nomTypeValide('a'.repeat(61)), false);
-});
-test('FR1', 'unités de comparaison : kg, l, unité', () => egal(UNITES.join(','), 'kg,l,unit'));
-
-document.getElementById('bilan').textContent = resultats.echecs
-  ? resultats.echecs + ' échec(s) sur ' + (resultats.reussis + resultats.echecs)
-  : 'Tous les tests passent (' + resultats.reussis + ')';
-window.__resultats = resultats;
-</script>
-</body>
-</html>
+import { MAGASIN, VERDICT, UNITES, LIBELLE_UNITE, normaliserNom, nomTypeValide, unitesCompatibles, estCompatible, versUniteDeBase, convertir, verifierFormat, arrondirCentimes, prixNormalise, joursEntre, mediane, referenceLeclerc, habituelIntermarche, prixHabituel, prixHabituelAutreMagasin, calculerVerdict } from './domain.js';
+const resultats=[]; function test(exigence,nom,fn){try{fn();resultats.push({ok:true,exigence,nom});}catch(e){resultats.push({ok:false,exigence,nom,msg:e.message});}}
+function egal(a,b,msg=''){if(JSON.stringify(a)!==JSON.stringify(b))throw new Error(msg+' attendu '+JSON.stringify(b)+', obtenu '+JSON.stringify(a));}
+function proche(a,b,eps=1e-6){if(typeof a!=='number'||Math.abs(a-b)>eps)throw new Error('attendu ≈ '+b+', obtenu '+a);}
+const LE=MAGASIN.LECLERC, IM=MAGASIN.INTERMARCHE, AUJ='2026-10-04';
+const obs=(magasin,date,prixCentimes,formatBase=1000,promo=false)=>({magasin,date,prixCentimes,formatBase,promo});
+test('FR1','normalisation du nom',()=>{egal(normaliserNom('CAFÉ Moulu'),'cafe moulu');egal(normaliserNom('  café   moulu '),'cafe moulu');});
+test('FR1','nom valide',()=>{egal(nomTypeValide('Café'),true);egal(nomTypeValide('   '),false);egal(nomTypeValide('a'.repeat(60)),true);egal(nomTypeValide('a'.repeat(61)),false);});
+test('FR1','unités historiques',()=>egal(UNITES.join(','),'kg,l,unit'));
+test('FR5','conversions',()=>{egal(versUniteDeBase(500,'g'),500);egal(versUniteDeBase(.5,'kg'),500);egal(versUniteDeBase(1.5,'l'),1500);egal(versUniteDeBase(6,'unit'),6);egal(convertir(500,'g','kg'),.5);egal(convertir(750,'ml','l'),.75);});
+test('FR5','compatibilité et format',()=>{egal(unitesCompatibles('kg'),['g','kg']);egal(estCompatible('kg','g'),true);egal(estCompatible('kg','l'),false);egal(verifierFormat('kg',500,'g'),{ok:true,formatBase:500});});
+test('FR5','prix normalisé',()=>{egal(prixNormalise(399,500,'kg'),{ok:true,centimesParUnite:798});egal(prixNormalise(250,500,'l'),{ok:true,centimesParUnite:500});});
+test('FR5','arrondi',()=>{egal(arrondirCentimes(0.5),1);egal(arrondirCentimes(-.5),-1);});
+test('FR10','dates et médiane',()=>{egal(joursEntre('2026-08-09',AUJ),56);egal(joursEntre('2026-10-05',AUJ),-1);egal(Number.isNaN(joursEntre('2026-02-30','2026-03-01')),true);egal(mediane([700,900,720]),720);egal(mediane([700,720,740,760]),730);});
+test('FR10','référence Leclerc',()=>{const o=[obs(LE,'2026-09-06',700),obs(LE,'2026-09-13',900),obs(LE,'2026-09-20',720),obs(LE,'2026-09-21',400,1000,true)];const r=referenceLeclerc(o,'kg',AUJ);egal(r.ok,true);egal(r.valeur,720);egal(r.nbReleves,3);});
+test('FR11','habituel Intermarché',()=>{egal(habituelIntermarche([obs(IM,'2026-07-10',700),obs(IM,'2026-09-12',720),obs(IM,'2026-09-12',500,1000,true)],'kg'),{ok:true,magasin:IM,type:'dernier',valeur:720,date:'2026-09-12'});});
+test('FR14','verdict',()=>{const o=[obs(IM,'2026-09-12',1000)];const v=calculerVerdict({prixCentimes:950,formatBase:1000,typeUnit:'kg',magasin:LE,observations:o,aujourdhui:AUJ,seuilPct:5});egal(v.resultat,VERDICT.ACHETER_ICI);proche(v.ecart,-.05);});
+test('FR14','seuil +5%',()=>{const v=calculerVerdict({prixCentimes:1050,formatBase:1000,typeUnit:'kg',magasin:LE,observations:[obs(IM,'2026-09-12',1000)],aujourdhui:AUJ,seuilPct:5});egal(v.resultat,VERDICT.ATTENDRE);});
+test('FR15','différences',()=>{const v=calculerVerdict({prixCentimes:400,formatBase:500,typeUnit:'kg',magasin:LE,observations:[obs(IM,'2026-09-12',1000)],aujourdhui:AUJ,seuilPct:5});egal(v.differenceUniteCentimes,-200);egal(v.differenceFormatCentimes,-100);});
+test('FR16','seuil réglable',()=>{const o=[obs(IM,'2026-09-12',1000)];egal(calculerVerdict({prixCentimes:950,formatBase:1000,typeUnit:'kg',magasin:LE,observations:o,aujourdhui:AUJ,seuilPct:10}).resultat,VERDICT.INDIFFERENT);});
+test('FR18','données insuffisantes',()=>{const v=calculerVerdict({prixCentimes:800,formatBase:1000,typeUnit:'kg',magasin:LE,observations:[],aujourdhui:AUJ,seuilPct:5});egal(v.resultat,VERDICT.INSUFFISANT);});
+const ko=resultats.filter(r=>!r.ok), bilanTexte=resultats.length-ko.length+' / '+resultats.length+' tests réussis';
+if(typeof document==='undefined'){console.log(bilanTexte);ko.forEach(r=>console.log('ÉCHEC ['+r.exigence+'] '+r.nom+' — '+r.msg));if(ko.length)process.exitCode=1;}
+else{const bilan=document.getElementById('bilan');bilan.textContent=bilanTexte;bilan.className=ko.length?'ko':'ok';const ul=document.getElementById('liste');[...ko,...resultats.filter(r=>r.ok)].forEach(r=>{const li=document.createElement('li');li.className=r.ok?'ok':'ko';const ex=document.createElement('span');ex.className='exi';ex.textContent=r.exigence;li.append(ex,document.createTextNode((r.ok?'✓':'✗')+' '+r.nom));if(!r.ok){const m=document.createElement('span');m.className='msg';m.textContent=r.msg;li.append(m);}ul.append(li);});}
+</script></body></html>

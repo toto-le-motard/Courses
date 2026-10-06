@@ -1,21 +1,143 @@
 // domain.js — fonctions pures du domaine (aucune dépendance à la base ni au navigateur).
-// Chaque fonction est couverte par tests.html (DoD2), avec le numéro d'exigence.
+// Stories 3-1 (unités, prix normalisé), 3-3 (références), 3-4 (verdict).
+// Conventions : prix en centimes ; formats en unités de base entières (g, ml, unit) ;
+// dates AAAA-MM-JJ ; prix normalisé calculé, jamais stocké.
 
+export const MAGASIN = Object.freeze({ LECLERC: 'leclerc', INTERMARCHE: 'intermarche' });
+export const VERDICT = Object.freeze({ ACHETER_ICI: 'acheter ici', ATTENDRE: 'attendre', INDIFFERENT: 'indifférent', INSUFFISANT: 'données insuffisantes' });
+export const SEUIL_DEFAUT_PCT = 5;
+export const FENETRE_JOURS = 56;
+export const MIN_RELEVES_REFERENCE = 3;
+const EPSILON = 1e-9;
+
+// Fonctions E2 conservées lors de la fusion avec le lot C.
 export const UNITES = ['kg', 'l', 'unit'];
 export const LIBELLE_UNITE = { kg: 'kg', l: 'l', unit: 'unité' };
-
-// FR1 : nom de type unique, insensible à la casse et aux accents.
 export function normaliserNom(texte) {
-  return String(texte == null ? '' : texte)
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/\s+/g, ' ')
-    .trim();
+  return String(texte == null ? '' : texte).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
 }
-
-// FR1 : un nom de type est valide s'il n'est pas vide et fait au plus 60 caractères.
 export function nomTypeValide(nom) {
   const n = String(nom == null ? '' : nom).trim();
   return n.length >= 1 && n.length <= 60;
+}
+
+const UNITES_DETAIL = Object.freeze({
+  g: { type: 'kg', versBase: 1 }, kg: { type: 'kg', versBase: 1000 },
+  ml: { type: 'l', versBase: 1 }, l: { type: 'l', versBase: 1000 },
+  unit: { type: 'unit', versBase: 1 },
+});
+const DIVISEUR = Object.freeze({ kg: 1000, l: 1000, unit: 1 });
+
+export function unitesCompatibles(typeUnit) {
+  switch (typeUnit) {
+    case 'kg': return ['g', 'kg'];
+    case 'l': return ['ml', 'l'];
+    case 'unit': return ['unit'];
+    default: return [];
+  }
+}
+export function estCompatible(typeUnit, unite) { return unitesCompatibles(typeUnit).includes(unite); }
+export function versUniteDeBase(valeur, unite) {
+  const u = UNITES_DETAIL[unite];
+  if (!u || typeof valeur !== 'number' || !Number.isFinite(valeur) || valeur <= 0) return null;
+  const base = Math.round(valeur * u.versBase);
+  return base >= 1 ? base : null;
+}
+export function convertir(valeur, de, vers) {
+  const a = UNITES_DETAIL[de], b = UNITES_DETAIL[vers];
+  if (!a || !b || a.type !== b.type || typeof valeur !== 'number' || !Number.isFinite(valeur)) return null;
+  return (valeur * a.versBase) / b.versBase;
+}
+export function verifierFormat(typeUnit, valeur, unite) {
+  if (!UNITES_DETAIL[unite]) return { ok: false, erreur: 'format-invalide', uniteAttendue: typeUnit };
+  if (!estCompatible(typeUnit, unite)) return { ok: false, erreur: 'format-incompatible', uniteAttendue: typeUnit };
+  const formatBase = versUniteDeBase(valeur, unite);
+  if (formatBase === null) return { ok: false, erreur: 'format-invalide', uniteAttendue: typeUnit };
+  return { ok: true, formatBase };
+}
+export function arrondirCentimes(x) { return Math.sign(x) * Math.round(Math.abs(x)); }
+export function prixNormalise(prixCentimes, formatBase, typeUnit) {
+  if (!(typeUnit in DIVISEUR)) return { ok: false, erreur: 'type-inconnu' };
+  if (typeof prixCentimes !== 'number' || !Number.isFinite(prixCentimes) || prixCentimes <= 0) return { ok: false, erreur: 'prix-invalide' };
+  if (typeof formatBase !== 'number' || !Number.isFinite(formatBase) || formatBase <= 0) return { ok: false, erreur: 'format-invalide' };
+  return { ok: true, centimesParUnite: (prixCentimes * DIVISEUR[typeUnit]) / formatBase };
+}
+function parserDate(s) {
+  if (typeof s !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return NaN;
+  const [a, m, j] = s.split('-').map(Number), t = Date.UTC(a, m - 1, j), d = new Date(t);
+  return d.getUTCFullYear() === a && d.getUTCMonth() === m - 1 && d.getUTCDate() === j ? t : NaN;
+}
+export function joursEntre(debut, fin) {
+  const a = parserDate(debut), b = parserDate(fin);
+  if (Number.isNaN(a) || Number.isNaN(b)) return NaN;
+  return Math.round((b - a) / 86400000);
+}
+
+// Seul point d'adaptation aux champs de db.js. db.js utilise format et promo: 0|1.
+function normaliserObservation(o, typeUnit) {
+  if (!o) return null;
+  const n = prixNormalise(o.prixCentimes ?? o.prix ?? o.priceCents, o.formatBase ?? o.format, typeUnit);
+  if (!n.ok || Number.isNaN(parserDate(o.date))) return null;
+  return { magasin: o.magasin ?? o.store, date: o.date, promo: Boolean(o.promo ?? o.isPromo), valeur: n.centimesParUnite };
+}
+function normaliserTous(observations, typeUnit, magasin) {
+  return (Array.isArray(observations) ? observations : []).map((o) => normaliserObservation(o, typeUnit)).filter((o) => o && o.magasin === magasin);
+}
+export function mediane(valeurs) {
+  if (!valeurs.length) return null;
+  const t = [...valeurs].sort((x, y) => x - y), m = Math.floor(t.length / 2);
+  return t.length % 2 ? t[m] : (t[m - 1] + t[m]) / 2;
+}
+function dernierConnu(normalises) {
+  if (!normalises.length) return null;
+  const tri = [...normalises].sort((x, y) => {
+    if (x.date !== y.date) return x.date < y.date ? 1 : -1;
+    if (x.promo !== y.promo) return x.promo ? 1 : -1;
+    return x.valeur - y.valeur;
+  });
+  const d = tri[0];
+  return { date: d.date, valeur: d.valeur, promo: d.promo };
+}
+export function referenceLeclerc(observations, typeUnit, aujourdhui) {
+  const tous = normaliserTous(observations, typeUnit, MAGASIN.LECLERC);
+  const retenus = tous.filter((o) => !o.promo && (() => { const j = joursEntre(o.date, aujourdhui); return j >= 0 && j <= FENETRE_JOURS; })());
+  if (retenus.length < MIN_RELEVES_REFERENCE) return { ok: false, raison: 'releves-insuffisants', nbReleves: retenus.length, dernierConnu: dernierConnu(tous) };
+  return { ok: true, magasin: MAGASIN.LECLERC, type: 'mediane', valeur: mediane(retenus.map((o) => o.valeur)), nbReleves: retenus.length, fenetreJours: FENETRE_JOURS };
+}
+export function habituelIntermarche(observations, typeUnit) {
+  const tous = normaliserTous(observations, typeUnit, MAGASIN.INTERMARCHE), horsPromo = tous.filter((o) => !o.promo);
+  if (!horsPromo.length) return { ok: false, raison: 'aucun-releve-hors-promo', nbReleves: 0, dernierConnu: dernierConnu(tous) };
+  const d = [...horsPromo].sort((x, y) => x.date !== y.date ? (x.date < y.date ? 1 : -1) : x.valeur - y.valeur)[0];
+  return { ok: true, magasin: MAGASIN.INTERMARCHE, type: 'dernier', valeur: d.valeur, date: d.date };
+}
+export function autreMagasin(magasin) {
+  if (magasin === MAGASIN.LECLERC) return MAGASIN.INTERMARCHE;
+  if (magasin === MAGASIN.INTERMARCHE) return MAGASIN.LECLERC;
+  return null;
+}
+export function prixHabituel(observations, magasin, typeUnit, aujourdhui) {
+  if (magasin === MAGASIN.LECLERC) return referenceLeclerc(observations, typeUnit, aujourdhui);
+  if (magasin === MAGASIN.INTERMARCHE) return habituelIntermarche(observations, typeUnit);
+  return { ok: false, raison: 'magasin-inconnu', nbReleves: 0, dernierConnu: null };
+}
+export function prixHabituelAutreMagasin(observations, magasinCourant, typeUnit, aujourdhui) {
+  return prixHabituel(observations, autreMagasin(magasinCourant), typeUnit, aujourdhui);
+}
+function seuilFraction(seuilPct) {
+  const s = typeof seuilPct === 'number' && Number.isFinite(seuilPct) && seuilPct >= 0 ? seuilPct : SEUIL_DEFAUT_PCT;
+  return s / 100;
+}
+export function calculerVerdict({ prixCentimes, formatBase, typeUnit, magasin, observations, aujourdhui, seuilPct, promo = false }) {
+  const autre = autreMagasin(magasin), base = { magasin, autreMagasin: autre, promo: Boolean(promo) };
+  const jour = prixNormalise(prixCentimes, formatBase, typeUnit);
+  if (!autre || !jour.ok) return { ...base, resultat: VERDICT.INSUFFISANT, raison: autre ? 'saisie-invalide' : 'magasin-inconnu', erreur: jour.ok ? null : jour.erreur, dernierConnu: null };
+  const habituel = prixHabituel(observations, autre, typeUnit, aujourdhui);
+  if (!habituel.ok || !(habituel.valeur > 0)) return { ...base, resultat: VERDICT.INSUFFISANT, raison: habituel.raison ?? 'releves-insuffisants', nbReleves: habituel.nbReleves ?? 0, dernierConnu: habituel.dernierConnu ?? null };
+  const seuil = seuilFraction(seuilPct), ecart = (jour.centimesParUnite - habituel.valeur) / habituel.valeur;
+  let resultat = VERDICT.INDIFFERENT;
+  if (ecart <= -seuil + EPSILON) resultat = VERDICT.ACHETER_ICI;
+  else if (ecart >= seuil - EPSILON) resultat = VERDICT.ATTENDRE;
+  const diffUnite = jour.centimesParUnite - habituel.valeur;
+  const diffFormat = (diffUnite * formatBase) / DIVISEUR[typeUnit];
+  return { ...base, resultat, ecart, seuil, prixJourNormalise: jour.centimesParUnite, habituelAutre: habituel, differenceUniteCentimes: arrondirCentimes(diffUnite), differenceFormatCentimes: arrondirCentimes(diffFormat) };
 }
