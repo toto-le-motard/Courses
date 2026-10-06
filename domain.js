@@ -56,6 +56,25 @@ export function verifierFormat(typeUnit, valeur, unite) {
   return { ok: true, formatBase };
 }
 export function arrondirCentimes(x) { return Math.sign(x) * Math.round(Math.abs(x)); }
+
+export function analyserPrixSaisie(saisie) {
+  const brut = String(saisie == null ? '' : saisie).trim().replace(',', '.');
+  if (!/^\d+(?:\.\d+)?$/.test(brut)) return null;
+  const valeur = Number(brut);
+  if (!Number.isFinite(valeur) || valeur <= 0) return null;
+  const centimes = arrondirCentimes(valeur * 100);
+  return centimes > 0 ? centimes : null;
+}
+
+export function formaterPrixEuros(centimes) {
+  if (typeof centimes !== 'number' || !Number.isFinite(centimes)) return '';
+  return (centimes / 100).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
+}
+
+export function formaterPrixNormalise(centimesParUnite, typeUnit) {
+  if (typeof centimesParUnite !== 'number' || !Number.isFinite(centimesParUnite) || centimesParUnite <= 0) return '';
+  return formaterPrixEuros(arrondirCentimes(centimesParUnite)) + '/' + (LIBELLE_UNITE[typeUnit] || typeUnit); 
+}
 export function prixNormalise(prixCentimes, formatBase, typeUnit) {
   if (!(typeUnit in DIVISEUR)) return { ok: false, erreur: 'type-inconnu' };
   if (typeof prixCentimes !== 'number' || !Number.isFinite(prixCentimes) || prixCentimes <= 0) return { ok: false, erreur: 'prix-invalide' };

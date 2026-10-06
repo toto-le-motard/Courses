@@ -148,3 +148,29 @@ svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width:
 .feuille h2 { margin: 0 0 8px; font-family: var(--police-titre); font-size: 20px; }
 .feuille p { margin: 0 0 12px; color: var(--texte2); }
 .feuille-actions { display: grid; gap: 8px; margin-top: 12px; }
+
+
+/* ---- E3 saisie magasin --------------------------------------------------------------- */
+.selecteur-magasin { display:grid; grid-template-columns:1fr 1fr; gap:8px; padding:6px; margin-bottom:14px; border:1px solid var(--bordure); border-radius:22px; background:var(--surface); }
+.selecteur-magasin.magasin-leclerc { box-shadow:0 0 0 1px rgba(91,140,255,.25); }
+.selecteur-magasin.magasin-intermarche { box-shadow:0 0 0 1px rgba(255,107,94,.25); }
+.magasin-btn { min-height:52px; border:0; border-radius:17px; background:transparent; color:var(--texte2); font:700 16px var(--police-titre); cursor:pointer; }
+.magasin-leclerc .magasin-btn[aria-pressed="true"] { background:var(--leclerc); color:var(--texte); }
+.magasin-intermarche .magasin-btn[aria-pressed="true"] { background:var(--intermarche); color:var(--texte); }
+.prix-zone { position:relative; margin-bottom:12px; }
+.prix-zone .champ { margin:0; padding-right:54px; height:86px; font:76px/1 var(--police-titre); letter-spacing:-2px; }
+.suffixe-euro { position:absolute; right:16px; top:50%; transform:translateY(-50%); color:var(--texte2); font:600 20px var(--police-titre); }
+.format-ligne { display:grid; grid-template-columns:2fr 1fr; gap:8px; }
+.format-ligne .champ { margin-bottom:0; }
+.suggestions { display:grid; gap:6px; margin-top:-6px; margin-bottom:4px; }
+.suggestion-type { min-height:48px; padding:8px 14px; text-align:left; border:1px solid var(--bordure); border-radius:14px; background:#151821; color:var(--texte); font:600 16px var(--police-texte); }
+.prix-normalise { min-height:24px; margin:2px 0 12px; color:var(--lime); font:600 17px var(--police-titre); }
+.date-ligne { position:relative; display:flex; align-items:center; gap:10px; min-height:48px; margin:6px 0; }
+.lien-date { border:0; background:none; color:var(--texte2); text-decoration:underline; font:600 15px var(--police-texte); padding:12px 4px; }
+.date-texte { color:var(--texte); font-size:15px; }
+.date-cache { position:absolute; width:1px; height:1px; opacity:0; pointer-events:none; }
+.promo-ligne { min-height:52px; display:flex; align-items:center; gap:12px; color:var(--texte); }
+.interrupteur { width:48px; height:28px; accent-color:var(--lime); }
+.btn-enregistrer { position:sticky; bottom:calc(88px + env(safe-area-inset-bottom,0px)); z-index:4; margin-top:12px; }
+.message-succes { min-height:22px; margin:8px 0; color:var(--lime); font-weight:700; }
+.message-succes[hidden] { display:none; }

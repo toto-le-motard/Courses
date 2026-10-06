@@ -165,3 +165,41 @@ export function supprimerType(id) {
     t.onabort = () => reject(t.error);
   });
 }
+
+
+// ---- Observations (E3, stories 3-2 et suivantes) -------------------------------------------
+export async function lireObservations(typeId) {
+  return requete('Observation', 'readonly', (s) => s.index('type').getAll(typeId));
+}
+
+export async function lireDernierReleve(typeId, magasin) {
+  const observations = await lireObservations(typeId);
+  return observations
+    .filter((o) => o.magasin === magasin)
+    .sort((a, b) => a.date !== b.date ? (a.date < b.date ? 1 : -1) : (a.id || 0) - (b.id || 0))[0] || null;
+}
+
+export const ajouterObservation = (observation) => ajouter('Observation', {
+  ...observation,
+  promo: observation.promo ? 1 : 0
+});
+
+export function ajouterObservations(observations) {
+  return new Promise((resolve, reject) => {
+    const t = _db.transaction('Observation', 'readwrite');
+    const ids = [];
+    try {
+      for (const observation of observations) {
+        const rq = t.objectStore('Observation').add({ ...observation, promo: observation.promo ? 1 : 0 });
+        rq.onsuccess = () => ids.push(rq.result);
+      }
+    } catch (e) {
+      t.abort();
+      reject(e);
+      return;
+    }
+    t.oncomplete = () => resolve(ids);
+    t.onerror = () => reject(t.error);
+    t.onabort = () => reject(t.error || new Error('Enregistrement annulé'));
+  });
+}
