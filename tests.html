@@ -9,7 +9,7 @@ li { padding:6px 0; border-bottom:1px solid rgba(255,255,255,.1); } .exi { color
 </style></head>
 <body><h1>Tests du domaine</h1><div id="bilan">…</div><ul id="liste"></ul>
 <script type="module">
-import { MAGASIN, VERDICT, UNITES, LIBELLE_UNITE, normaliserNom, nomTypeValide, unitesCompatibles, estCompatible, versUniteDeBase, convertir, verifierFormat, arrondirCentimes, analyserPrixSaisie, formaterPrixEuros, formaterPrixNormalise, prixNormalise, joursEntre, mediane, referenceLeclerc, habituelIntermarche, prixHabituel, prixHabituelAutreMagasin, calculerVerdict, estPrixIncoherent, decisionDoublon } from './domain.js';
+import { MAGASIN, VERDICT, UNITES, LIBELLE_UNITE, normaliserNom, nomTypeValide, unitesCompatibles, estCompatible, versUniteDeBase, convertir, verifierFormat, arrondirCentimes, analyserPrixSaisie, formaterPrixEuros, formaterPrixNormalise, prixNormalise, joursEntre, mediane, referenceLeclerc, habituelIntermarche, prixHabituel, prixHabituelAutreMagasin, calculerVerdict, estPrixIncoherent, decisionDoublon, trierReleves } from './domain.js';
 const resultats={reussis:0,echecs:0,details:[]},lignes=[]; function test(exigence,nom,fn){let msg=null;try{fn()}catch(e){msg=e.message}if(msg){resultats.echecs++;resultats.details.push(exigence+' '+nom+' : '+msg)}else resultats.reussis++;lignes.push({ok:!msg,exigence,nom,msg});}
 function egal(a,b,msg=''){if(JSON.stringify(a)!==JSON.stringify(b))throw new Error(msg+' attendu '+JSON.stringify(b)+', obtenu '+JSON.stringify(a));}
 function proche(a,b,eps=1e-6){if(typeof a!=='number'||Math.abs(a-b)>eps)throw new Error('attendu ≈ '+b+', obtenu '+a);}
@@ -18,6 +18,10 @@ test('UX 5 / story 3.6','prix incohérent sans relevé antérieur',()=>egal(estP
 test('UX 5 / story 3.6','écart exactement 50% sans alerte',()=>{egal(estPrixIncoherent(150,100),false);egal(estPrixIncoherent(50,100),false);});
 test('UX 5 / story 3.6','écart 50,01% avec alerte',()=>egal(estPrixIncoherent(150.01,100),true));
 test('UX 5 / story 3.6','baisse et hausse',()=>{egal(estPrixIncoherent(49,100),true);egal(estPrixIncoherent(149,100),false);egal(estPrixIncoherent(151,100),true);});
+test('FR8, FR9','tri historique par date puis id',()=>{const r=trierReleves([{id:2,date:'2026-10-01'},{id:5,date:'2026-10-02'},{id:4,date:'2026-10-02'}]);egal(r.map(x=>x.id),[5,4,2]);});
+test('FR8, FR9','référence Leclerc recalculée après suppression',()=>{const a=[{magasin:LE,date:'2026-09-01',prixCentimes:700,formatBase:1000},{magasin:LE,date:'2026-09-08',prixCentimes:900,formatBase:1000},{magasin:LE,date:'2026-09-15',prixCentimes:800,formatBase:1000}];egal(referenceLeclerc(a,'kg',AUJ).valeur,800);egal(referenceLeclerc(a.slice(1),'kg',AUJ).ok,false);});
+test('FR8, FR9','médiane recalculée après modification du prix',()=>{const a=[{magasin:LE,date:'2026-09-01',prixCentimes:700,formatBase:1000},{magasin:LE,date:'2026-09-08',prixCentimes:900,formatBase:1000},{magasin:LE,date:'2026-09-15',prixCentimes:1100,formatBase:1000}];egal(referenceLeclerc(a,'kg',AUJ).valeur,900);a[1].prixCentimes=1000;egal(referenceLeclerc(a,'kg',AUJ).valeur,1000);});
+test('FR8, FR9','relevé passé en promo exclu de la référence',()=>{const a=[{magasin:LE,date:'2026-09-01',prixCentimes:700,formatBase:1000},{magasin:LE,date:'2026-09-08',prixCentimes:900,formatBase:1000},{magasin:LE,date:'2026-09-15',prixCentimes:800,formatBase:1000},{magasin:LE,date:'2026-09-20',prixCentimes:100,formatBase:1000,promo:true}];egal(referenceLeclerc(a,'kg',AUJ).valeur,800);});
 test('UX 5 / story 3.6','doublon absent',()=>egal(decisionDoublon(null,100),'ajouter'));
 test('UX 5 / story 3.6','doublon égal',()=>egal(decisionDoublon(100,100),'remplacer'));
 test('UX 5 / story 3.6','doublon plus bas',()=>egal(decisionDoublon(100,90),'remplacer'));

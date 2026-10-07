@@ -11,7 +11,7 @@
 //                   prixHabituelMemeMagasinCentimes|null (prix habituel hors promo du MÊME magasin, figé à la date) }
 //   Settings    : { cle (clé), valeur }
 
-import { normaliserNom, prixNormalise, decisionDoublon } from './domain.js';
+import { normaliserNom, prixNormalise, decisionDoublon, trierReleves } from './domain.js';
 
 export const NOM_BASE = 'appli-courses';
 export const VERSION_SCHEMA = 1;
@@ -278,7 +278,7 @@ export function annulerEnregistrement(jeton) {
 
 export async function listerReleves(typeId) {
   const observations = await lireObservations(typeId);
-  return observations.sort((a, b) => a.date !== b.date ? (a.date < b.date ? 1 : -1) : (b.id || 0) - (a.id || 0));
+  return trierReleves(observations);
 }
 
 export async function modifierReleve(id, champs) {

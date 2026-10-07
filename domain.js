@@ -57,6 +57,12 @@ export function verifierFormat(typeUnit, valeur, unite) {
 }
 export function arrondirCentimes(x) { return Math.sign(x) * Math.round(Math.abs(x)); }
 
+export function trierReleves(releves) {
+  return [...(Array.isArray(releves) ? releves : [])].sort((a, b) =>
+    a.date !== b.date ? (a.date < b.date ? 1 : -1) : (b.id || 0) - (a.id || 0)
+  );
+}
+
 export function estPrixIncoherent(nouveauNormalise, dernierNormalise) {
   if (dernierNormalise == null) return false;
   if (!(nouveauNormalise > 0) || !(dernierNormalise > 0)) return false;
