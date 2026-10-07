@@ -57,6 +57,17 @@ export function verifierFormat(typeUnit, valeur, unite) {
 }
 export function arrondirCentimes(x) { return Math.sign(x) * Math.round(Math.abs(x)); }
 
+export function estPrixIncoherent(nouveauNormalise, dernierNormalise) {
+  if (dernierNormalise == null) return false;
+  if (!(nouveauNormalise > 0) || !(dernierNormalise > 0)) return false;
+  return Math.abs(nouveauNormalise - dernierNormalise) / dernierNormalise > 0.5;
+}
+export function decisionDoublon(existantNormalise, nouveauNormalise) {
+  if (existantNormalise == null) return 'ajouter';
+  if (!(nouveauNormalise > 0)) return 'conserver';
+  return nouveauNormalise <= existantNormalise ? 'remplacer' : 'conserver';
+}
+
 export function analyserPrixSaisie(saisie) {
   const brut = String(saisie == null ? '' : saisie).trim().replace(',', '.');
   if (!/^\d+(?:\.\d+)?$/.test(brut)) return null;

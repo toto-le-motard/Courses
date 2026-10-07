@@ -1,6 +1,6 @@
 // app.js — interface et navigation (stories 1.2 à 3-2).
-import { initDb, dbPrete, listerTypes, lireDernierReleve, lireObservations, ajouterObservations, demanderStockagePersistant, lireReglage, ecrireReglage, compter, STORES, VERSION_SCHEMA } from './db.js';
-import { MAGASIN, UNITES, LIBELLE_UNITE, VERDICT, analyserPrixSaisie, verifierFormat, prixNormalise, formaterPrixEuros, formaterPrixNormalise, calculerVerdict, prixHabituel } from './domain.js';
+import { initDb, dbPrete, listerTypes, lireDernierReleve, lireObservations, dernierReleve, trouverDoublon, enregistrerReleves, annulerEnregistrement, listerReleves, modifierReleve, supprimerReleve, demanderStockagePersistant, lireReglage, ecrireReglage, compter, STORES, VERSION_SCHEMA } from './db.js';
+import { MAGASIN, UNITES, LIBELLE_UNITE, VERDICT, analyserPrixSaisie, verifierFormat, prixNormalise, formaterPrixEuros, formaterPrixNormalise, calculerVerdict, prixHabituel, estPrixIncoherent, decisionDoublon } from './domain.js';
 import { accueilVide, vueTypes, vueTypeForm } from './types-ui.js';
 
 const vue = document.getElementById('vue');
@@ -11,6 +11,24 @@ const onglets = document.querySelectorAll('.tabs a');
 let versionAppli = '…';
 let diagnostic = { base: 'ouverture…', persistant: '…', lancements: '…', comptes: '' };
 let magasinCourant = MAGASIN.LECLERC;
+let annulationActive = null;
+let annulationTimer = null;
+
+function afficherAnnulation(jeton, magasin) {
+  annulationActive = jeton;
+  if (annulationTimer) clearTimeout(annulationTimer);
+  document.getElementById('bandeau-annulation')?.remove();
+  const b = el('div', { id: 'bandeau-annulation', class: 'bandeau-annulation', role: 'status' },
+    el('span', { text: 'Enregistré chez ' + libelleMagasin(magasin) }),
+    el('button', { type: 'button', class: 'btn-annuler-enregistrement', text: 'Annuler', onclick: async () => {
+      if (!annulationActive) return;
+      const a = annulationActive; annulationActive = null; clearTimeout(annulationTimer); b.remove();
+      await annulerEnregistrement(a);
+    }})
+  );
+  document.body.append(b);
+  annulationTimer = setTimeout(() => { if (annulationActive === jeton) { annulationActive = null; b.remove(); } }, 5000);
+}
 
 function el(tag, attrs = {}, ...enfants) {
   const n = document.createElement(tag);
@@ -73,6 +91,30 @@ async function lireTypesAvecDerniers() {
   });
 }
 
+function demanderConfirmationPrix(prixDernier) {
+  return new Promise(resolve => {
+    const d = el('dialog', { class: 'feuille' },
+      el('h2', { text: 'Prix très différent du dernier relevé (' + prixDernier + '). Confirmer ?' }),
+      el('div', { class: 'feuille-actions' },
+        el('button', { type:'button', class:'btn btn-primaire', text:'Confirmer', onclick:()=>{d.close();resolve(true);} })
+      )
+    );
+    d.addEventListener('close',()=>{d.remove(); if (!d.dataset.done) resolve(false);});
+    document.body.append(d); d.showModal();
+  });
+}
+function demanderRemplacement(prixExistant) {
+  return new Promise(resolve => {
+    const d = el('dialog', { class:'feuille' },
+      el('h2', { text:'Relevé du jour déjà saisi à ' + prixExistant + ', conservé' }),
+      el('div', { class:'feuille-actions' },
+        el('button',{type:'button',class:'btn btn-primaire',text:'Remplacer quand même',onclick:()=>{d.dataset.done='1';d.close();resolve(true);}})
+      )
+    );
+    d.addEventListener('close',()=>{d.remove(); if(!d.dataset.done) resolve(false);});
+    document.body.append(d); d.showModal();
+  });
+}
 function vueMagasin() {
   const racine = el('div', { class: 'ecran-magasin' });
   const entete = el('div', { class: 'selecteur-magasin ' + classeMagasin(magasinCourant) });
@@ -156,11 +198,36 @@ function vueMagasin() {
         if (horsPromoCentimes < prixCentimes) horsPromoAvertissement.hidden = false;
         observations.push({ type: typeChoisi.id, magasin: magasinCourant, date, prixCentimes: horsPromoCentimes, format: format.formatBase, promo: false });
       }
-      await ajouterObservations(observations);
+      // Contrôle 1 : format incompatible déjà effectué ci-dessus.
+      const nNouveau = prixNormalise(prixCentimes, format.formatBase, typeChoisi.unite).centimesParUnite;
+      const dernierPourAlerte = await dernierReleve(typeChoisi.id, magasinCourant);
+      if (dernierPourAlerte) {
+        const nDernier = prixNormalise(dernierPourAlerte.prixCentimes, dernierPourAlerte.format, typeChoisi.unite).centimesParUnite;
+        if (estPrixIncoherent(nNouveau, nDernier) && !bouton.dataset.prixConfirme) {
+          bouton.dataset.prixConfirme = '1';
+          const ok = await demanderConfirmationPrix(formaterPrixNormalise(nDernier, typeChoisi.unite));
+          delete bouton.dataset.prixConfirme;
+          if (!ok) return;
+        }
+      }
+      // Contrôle 2 : doublon du jour. La décision est calculée pour chaque statut.
+      for (const o of observations) {
+        const existant = await trouverDoublon(o.type, o.magasin, o.date, o.promo);
+        if (!existant) continue;
+        const nExistant = prixNormalise(existant.prixCentimes, existant.format, typeChoisi.unite).centimesParUnite;
+        const decision = decisionDoublon(nExistant, nNouveau);
+        if (decision === 'conserver') {
+          const remplacer = await demanderRemplacement(formaterPrixEuros(Math.round(nExistant)));
+          if (!remplacer) return;
+          o.__remplacerPlusHaut = true;
+        }
+      }
+      const jeton = await enregistrerReleves(observations, { remplacerSiPlusHaut: observations.some(o => o.__remplacerPlusHaut) });
+      observations.forEach(o => delete o.__remplacerPlusHaut);
       recherche.value = ''; typeChoisi = null; dernier = null; prix.value = ''; valeurFormat.value = ''; date = aujourdHui(); dateInput.value = date; dateTexte.textContent = dateAffichee(date); promo.checked = false;
       suggestions.replaceChildren(); prixHorsPromoBloc.hidden = true; prixHorsPromo.value = ''; horsPromoAvertissement.hidden = true; chargerFormulaire();
-      message.textContent = 'Enregistré chez ' + libelleMagasin(magasinCourant);
-      message.hidden = false;
+      message.hidden = true;
+      afficherAnnulation(jeton, magasinCourant);
       recherche.focus();
     } catch (e) { erreur(e.message || 'Enregistrement impossible.'); }
     finally { bouton.disabled = !estFormulaireValide(); }
@@ -292,6 +359,75 @@ function vueMagasin() {
   return racine;
 }
 
+
+// ---- Historique des relevés (FR8 / FR9) -----------------------------------------------------
+async function vueHistorique(typeId) {
+  const racine=el('div',{class:'historique'});
+  const type=await dbPrete.then(()=>lireTypeSafe(typeId));
+  if(!type) return carte('Historique','Type introuvable.');
+  const liste=el('div',{class:'liste-historique'});
+  racine.append(el('a',{href:'#/types',class:'btn btn-secondaire btn-bloc'},'← Retour aux types'),liste);
+  async function dessiner(){
+    const rows=await listerReleves(typeId); liste.replaceChildren();
+    if(!rows.length){
+      liste.append(carte('Aucun relevé','Aucun relevé pour ce type.'),
+        el('a',{href:'#/magasin',class:'btn btn-primaire btn-bloc'},'Saisir un relevé'));
+      return;
+    }
+    for(const o of rows) liste.append(ligneHistorique(o));
+  }
+  function ligneHistorique(o){
+    const row=el('div',{class:'ligne ligne-releve','data-id':o.id},
+      el('div',{class:'ligne-releve-contenu'},
+        el('div',{class:'ligne-releve-haut'},
+          el('span',{class:'puce '+classeMagasin(o.magasin),text:libelleMagasin(o.magasin)}),
+          el('span',{class:'releve-date',text:dateAffichee(o.date)})),
+        el('div',{class:'ligne-releve-bas'},
+          el('strong',{text:formaterPrixNormalise(prixNormalise(o.prixCentimes,o.format,type.unite).centimesParUnite,type.unite)}),
+          o.promo?el('span',{class:'badge-promo',text:'Promo'}):null)),
+      el('button',{type:'button',class:'btn-icone',text:'⋯','aria-label':'Actions du relevé',onclick:()=>menuReleve(o)})
+    );
+    let x=0,timer=null;
+    row.addEventListener('pointerdown',e=>{if(e.pointerType==='touch'){x=e.clientX;timer=setTimeout(()=>menuReleve(o),550);}});
+    row.addEventListener('pointerup',e=>{if(timer)clearTimeout(timer); if(e.pointerType==='touch'&&Math.abs(e.clientX-x)>60)menuReleve(o);});
+    row.addEventListener('pointercancel',()=>{if(timer)clearTimeout(timer);});
+    return row;
+  }
+  function menuReleve(o){
+    const d=el('dialog',{class:'feuille'},el('h2',{text:'Relevé du '+dateAffichee(o.date)}),
+      el('div',{class:'feuille-actions'},
+        el('button',{type:'button',class:'btn btn-primaire',text:'Modifier',onclick:()=>{d.close();afficherEdition(o);}}),
+        el('button',{type:'button',class:'btn btn-danger',text:'Supprimer',onclick:()=>{d.close();confirmerSuppressionReleve(o);}}),
+        el('button',{type:'button',class:'btn btn-secondaire',text:'Fermer',onclick:()=>d.close()})));
+    d.addEventListener('close',()=>d.remove());document.body.append(d);d.showModal();
+  }
+  function confirmerSuppressionReleve(o){
+    const d=el('dialog',{class:'feuille'},el('h2',{text:'Supprimer ce relevé ?'}),
+      el('div',{class:'feuille-actions'},
+        el('button',{type:'button',class:'btn btn-danger',text:'Supprimer',onclick:async()=>{d.close();await supprimerReleve(o.id);await dessiner();}}),
+        el('button',{type:'button',class:'btn btn-secondaire',text:'Annuler',onclick:()=>d.close()})));
+    d.addEventListener('close',()=>d.remove());document.body.append(d);d.showModal();
+  }
+  function afficherEdition(o){
+    const d=el('dialog',{class:'feuille feuille-edition'});
+    const magasin=el('select',{class:'champ'}); magasin.append(...[MAGASIN.LECLERC,MAGASIN.INTERMARCHE].map(m=>el('option',{value:m,text:libelleMagasin(m)})));magasin.value=o.magasin;
+    const prix=el('input',{class:'champ',inputmode:'decimal',value:String((o.prixCentimes/100).toFixed(2)).replace('.',',')});
+    const format=el('input',{class:'champ',type:'number',inputmode:'decimal',value:o.format});
+    const unite=el('select',{class:'champ'});
+    const remplirUnites=()=>{unite.replaceChildren(...(type.unite==='kg'?['g','kg']:type.unite==='l'?['ml','l']:['unit']).map(u=>el('option',{value:u,text:LIBELLE_UNITE[u]})));};
+    remplirUnites();
+    const base=o.format; let u=type.unite==='kg'&&base%1000===0?'kg':type.unite==='l'&&base%1000===0?'l':type.unite==='kg'?'g':type.unite==='l'?'ml':'unit';format.value=type.unite==='kg'&&u==='kg'?base/1000:type.unite==='l'&&u==='l'?base/1000:base;unite.value=u;
+    const date=el('input',{class:'champ',type:'date',value:o.date}); const promo=el('input',{type:'checkbox',checked:o.promo});
+    const msg=el('p',{class:'erreur',role:'alert',hidden:true});
+    const form=el('form',{novalidate:true},el('label',{class:'etiquette',text:'Magasin'}),magasin,el('label',{class:'etiquette',text:'Prix'}),prix,el('label',{class:'etiquette',text:'Format'}),format,unite,el('label',{class:'promo-ligne'},promo,' Promo'),el('label',{class:'etiquette',text:'Date'}),date,msg,
+      el('div',{class:'feuille-actions'},el('button',{type:'submit',class:'btn btn-primaire',text:'Enregistrer'}),el('button',{type:'button',class:'btn btn-secondaire',text:'Annuler',onclick:()=>d.close()})));
+    form.addEventListener('submit',async e=>{e.preventDefault();msg.hidden=true;const p=analyserPrixSaisie(prix.value),f=verifierFormat(type.unite,Number(format.value),unite.value);if(!p||!f.ok){msg.textContent=f.ok?'Saisissez un prix valide.':'Saisissez un format compatible.';msg.hidden=false;return;}try{await modifierReleve(o.id,{magasin:magasin.value,prixCentimes:p,format:f.formatBase,date:date.value,promo:promo.checked});d.close();await dessiner();}catch(err){msg.textContent=err.message;msg.hidden=false;}});
+    d.addEventListener('close',()=>d.remove());document.body.append(d);d.showModal();
+  }
+  await dessiner(); return racine;
+}
+async function lireTypeSafe(id){ const r=await listerTypes(); return r.find(t=>t.id===Number(id))||null; }
+
 const ROUTES = {
   magasin: { titre: 'Magasin', onglet: 'magasin', vue: vueMagasin },
   liste: { titre: 'Liste', onglet: 'liste', vue: () => carte('Avant les courses', 'Cet écran arrive avec l’épic E5.') },
@@ -299,7 +435,8 @@ const ROUTES = {
   'type-nouveau': { titre: 'Nouveau type', onglet: 'types', vue: () => vueTypeForm(null) },
   'type-edit': { titre: 'Modifier le type', onglet: 'types', vue: (p) => vueTypeForm(Number(p)) },
   bilan: { titre: 'Bilan', onglet: 'bilan', vue: () => carte('Économies réalisées', 'Cet écran arrive avec l’épic E7.') },
-  reglages: { titre: 'Réglages', onglet: null, vue: vueReglages }
+  reglages: { titre: 'Réglages', onglet: null, vue: vueReglages },
+  historique: { titre: 'Historique', onglet: 'types', vue: (p) => vueHistorique(Number(p)) }
 };
 
 function afficher() {

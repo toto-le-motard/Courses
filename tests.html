@@ -9,11 +9,20 @@ li { padding:6px 0; border-bottom:1px solid rgba(255,255,255,.1); } .exi { color
 </style></head>
 <body><h1>Tests du domaine</h1><div id="bilan">…</div><ul id="liste"></ul>
 <script type="module">
-import { MAGASIN, VERDICT, UNITES, LIBELLE_UNITE, normaliserNom, nomTypeValide, unitesCompatibles, estCompatible, versUniteDeBase, convertir, verifierFormat, arrondirCentimes, analyserPrixSaisie, formaterPrixEuros, formaterPrixNormalise, prixNormalise, joursEntre, mediane, referenceLeclerc, habituelIntermarche, prixHabituel, prixHabituelAutreMagasin, calculerVerdict } from './domain.js';
+import { MAGASIN, VERDICT, UNITES, LIBELLE_UNITE, normaliserNom, nomTypeValide, unitesCompatibles, estCompatible, versUniteDeBase, convertir, verifierFormat, arrondirCentimes, analyserPrixSaisie, formaterPrixEuros, formaterPrixNormalise, prixNormalise, joursEntre, mediane, referenceLeclerc, habituelIntermarche, prixHabituel, prixHabituelAutreMagasin, calculerVerdict, estPrixIncoherent, decisionDoublon } from './domain.js';
 const resultats={reussis:0,echecs:0,details:[]},lignes=[]; function test(exigence,nom,fn){let msg=null;try{fn()}catch(e){msg=e.message}if(msg){resultats.echecs++;resultats.details.push(exigence+' '+nom+' : '+msg)}else resultats.reussis++;lignes.push({ok:!msg,exigence,nom,msg});}
 function egal(a,b,msg=''){if(JSON.stringify(a)!==JSON.stringify(b))throw new Error(msg+' attendu '+JSON.stringify(b)+', obtenu '+JSON.stringify(a));}
 function proche(a,b,eps=1e-6){if(typeof a!=='number'||Math.abs(a-b)>eps)throw new Error('attendu ≈ '+b+', obtenu '+a);}
 const LE=MAGASIN.LECLERC, IM=MAGASIN.INTERMARCHE, AUJ='2026-10-04';
+test('UX 5 / story 3.6','prix incohérent sans relevé antérieur',()=>egal(estPrixIncoherent(100, null),false));
+test('UX 5 / story 3.6','écart exactement 50% sans alerte',()=>{egal(estPrixIncoherent(150,100),false);egal(estPrixIncoherent(50,100),false);});
+test('UX 5 / story 3.6','écart 50,01% avec alerte',()=>egal(estPrixIncoherent(150.01,100),true));
+test('UX 5 / story 3.6','baisse et hausse',()=>{egal(estPrixIncoherent(49,100),true);egal(estPrixIncoherent(149,100),false);egal(estPrixIncoherent(151,100),true);});
+test('UX 5 / story 3.6','doublon absent',()=>egal(decisionDoublon(null,100),'ajouter'));
+test('UX 5 / story 3.6','doublon égal',()=>egal(decisionDoublon(100,100),'remplacer'));
+test('UX 5 / story 3.6','doublon plus bas',()=>egal(decisionDoublon(100,90),'remplacer'));
+test('UX 5 / story 3.6','doublon plus haut',()=>egal(decisionDoublon(100,110),'conserver'));
+test('UX 5 / story 3.6','promo et hors promo distincts',()=>{const a={promo:0},b={promo:1};egal(a.promo===b.promo,false);});
 const obs=(magasin,date,prixCentimes,formatBase=1000,promo=false)=>({magasin,date,prixCentimes,formatBase,promo});
 test('FR1','normalisation du nom',()=>{egal(normaliserNom('CAFÉ Moulu'),'cafe moulu');egal(normaliserNom('  café   moulu '),'cafe moulu');});
 test('FR1','nom valide',()=>{egal(nomTypeValide('Café'),true);egal(nomTypeValide('   '),false);egal(nomTypeValide('a'.repeat(60)),true);egal(nomTypeValide('a'.repeat(61)),false);});

@@ -193,3 +193,9 @@ svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width:
 .verdict-insuffisant { border-color:#B4BCCD; border-style:dashed; }
 .verdict-insuffisant .verdict-icone { border:2px solid #B4BCCD; color:#B4BCCD; background:transparent; }
 .badge-promo { display:inline-flex; min-height:32px; align-items:center; padding:4px 12px; margin-top:12px; border-radius:999px; background:var(--lime); color:var(--fond); font-weight:800; }
+
+/* ---- Stories 3-6 / 3-7 -------------------------------------------------------------- */
+.bandeau-annulation{position:fixed;left:12px;right:12px;bottom:calc(82px + env(safe-area-inset-bottom,0px));z-index:8;min-height:56px;padding:6px 10px 6px 16px;display:flex;align-items:center;justify-content:space-between;gap:10px;border:1px solid var(--bordure);border-radius:20px;background:rgba(24,27,36,.94);box-shadow:0 8px 30px rgba(0,0,0,.28)}
+@supports (backdrop-filter:blur(1px)){.bandeau-annulation{-webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px);background:rgba(255,255,255,.08)}}
+.btn-annuler-enregistrement{min-height:48px;padding:0 14px;border:0;border-radius:14px;background:transparent;color:var(--lime);font:700 16px var(--police-texte)}
+.historique{display:grid;gap:10px}.ligne-releve{min-height:78px;padding:10px 8px 10px 14px}.ligne-releve-contenu{flex:1;min-width:0}.ligne-releve-haut,.ligne-releve-bas{display:flex;align-items:center;gap:8px;justify-content:space-between}.ligne-releve-bas{margin-top:5px}.ligne-releve-bas strong{font:700 18px var(--police-titre)}.releve-date{color:var(--texte2);font-size:14px}.magasin-leclerc{color:#5B8CFF}.magasin-intermarche{color:#FF6B5E}.puce.magasin-leclerc,.puce.magasin-intermarche{background:transparent;border:1px solid currentColor}.feuille-edition{max-height:calc(100vh - 32px);overflow:auto}

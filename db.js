@@ -11,7 +11,7 @@
 //                   prixHabituelMemeMagasinCentimes|null (prix habituel hors promo du MÊME magasin, figé à la date) }
 //   Settings    : { cle (clé), valeur }
 
-import { normaliserNom } from './domain.js';
+import { normaliserNom, prixNormalise, decisionDoublon } from './domain.js';
 
 export const NOM_BASE = 'appli-courses';
 export const VERSION_SCHEMA = 1;
@@ -203,3 +203,92 @@ export function ajouterObservations(observations) {
     t.onabort = () => reject(t.error || new Error('Enregistrement annulé'));
   });
 }
+
+
+// ---- Garde-fous et historique des relevés (stories 3-6 / 3-7) -------------------------------
+
+export async function dernierReleve(typeId, magasin) {
+  return lireDernierReleve(typeId, magasin);
+}
+
+export async function trouverDoublon(typeId, magasin, date, promo) {
+  return requete('Observation', 'readonly', (s) =>
+    s.index('cleJour').get([typeId, magasin, date, promo ? 1 : 0])
+  );
+}
+
+async function typeUnitePour(typeId) {
+  const t = await lireType(typeId);
+  if (!t) throw new Error('Type introuvable.');
+  return t.unite;
+}
+
+function normaliseObservation(observation, unite) {
+  const n = prixNormalise(observation.prixCentimes, observation.format, unite);
+  return n.ok ? n.centimesParUnite : null;
+}
+
+export function enregistrerReleves(liste, { remplacerSiPlusHaut = false } = {}) {
+  if (!Array.isArray(liste) || !liste.length) return Promise.resolve({ ajoutes: [], remplaces: [] });
+  return (async () => {
+    const unites = new Map();
+    for (const o of liste) unites.set(o.type, await typeUnitePour(o.type));
+    const existants = await Promise.all(liste.map(o => trouverDoublon(o.type, o.magasin, o.date, o.promo)));
+    const decisions = liste.map((o, i) => {
+      const existant = existants[i];
+      if (!existant) return 'ajouter';
+      const nExistant = normaliseObservation(existant, unites.get(o.type));
+      const nNouveau = normaliseObservation(o, unites.get(o.type));
+      const d = decisionDoublon(nExistant, nNouveau);
+      return d === 'conserver' && !remplacerSiPlusHaut ? 'conserver' : 'remplacer';
+    });
+    return new Promise((resolve, reject) => {
+      const t = _db.transaction('Observation', 'readwrite');
+      const store = t.objectStore('Observation');
+      const ajoutes = [], remplaces = [];
+      for (let i = 0; i < liste.length; i++) {
+        if (decisions[i] === 'conserver') continue;
+        const existant = existants[i];
+        if (existant) {
+          remplaces.push(structuredClone(existant));
+          store.delete(existant.id);
+        }
+        const add = store.add({ ...liste[i], promo: liste[i].promo ? 1 : 0 });
+        add.onsuccess = () => ajoutes.push(add.result);
+      }
+      t.oncomplete = () => resolve({ ajoutes, remplaces });
+      t.onerror = () => reject(t.error);
+      t.onabort = () => reject(t.error || new Error('Enregistrement impossible'));
+    });
+  })();
+}
+
+export function annulerEnregistrement(jeton) {
+  return new Promise((resolve, reject) => {
+    if (!jeton) return resolve();
+    const t = _db.transaction('Observation', 'readwrite');
+    const s = t.objectStore('Observation');
+    for (const id of jeton.ajoutes || []) s.delete(id);
+    for (const original of jeton.remplaces || []) s.put(original);
+    t.oncomplete = () => resolve();
+    t.onerror = () => reject(t.error);
+    t.onabort = () => reject(t.error || new Error('Annulation impossible'));
+  });
+}
+
+export async function listerReleves(typeId) {
+  const observations = await lireObservations(typeId);
+  return observations.sort((a, b) => a.date !== b.date ? (a.date < b.date ? 1 : -1) : (b.id || 0) - (a.id || 0));
+}
+
+export async function modifierReleve(id, champs) {
+  const actuel = await lire('Observation', id);
+  if (!actuel) throw new Error('Relevé introuvable.');
+  const prochain = { ...actuel, ...champs, id: actuel.id, promo: champs.promo ? 1 : 0 };
+  const doublon = await trouverDoublon(prochain.type, prochain.magasin, prochain.date, prochain.promo);
+  if (doublon && doublon.id !== id) throw new Error('Un relevé existe déjà pour ce jour, ce magasin et ce statut');
+  await mettre('Observation', prochain);
+  return prochain;
+}
+
+export const supprimerReleve = (id) => supprimer('Observation', id);

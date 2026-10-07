@@ -56,7 +56,7 @@ export function vueTypes() {
 
   function ligne(t) {
     return el('div', { class: 'ligne' },
-      el('div', { class: 'ligne-texte' }, el('strong', { text: t.nom }), el('span', { class: 'puce', text: LIBELLE_UNITE[t.unite] })),
+      el('div', { class: 'ligne-texte' }, el('strong', { text: t.nom }), el('span', { class: 'puce', text: LIBELLE_UNITE[t.unite] }), el('a', { href: '#/historique/' + t.id, class: 'btn btn-secondaire', text: 'Historique' })),
       t.archive ? el('button', { type: 'button', class: 'btn btn-secondaire', onclick: () => basculerArchive(t, false) }, 'Restaurer') : null,
       el('button', { type: 'button', class: 'btn-icone', 'aria-label': 'Actions pour ' + t.nom, onclick: () => menu(t) }, '\u22EF'));
   }
