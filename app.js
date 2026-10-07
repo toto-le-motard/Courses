@@ -1,6 +1,6 @@
 // app.js — interface et navigation (stories 1.2 à 3-2).
-import { initDb, dbPrete, listerTypes, lireDernierReleve, lireObservations, dernierReleve, trouverDoublon, enregistrerReleves, annulerEnregistrement, listerReleves, modifierReleve, supprimerReleve, demanderStockagePersistant, lireReglage, ecrireReglage, compter, STORES, VERSION_SCHEMA } from './db.js';
-import { MAGASIN, UNITES, LIBELLE_UNITE, VERDICT, analyserPrixSaisie, verifierFormat, prixNormalise, formaterPrixEuros, formaterPrixNormalise, calculerVerdict, prixHabituel, estPrixIncoherent, decisionDoublon } from './domain.js';
+import { initDb, dbPrete, listerTypes, lireDernierReleve, lireObservations, dernierReleve, trouverDoublon, enregistrerReleves, analyserDoublons, annulerEnregistrement, listerReleves, modifierReleve, supprimerReleve, demanderStockagePersistant, lireReglage, ecrireReglage, compter, STORES, VERSION_SCHEMA } from './db.js';
+import { MAGASIN, UNITES, LIBELLE_UNITE, VERDICT, analyserPrixSaisie, verifierFormat, prixNormalise, formaterPrixEuros, formaterPrixNormalise, calculerVerdict, prixHabituel, estPrixIncoherent } from './domain.js';
 import { accueilVide, vueTypes, vueTypeForm } from './types-ui.js';
 
 const vue = document.getElementById('vue');
@@ -14,6 +14,11 @@ let magasinCourant = MAGASIN.LECLERC;
 let annulationActive = null;
 let annulationTimer = null;
 
+function afficherErreur(msg) {
+  const zone = document.querySelector('.message-succes');
+  if (zone) { zone.textContent = msg || ''; zone.hidden = !msg; }
+}
+
 function afficherAnnulation(jeton, magasin) {
   annulationActive = jeton;
   if (annulationTimer) clearTimeout(annulationTimer);
@@ -23,7 +28,12 @@ function afficherAnnulation(jeton, magasin) {
     el('button', { type: 'button', class: 'btn-annuler-enregistrement', text: 'Annuler', onclick: async () => {
       if (!annulationActive) return;
       const a = annulationActive; annulationActive = null; clearTimeout(annulationTimer); b.remove();
-      await annulerEnregistrement(a);
+      try {
+        await annulerEnregistrement(a);
+        if (location.hash.startsWith('#/historique/')) afficher();
+      } catch {
+        afficherErreur('Annulation impossible.');
+      }
     }})
   );
   document.body.append(b);
@@ -103,10 +113,10 @@ function demanderConfirmationPrix(prixDernier) {
     document.body.append(d); d.showModal();
   });
 }
-function demanderRemplacement(prixExistant) {
+function demanderRemplacement(prixExistant, promo) {
   return new Promise(resolve => {
     const d = el('dialog', { class:'feuille' },
-      el('h2', { text:'Relevé du jour déjà saisi à ' + prixExistant + ', conservé' }),
+      el('h2', { text:'Relevé ' + (promo ? 'promo' : 'hors promo') + ' du jour déjà saisi à ' + prixExistant + ', conservé' }),
       el('div', { class:'feuille-actions' },
         el('button',{type:'button',class:'btn btn-primaire',text:'Remplacer quand même',onclick:()=>{d.dataset.done='1';d.close();resolve(true);}})
       )
@@ -210,24 +220,21 @@ function vueMagasin() {
           if (!ok) return;
         }
       }
-      // Contrôle 2 : doublon du jour. La décision est calculée pour chaque statut.
-      for (const o of observations) {
-        const existant = await trouverDoublon(o.type, o.magasin, o.date, o.promo);
-        if (!existant) continue;
-        const nExistant = prixNormalise(existant.prixCentimes, existant.format, typeChoisi.unite).centimesParUnite;
-        const decision = decisionDoublon(nExistant, nNouveau);
-        if (decision === 'conserver') {
-          const remplacer = await demanderRemplacement(formaterPrixEuros(Math.round(nExistant)));
-          if (!remplacer) return;
-          o.__remplacerPlusHaut = true;
-        }
+      // Contrôle 2 : doublon du jour. L'analyse est centralisée et propre à chaque observation.
+      const analyses = await analyserDoublons(observations);
+      const remplacements = analyses.map(() => false);
+      for (let i = 0; i < analyses.length; i++) {
+        const analyse = analyses[i];
+        if (analyse.decision !== 'conserver') continue;
+        const remplacer = await demanderRemplacement(formaterPrixNormalise(analyse.nExistant, typeChoisi.unite), observations[i].promo);
+        if (!remplacer) return;
+        remplacements[i] = true;
       }
-      const jeton = await enregistrerReleves(observations, { remplacerSiPlusHaut: observations.some(o => o.__remplacerPlusHaut) });
-      observations.forEach(o => delete o.__remplacerPlusHaut);
+      const jeton = await enregistrerReleves(observations, { remplacements });
       recherche.value = ''; typeChoisi = null; dernier = null; prix.value = ''; valeurFormat.value = ''; date = aujourdHui(); dateInput.value = date; dateTexte.textContent = dateAffichee(date); promo.checked = false;
       suggestions.replaceChildren(); prixHorsPromoBloc.hidden = true; prixHorsPromo.value = ''; horsPromoAvertissement.hidden = true; chargerFormulaire();
       message.hidden = true;
-      afficherAnnulation(jeton, magasinCourant);
+      if (jeton.ajoutes.length > 0) afficherAnnulation(jeton, magasinCourant);
       recherche.focus();
     } catch (e) { erreur(e.message || 'Enregistrement impossible.'); }
     finally { bouton.disabled = !estFormulaireValide(); }

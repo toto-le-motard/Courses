@@ -9,7 +9,7 @@ li { padding:6px 0; border-bottom:1px solid rgba(255,255,255,.1); } .exi { color
 </style></head>
 <body><h1>Tests du domaine</h1><div id="bilan">…</div><ul id="liste"></ul>
 <script type="module">
-import { MAGASIN, VERDICT, UNITES, LIBELLE_UNITE, normaliserNom, nomTypeValide, unitesCompatibles, estCompatible, versUniteDeBase, convertir, verifierFormat, arrondirCentimes, analyserPrixSaisie, formaterPrixEuros, formaterPrixNormalise, prixNormalise, joursEntre, mediane, referenceLeclerc, habituelIntermarche, prixHabituel, prixHabituelAutreMagasin, calculerVerdict, estPrixIncoherent, decisionDoublon, trierReleves } from './domain.js';
+import { MAGASIN, VERDICT, UNITES, LIBELLE_UNITE, normaliserNom, nomTypeValide, unitesCompatibles, estCompatible, versUniteDeBase, convertir, verifierFormat, arrondirCentimes, analyserPrixSaisie, formaterPrixEuros, formaterPrixNormalise, prixNormalise, joursEntre, mediane, referenceLeclerc, habituelIntermarche, prixHabituel, prixHabituelAutreMagasin, calculerVerdict, estPrixIncoherent, decisionDoublon, analyserDoublon, cleDoublon, trierReleves } from './domain.js';
 const resultats={reussis:0,echecs:0,details:[]},lignes=[]; function test(exigence,nom,fn){let msg=null;try{fn()}catch(e){msg=e.message}if(msg){resultats.echecs++;resultats.details.push(exigence+' '+nom+' : '+msg)}else resultats.reussis++;lignes.push({ok:!msg,exigence,nom,msg});}
 function egal(a,b,msg=''){if(JSON.stringify(a)!==JSON.stringify(b))throw new Error(msg+' attendu '+JSON.stringify(b)+', obtenu '+JSON.stringify(a));}
 function proche(a,b,eps=1e-6){if(typeof a!=='number'||Math.abs(a-b)>eps)throw new Error('attendu ≈ '+b+', obtenu '+a);}
@@ -23,10 +23,19 @@ test('FR8, FR9','référence Leclerc recalculée après suppression',()=>{const 
 test('FR8, FR9','médiane recalculée après modification du prix',()=>{const a=[{magasin:LE,date:'2026-09-01',prixCentimes:700,formatBase:1000},{magasin:LE,date:'2026-09-08',prixCentimes:900,formatBase:1000},{magasin:LE,date:'2026-09-15',prixCentimes:1100,formatBase:1000}];egal(referenceLeclerc(a,'kg',AUJ).valeur,900);a[1].prixCentimes=1000;egal(referenceLeclerc(a,'kg',AUJ).valeur,1000);});
 test('FR8, FR9','relevé passé en promo exclu de la référence',()=>{const a=[{magasin:LE,date:'2026-09-01',prixCentimes:700,formatBase:1000},{magasin:LE,date:'2026-09-08',prixCentimes:900,formatBase:1000},{magasin:LE,date:'2026-09-15',prixCentimes:800,formatBase:1000},{magasin:LE,date:'2026-09-20',prixCentimes:100,formatBase:1000,promo:true}];egal(referenceLeclerc(a,'kg',AUJ).valeur,800);});
 test('UX 5 / story 3.6','doublon absent',()=>egal(decisionDoublon(null,100),'ajouter'));
+test('UX 5 / story 3.6','clés promo et hors promo différentes',()=>{const a=cleDoublon({type:1,magasin:LE,date:AUJ,promo:0}),b=cleDoublon({type:1,magasin:LE,date:AUJ,promo:1});if(JSON.stringify(a)===JSON.stringify(b))throw new Error('clés identiques');});
+test('UX 5 / story 3.6','promo true et 1 même clé',()=>egal(cleDoublon({type:1,magasin:LE,date:AUJ,promo:true}),cleDoublon({type:1,magasin:LE,date:AUJ,promo:1})));
+test('UX 5 / story 3.6','types différents clés différentes',()=>{const a=cleDoublon({type:1,magasin:LE,date:AUJ,promo:0}),b=cleDoublon({type:2,magasin:LE,date:AUJ,promo:0});if(JSON.stringify(a)===JSON.stringify(b))throw new Error('clés identiques');});
+test('UX 5 / story 3.6','magasins différents clés différentes',()=>{const a=cleDoublon({type:1,magasin:LE,date:AUJ,promo:0}),b=cleDoublon({type:1,magasin:IM,date:AUJ,promo:0});if(JSON.stringify(a)===JSON.stringify(b))throw new Error('clés identiques');});
+test('UX 5 / story 3.6','dates différentes clés différentes',()=>{const a=cleDoublon({type:1,magasin:LE,date:AUJ,promo:0}),b=cleDoublon({type:1,magasin:LE,date:'2026-10-05',promo:0});if(JSON.stringify(a)===JSON.stringify(b))throw new Error('clés identiques');});
+test('UX 5 / story 3.6','promo plus bas remplace',()=>egal(analyserDoublon({prixCentimes:900,format:1000,promo:true},{prixCentimes:600,format:1000,promo:true},'kg').decision,'remplacer'));
+test('UX 5 / story 3.6','hors promo plus haut conserve',()=>egal(analyserDoublon({prixCentimes:900,format:1000,promo:false},{prixCentimes:950,format:1000,promo:false},'kg').decision,'conserver'));
+test('UX 5 / story 3.6','existant absent ajoute',()=>egal(analyserDoublon(null,{prixCentimes:600,format:1000,promo:true},'kg').decision,'ajouter'));
+test('UX 5 / story 3.6','formats différents comparés en prix normalisé',()=>{const r=analyserDoublon({prixCentimes:450,format:500},{prixCentimes:800,format:1000},'kg');egal(r.nExistant,900);egal(r.nNouveau,800);egal(r.decision,'remplacer');});
+
 test('UX 5 / story 3.6','doublon égal',()=>egal(decisionDoublon(100,100),'remplacer'));
 test('UX 5 / story 3.6','doublon plus bas',()=>egal(decisionDoublon(100,90),'remplacer'));
 test('UX 5 / story 3.6','doublon plus haut',()=>egal(decisionDoublon(100,110),'conserver'));
-test('UX 5 / story 3.6','promo et hors promo distincts',()=>{const a={promo:0},b={promo:1};egal(a.promo===b.promo,false);});
 const obs=(magasin,date,prixCentimes,formatBase=1000,promo=false)=>({magasin,date,prixCentimes,formatBase,promo});
 test('FR1','normalisation du nom',()=>{egal(normaliserNom('CAFÉ Moulu'),'cafe moulu');egal(normaliserNom('  café   moulu '),'cafe moulu');});
 test('FR1','nom valide',()=>{egal(nomTypeValide('Café'),true);egal(nomTypeValide('   '),false);egal(nomTypeValide('a'.repeat(60)),true);egal(nomTypeValide('a'.repeat(61)),false);});

@@ -68,6 +68,19 @@ export function estPrixIncoherent(nouveauNormalise, dernierNormalise) {
   if (!(nouveauNormalise > 0) || !(dernierNormalise > 0)) return false;
   return Math.abs(nouveauNormalise - dernierNormalise) / dernierNormalise > 0.5;
 }
+export function cleDoublon(o) {
+  return [o.type, o.magasin, o.date, o.promo ? 1 : 0];
+}
+
+export function analyserDoublon(existant, nouveau, unite) {
+  if (!existant) return { existant: null, decision: 'ajouter', nExistant: null, nNouveau: prixNormalise(nouveau.prixCentimes, nouveau.format, unite).centimesParUnite ?? null };
+  const nExistantResult = prixNormalise(existant.prixCentimes, existant.format, unite);
+  const nNouveauResult = prixNormalise(nouveau.prixCentimes, nouveau.format, unite);
+  const nExistant = nExistantResult.ok ? nExistantResult.centimesParUnite : null;
+  const nNouveau = nNouveauResult.ok ? nNouveauResult.centimesParUnite : null;
+  return { existant, decision: decisionDoublon(nExistant, nNouveau), nExistant, nNouveau };
+}
+
 export function decisionDoublon(existantNormalise, nouveauNormalise) {
   if (existantNormalise == null) return 'ajouter';
   if (!(nouveauNormalise > 0)) return 'conserver';

@@ -11,7 +11,7 @@
 //                   prixHabituelMemeMagasinCentimes|null (prix habituel hors promo du MÊME magasin, figé à la date) }
 //   Settings    : { cle (clé), valeur }
 
-import { normaliserNom, prixNormalise, decisionDoublon, trierReleves } from './domain.js';
+import { normaliserNom, prixNormalise, decisionDoublon, analyserDoublon, cleDoublon, verifierFormat, MAGASIN, trierReleves } from './domain.js';
 
 export const NOM_BASE = 'appli-courses';
 export const VERSION_SCHEMA = 1;
@@ -107,6 +107,7 @@ export async function demanderStockagePersistant() {
 export async function initDb() {
   try {
     _db = await ouvrir();
+    await nettoyerChampsParasites();
     await reglagesParDefaut();
     _ok(_db);
     return _db;
@@ -213,7 +214,7 @@ export async function dernierReleve(typeId, magasin) {
 
 export async function trouverDoublon(typeId, magasin, date, promo) {
   return requete('Observation', 'readonly', (s) =>
-    s.index('cleJour').get([typeId, magasin, date, promo ? 1 : 0])
+    s.index('cleJour').get(cleDoublon({ type: typeId, magasin, date, promo }))
   );
 }
 
@@ -223,37 +224,42 @@ async function typeUnitePour(typeId) {
   return t.unite;
 }
 
-function normaliseObservation(observation, unite) {
-  const n = prixNormalise(observation.prixCentimes, observation.format, unite);
-  return n.ok ? n.centimesParUnite : null;
+export async function analyserDoublons(liste) {
+  if (!Array.isArray(liste) || !liste.length) return [];
+  const unites = new Map();
+  for (const o of liste) unites.set(o.type, await typeUnitePour(o.type));
+  const existants = await Promise.all(liste.map((o) => trouverDoublon(o.type, o.magasin, o.date, o.promo)));
+  return liste.map((o, i) => analyserDoublon(existants[i], o, unites.get(o.type)));
 }
 
-export function enregistrerReleves(liste, { remplacerSiPlusHaut = false } = {}) {
+function observationPropre(o) {
+  return {
+    type: o.type,
+    magasin: o.magasin,
+    date: o.date,
+    prixCentimes: o.prixCentimes,
+    format: o.format,
+    promo: o.promo ? 1 : 0
+  };
+}
+
+export function enregistrerReleves(liste, { remplacements = [] } = {}) {
   if (!Array.isArray(liste) || !liste.length) return Promise.resolve({ ajoutes: [], remplaces: [] });
   return (async () => {
-    const unites = new Map();
-    for (const o of liste) unites.set(o.type, await typeUnitePour(o.type));
-    const existants = await Promise.all(liste.map(o => trouverDoublon(o.type, o.magasin, o.date, o.promo)));
-    const decisions = liste.map((o, i) => {
-      const existant = existants[i];
-      if (!existant) return 'ajouter';
-      const nExistant = normaliseObservation(existant, unites.get(o.type));
-      const nNouveau = normaliseObservation(o, unites.get(o.type));
-      const d = decisionDoublon(nExistant, nNouveau);
-      return d === 'conserver' && !remplacerSiPlusHaut ? 'conserver' : 'remplacer';
-    });
+    const analyses = await analyserDoublons(liste);
     return new Promise((resolve, reject) => {
       const t = _db.transaction('Observation', 'readwrite');
       const store = t.objectStore('Observation');
       const ajoutes = [], remplaces = [];
       for (let i = 0; i < liste.length; i++) {
-        if (decisions[i] === 'conserver') continue;
-        const existant = existants[i];
+        const analyse = analyses[i];
+        if (analyse.decision === 'conserver' && !remplacements[i]) continue;
+        const existant = analyse.existant;
         if (existant) {
           remplaces.push(structuredClone(existant));
           store.delete(existant.id);
         }
-        const add = store.add({ ...liste[i], promo: liste[i].promo ? 1 : 0 });
+        const add = store.add(observationPropre(liste[i]));
         add.onsuccess = () => ajoutes.push(add.result);
       }
       t.oncomplete = () => resolve({ ajoutes, remplaces });
@@ -276,15 +282,65 @@ export function annulerEnregistrement(jeton) {
   });
 }
 
+export async function nettoyerChampsParasites() {
+  return new Promise((resolve, reject) => {
+    const t = _db.transaction('Observation', 'readwrite');
+    const s = t.objectStore('Observation');
+    const r = s.openCursor();
+    r.onsuccess = () => {
+      const c = r.result;
+      if (!c) return;
+      const o = c.value;
+      const champs = Object.keys(o).filter((k) => k.startsWith('__'));
+      if (champs.length) {
+        for (const k of champs) delete o[k];
+        c.update(o);
+      }
+      c.continue();
+    };
+    t.oncomplete = () => resolve();
+    t.onerror = () => reject(t.error);
+    t.onabort = () => reject(t.error || new Error('Nettoyage impossible'));
+  });
+}
+
 export async function listerReleves(typeId) {
   const observations = await lireObservations(typeId);
   return trierReleves(observations);
 }
 
+function dateValide(date) {
+  if (typeof date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return false;
+  const [a, m, j] = date.split('-').map(Number);
+  const d = new Date(Date.UTC(a, m - 1, j));
+  return d.getUTCFullYear() === a && d.getUTCMonth() === m - 1 && d.getUTCDate() === j;
+}
+
 export async function modifierReleve(id, champs) {
   const actuel = await lire('Observation', id);
   if (!actuel) throw new Error('Relevé introuvable.');
-  const prochain = { ...actuel, ...champs, id: actuel.id, promo: champs.promo ? 1 : 0 };
+  const prochain = { ...actuel };
+  for (const champ of ['magasin', 'date', 'prixCentimes', 'format', 'promo']) {
+    if (Object.prototype.hasOwnProperty.call(champs || {}, champ)) prochain[champ] = champs[champ];
+  }
+  if (prochain.magasin !== MAGASIN.LECLERC && prochain.magasin !== MAGASIN.INTERMARCHE) {
+    throw new Error('Magasin invalide.');
+  }
+  if (!Number.isInteger(prochain.prixCentimes) || prochain.prixCentimes <= 0) {
+    throw new Error('Prix invalide.');
+  }
+  if (!dateValide(prochain.date)) throw new Error('Date invalide.');
+  prochain.promo = prochain.promo ? 1 : 0;
+  if (!Number.isInteger(prochain.format) || prochain.format <= 0) {
+    throw new Error('Format invalide.');
+  }
+  const type = await lireType(prochain.type);
+  if (!type) throw new Error('Type introuvable.');
+  const uniteBase = type.unite === 'kg' ? 'g' : type.unite === 'l' ? 'ml' : 'unit';
+  const formatOk = verifierFormat(type.unite, prochain.format, uniteBase);
+  if (!formatOk.ok || !prixNormalise(prochain.prixCentimes, prochain.format, type.unite).ok) {
+    throw new Error('Format incompatible avec l\'unité du type');
+  }
   const doublon = await trouverDoublon(prochain.type, prochain.magasin, prochain.date, prochain.promo);
   if (doublon && doublon.id !== id) throw new Error('Un relevé existe déjà pour ce jour, ce magasin et ce statut');
   await mettre('Observation', prochain);
