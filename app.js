@@ -1,6 +1,6 @@
 // app.js — interface et navigation (stories 1.2 à 3-2).
 import { initDb, dbPrete, listerTypes, lireDernierReleve, lireObservations, dernierReleve, trouverDoublon, enregistrerReleves, analyserDoublons, annulerEnregistrement, listerReleves, modifierReleve, supprimerReleve, demanderStockagePersistant, lireReglage, ecrireReglage, compter, STORES, VERSION_SCHEMA } from './db.js';
-import { MAGASIN, UNITES, LIBELLE_UNITE, VERDICT, analyserPrixSaisie, verifierFormat, prixNormalise, formaterPrixEuros, formaterPrixNormalise, calculerVerdict, prixHabituel, estPrixIncoherent } from './domain.js';
+import { MAGASIN, UNITES, LIBELLE_UNITE, VERDICT, analyserPrixSaisie, verifierFormat, prixNormalise, formaterPrixEuros, formaterPrixNormalise, calculerVerdict, prixHabituel, estPrixIncoherent, unitesCompatibles, formatAffichage } from './domain.js';
 import { accueilVide, vueTypes, vueTypeForm } from './types-ui.js';
 
 const vue = document.getElementById('vue');
@@ -243,26 +243,22 @@ function vueMagasin() {
   function chargerDernierEtFormat() {
     if (!typeChoisi) return;
     dernier = types.find((x) => x.type.id === typeChoisi.id)?.dernier || null;
-    const compatibles = UNITES.includes(typeChoisi.unite) ? (typeChoisi.unite === 'kg' ? ['g','kg'] : typeChoisi.unite === 'l' ? ['ml','l'] : ['unit']) : [];
+    const compatibles = unitesCompatibles(typeChoisi.unite);
     uniteFormat.replaceChildren(...compatibles.map((u) => el('option', { value: u, text: LIBELLE_UNITE[u] })));
-    let valeur = '';
-    let unite = compatibles[0];
+    let affichage = formatAffichage(dernier ? Number(dernier.format) : NaN, typeChoisi.unite);
+    if (!dernier) affichage = { valeur: '', unite: compatibles[0] || '' };
+    valeurFormat.value = affichage.valeur.replace(',', '.');
+    uniteFormat.value = affichage.unite;
     if (dernier) {
-      const base = Number(dernier.format);
-      if (typeChoisi.unite === 'kg' && base % 1000 === 0) { valeur = base / 1000; unite = 'kg'; }
-      else if (typeChoisi.unite === 'l' && base % 1000 === 0) { valeur = base / 1000; unite = 'l'; }
-      else { valeur = base; unite = typeChoisi.unite === 'kg' ? 'g' : typeChoisi.unite === 'l' ? 'ml' : 'unit'; }
       prix.value = dernier.prixCentimes ? String((dernier.prixCentimes / 100).toFixed(2)).replace('.', ',') : '';
     }
-    valeurFormat.value = valeur;
-    uniteFormat.value = unite;
   }
 
   function estFormulaireValide() {
     if (!typeChoisi) return false;
     const p = prixValide();
     const f = verifierFormat(typeChoisi.unite, Number(valeurFormat.value), uniteFormat.value);
-    return Boolean(p && f.ok);
+    return Boolean(p && valeurFormat.value.trim() && uniteFormat.value && f.ok);
   }
 
   async function actualiserVerdict() {
@@ -421,9 +417,9 @@ async function vueHistorique(typeId) {
     const prix=el('input',{class:'champ',inputmode:'decimal',value:String((o.prixCentimes/100).toFixed(2)).replace('.',',')});
     const format=el('input',{class:'champ',type:'number',inputmode:'decimal',value:o.format});
     const unite=el('select',{class:'champ'});
-    const remplirUnites=()=>{unite.replaceChildren(...(type.unite==='kg'?['g','kg']:type.unite==='l'?['ml','l']:['unit']).map(u=>el('option',{value:u,text:LIBELLE_UNITE[u]})));};
+    const remplirUnites=()=>{unite.replaceChildren(...unitesCompatibles(type.unite).map(u=>el('option',{value:u,text:LIBELLE_UNITE[u]})));};
     remplirUnites();
-    const base=o.format; let u=type.unite==='kg'&&base%1000===0?'kg':type.unite==='l'&&base%1000===0?'l':type.unite==='kg'?'g':type.unite==='l'?'ml':'unit';format.value=type.unite==='kg'&&u==='kg'?base/1000:type.unite==='l'&&u==='l'?base/1000:base;unite.value=u;
+    const affichage=formatAffichage(Number(o.format),type.unite); format.value=affichage.valeur.replace(',', '.'); unite.value=affichage.unite;
     const date=el('input',{class:'champ',type:'date',value:o.date}); const promo=el('input',{type:'checkbox',checked:o.promo});
     const msg=el('p',{class:'erreur',role:'alert',hidden:true});
     const form=el('form',{novalidate:true},el('label',{class:'etiquette',text:'Magasin'}),magasin,el('label',{class:'etiquette',text:'Prix'}),prix,el('label',{class:'etiquette',text:'Format'}),format,unite,el('label',{class:'promo-ligne'},promo,' Promo'),el('label',{class:'etiquette',text:'Date'}),date,msg,

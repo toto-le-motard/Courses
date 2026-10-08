@@ -28,6 +28,18 @@ const UNITES_DETAIL = Object.freeze({
 });
 const DIVISEUR = Object.freeze({ kg: 1000, l: 1000, unit: 1 });
 
+export function formatAffichage(valeurBase, uniteType) {
+  const petiteUnite = uniteType === 'kg' ? 'g' : uniteType === 'l' ? 'ml' : uniteType === 'unit' ? 'unit' : null;
+  if (!petiteUnite || typeof valeurBase !== 'number' || !Number.isFinite(valeurBase) || valeurBase <= 0) {
+    return { valeur: '', unite: petiteUnite };
+  }
+  const base = Math.round(valeurBase);
+  const enGrandeUnite = (uniteType === 'kg' || uniteType === 'l') && base >= 1000;
+  const unite = enGrandeUnite ? uniteType : petiteUnite;
+  const valeur = enGrandeUnite ? base / 1000 : base;
+  return { valeur: valeur.toLocaleString('fr-FR', { maximumFractionDigits: 3 }), unite };
+}
+
 export function unitesCompatibles(typeUnit) {
   switch (typeUnit) {
     case 'kg': return ['g', 'kg'];
