@@ -171,7 +171,7 @@ svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width:
 .date-cache { position:absolute; width:1px; height:1px; opacity:0; pointer-events:none; }
 .promo-ligne { min-height:52px; display:flex; align-items:center; gap:12px; color:var(--texte); }
 .interrupteur { width:48px; height:28px; accent-color:var(--lime); }
-.btn-enregistrer { position:sticky; bottom:calc(88px + env(safe-area-inset-bottom,0px)); z-index:4; margin-top:12px; }
+ .btn-enregistrer { position:static; margin-top:12px; }
 .message-succes { min-height:22px; margin:8px 0; color:var(--lime); font-weight:700; }
 .message-succes[hidden] { display:none; }
 

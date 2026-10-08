@@ -30,7 +30,7 @@ function afficherAnnulation(jeton, magasin) {
       const a = annulationActive; annulationActive = null; clearTimeout(annulationTimer); b.remove();
       try {
         await annulerEnregistrement(a);
-        if (location.hash.startsWith('#/historique/')) afficher();
+        if (location.hash.startsWith('#/historique/')) void afficher();
       } catch {
         afficherErreur('Annulation impossible.');
       }
@@ -50,7 +50,7 @@ function el(tag, attrs = {}, ...enfants) {
     else if (k.startsWith('on')) n.addEventListener(k.slice(2), v);
     else n.setAttribute(k, v === true ? '' : v);
   }
-  for (const e of enfants.flat()) if (e != null) n.append(e.nodeType ? e : document.createTextNode(e));
+  for (const e of enfants.flat()) { if (e == null || e === false) continue; if (typeof e === 'object' && typeof e.then === 'function') { console.error('el : Promise reçue'); n.append(document.createTextNode('Erreur d'affichage')); continue; } n.append(e.nodeType ? e : document.createTextNode(e)); }
   return n;
 }
 
@@ -83,7 +83,7 @@ function vueReglages() {
   const c = carte('À propos et diagnostic');
   const p = el('p', { class: 'diag' });
   const lignes = [
-    ['Version de l’appli', versionAppli], ['Base de données', diagnostic.base],
+    ['Version du cache', versionAppli === '…' ? 'v18' : versionAppli], ['Version de l’appli', versionAppli], ['Base de données', diagnostic.base],
     ['Stockage persistant', diagnostic.persistant], ['Lancements enregistrés', diagnostic.lancements],
     ['Contenu', diagnostic.comptes]
   ];
@@ -245,10 +245,10 @@ function vueMagasin() {
     dernier = types.find((x) => x.type.id === typeChoisi.id)?.dernier || null;
     const compatibles = unitesCompatibles(typeChoisi.unite);
     uniteFormat.replaceChildren(...compatibles.map((u) => el('option', { value: u, text: LIBELLE_UNITE[u] })));
-    let affichage = formatAffichage(dernier ? Number(dernier.format) : NaN, typeChoisi.unite);
-    if (!dernier) affichage = { valeur: '', unite: compatibles[0] || '' };
-    valeurFormat.value = affichage.valeur.replace(',', '.');
-    uniteFormat.value = affichage.unite;
+    const affichage = dernier ? formatAffichage(Number(dernier.format), typeChoisi.unite) : { valeur: '', unite: compatibles[0] || '' };
+    valeurFormat.value = affichage.valeur === '' ? '' : affichage.valeur.replace(',', '.');
+    uniteFormat.value = compatibles.includes(affichage.unite) ? affichage.unite : (compatibles[0] || '');
+    if (uniteFormat.options.length && !uniteFormat.value) uniteFormat.selectedIndex = 0;
     if (dernier) {
       prix.value = dernier.prixCentimes ? String((dernier.prixCentimes / 100).toFixed(2)).replace('.', ',') : '';
     }
@@ -320,7 +320,7 @@ function vueMagasin() {
       }
       const n = f.ok && p ? prixNormalise(p, f.formatBase, typeChoisi.unite) : null;
       prixNormaliseAffiche.textContent = n?.ok ? formaterPrixNormalise(n.centimesParUnite, typeChoisi.unite) : '';
-      bouton.disabled = !(p && f.ok);
+      bouton.disabled = !(p && valeurFormat.value.trim() && uniteFormat.value && f.ok);
       void actualiserVerdict();
     } else {
       prixNormaliseAffiche.textContent = '';
@@ -364,13 +364,14 @@ function vueMagasin() {
 
 
 // ---- Historique des relevés (FR8 / FR9) -----------------------------------------------------
-async function vueHistorique(typeId) {
+function vueHistorique(typeId) {
   const racine=el('div',{class:'historique'});
-  const type=await dbPrete.then(()=>lireTypeSafe(typeId));
-  if(!type) return carte('Historique','Type introuvable.');
   const liste=el('div',{class:'liste-historique'});
   racine.append(el('a',{href:'#/types',class:'btn btn-secondaire btn-bloc'},'← Retour aux types'),liste);
-  async function dessiner(){
+  async function charger(){
+    const type=await dbPrete.then(()=>lireTypeSafe(typeId));
+    if(!type) { liste.replaceChildren(carte('Historique','Type introuvable.')); return; }
+    async function dessiner(){
     const rows=await listerReleves(typeId); liste.replaceChildren();
     if(!rows.length){
       liste.append(carte('Aucun relevé','Aucun relevé pour ce type.'),
@@ -415,19 +416,26 @@ async function vueHistorique(typeId) {
     const d=el('dialog',{class:'feuille feuille-edition'});
     const magasin=el('select',{class:'champ'}); magasin.append(...[MAGASIN.LECLERC,MAGASIN.INTERMARCHE].map(m=>el('option',{value:m,text:libelleMagasin(m)})));magasin.value=o.magasin;
     const prix=el('input',{class:'champ',inputmode:'decimal',value:String((o.prixCentimes/100).toFixed(2)).replace('.',',')});
-    const format=el('input',{class:'champ',type:'number',inputmode:'decimal',value:o.format});
-    const unite=el('select',{class:'champ'});
-    const remplirUnites=()=>{unite.replaceChildren(...unitesCompatibles(type.unite).map(u=>el('option',{value:u,text:LIBELLE_UNITE[u]})));};
-    remplirUnites();
-    const affichage=formatAffichage(Number(o.format),type.unite); format.value=affichage.valeur.replace(',', '.'); unite.value=affichage.unite;
-    const date=el('input',{class:'champ',type:'date',value:o.date}); const promo=el('input',{type:'checkbox',checked:o.promo});
-    const msg=el('p',{class:'erreur',role:'alert',hidden:true});
-    const form=el('form',{novalidate:true},el('label',{class:'etiquette',text:'Magasin'}),magasin,el('label',{class:'etiquette',text:'Prix'}),prix,el('label',{class:'etiquette',text:'Format'}),format,unite,el('label',{class:'promo-ligne'},promo,' Promo'),el('label',{class:'etiquette',text:'Date'}),date,msg,
-      el('div',{class:'feuille-actions'},el('button',{type:'submit',class:'btn btn-primaire',text:'Enregistrer'}),el('button',{type:'button',class:'btn btn-secondaire',text:'Annuler',onclick:()=>d.close()})));
-    form.addEventListener('submit',async e=>{e.preventDefault();msg.hidden=true;const p=analyserPrixSaisie(prix.value),f=verifierFormat(type.unite,Number(format.value),unite.value);if(!p||!f.ok){msg.textContent=f.ok?'Saisissez un prix valide.':'Saisissez un format compatible.';msg.hidden=false;return;}try{await modifierReleve(o.id,{magasin:magasin.value,prixCentimes:p,format:f.formatBase,date:date.value,promo:promo.checked});d.close();await dessiner();}catch(err){msg.textContent=err.message;msg.hidden=false;}});
+    const format=el('input',{class:'champ',type:'number',inputmode:'decimal'});
+    const unite=el('select',{class:'champ'}), compatibles=unitesCompatibles(type.unite);
+    unite.replaceChildren(...compatibles.map(u=>el('option',{value:u,text:LIBELLE_UNITE[u]})));
+    const affichage=formatAffichage(Number(o.format),type.unite); format.value=affichage.valeur.replace(',','.');
+    unite.value=compatibles.includes(affichage.unite)?affichage.unite:(compatibles[0]||'');
+    if(unite.options.length&&!unite.value)unite.selectedIndex=0;
+    const date=el('input',{class:'champ',type:'date',value:o.date}), promo=el('input',{type:'checkbox',checked:o.promo});
+    const msg=el('p',{class:'erreur',role:'alert',hidden:true}), prixNormaliseEdition=el('p',{class:'prix-normalise'});
+    const boutonEdition=el('button',{type:'submit',class:'btn btn-primaire',text:'Enregistrer',disabled:true});
+    const form=el('form',{novalidate:true},el('label',{class:'etiquette',text:'Magasin'}),magasin,el('label',{class:'etiquette',text:'Prix'}),prix,el('label',{class:'etiquette',text:'Format'}),format,unite,prixNormaliseEdition,el('label',{class:'promo-ligne'},promo,' Promo'),el('label',{class:'etiquette',text:'Date'}),date,msg,
+      el('div',{class:'feuille-actions'},boutonEdition,el('button',{type:'button',class:'btn btn-secondaire',text:'Annuler',onclick:()=>d.close()})));
+    function verifierEdition(){const p=analyserPrixSaisie(prix.value),f=verifierFormat(type.unite,Number(format.value),unite.value);prixNormaliseEdition.textContent=p&&f.ok?formaterPrixNormalise(prixNormalise(p,f.formatBase,type.unite).centimesParUnite,type.unite):'';boutonEdition.disabled=!(p&&format.value.trim()&&unite.value&&f.ok);}
+    prix.addEventListener('input',verifierEdition);format.addEventListener('input',verifierEdition);unite.addEventListener('change',verifierEdition);verifierEdition();
+    form.addEventListener('submit',async e=>{e.preventDefault();msg.hidden=true;const p=analyserPrixSaisie(prix.value),f=verifierFormat(type.unite,Number(format.value),unite.value);if(!p||!format.value.trim()||!unite.value||!f.ok){msg.textContent='Saisissez un prix et un format compatibles.';msg.hidden=false;return;}try{await modifierReleve(o.id,{magasin:magasin.value,prixCentimes:p,format:f.formatBase,date:date.value,promo:promo.checked});d.close();await dessiner();}catch(err){msg.textContent=err.message;msg.hidden=false;}});
     d.addEventListener('close',()=>d.remove());document.body.append(d);d.showModal();
   }
-  await dessiner(); return racine;
+    await dessiner();
+  }
+  charger().catch(() => liste.replaceChildren(carte('Historique','Impossible de charger l’historique.')));
+  return racine;
 }
 async function lireTypeSafe(id){ const r=await listerTypes(); return r.find(t=>t.id===Number(id))||null; }
 
@@ -442,17 +450,17 @@ const ROUTES = {
   historique: { titre: 'Historique', onglet: 'types', vue: (p) => vueHistorique(Number(p)) }
 };
 
-function afficher() {
+async function afficher() {
   const [nom, param] = (location.hash.replace('#/', '') || 'magasin').split('/');
   const r = ROUTES[nom] || ROUTES.magasin;
   titre.textContent = r.titre; document.title = r.titre + ' · Appli Courses';
-  vue.replaceChildren(r.vue(param));
+  vue.replaceChildren(await r.vue(param));
   vue.style.animation = 'none'; void vue.offsetWidth; vue.style.animation = '';
   onglets.forEach((a) => a.dataset.route === r.onglet ? a.setAttribute('aria-current', 'page') : a.removeAttribute('aria-current'));
   window.scrollTo(0, 0);
 }
 if (!location.hash) history.replaceState(null, '', '#/magasin');
-window.addEventListener('hashchange', afficher); afficher();
+window.addEventListener('hashchange', () => { void afficher(); }); void afficher();
 
 (async () => {
   try {
@@ -463,8 +471,8 @@ window.addEventListener('hashchange', afficher); afficher();
     diagnostic.persistant = ok === null ? 'non géré par ce navigateur' : (ok ? 'oui' : 'non (pensez à exporter régulièrement)');
     const n = (await lireReglage('lancements', 0)) + 1; await ecrireReglage('lancements', n); diagnostic.lancements = String(n);
     const parts = []; for (const s of STORES) parts.push(s + ' ' + (await compter(s))); diagnostic.comptes = parts.join(' · ');
-    if (location.hash === '#/magasin') afficher();
-  } catch (e) { diagnostic.base = 'ERREUR : ' + (e && e.message ? e.message : e); if (location.hash === '#/reglages') afficher(); }
+    if (location.hash === '#/magasin') void afficher();
+  } catch (e) { diagnostic.base = 'ERREUR : ' + (e && e.message ? e.message : e); if (location.hash === '#/reglages') void afficher(); }
 })();
 
 function demanderVersion() { const ctrl = navigator.serviceWorker.controller; if (ctrl) ctrl.postMessage({ type: 'GET_VERSION' }); }

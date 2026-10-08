@@ -107,7 +107,7 @@ export async function demanderStockagePersistant() {
 export async function initDb() {
   try {
     _db = await ouvrir();
-    await nettoyerChampsParasites();
+    try { await nettoyerChampsParasites(); } catch (e) { console.error('Nettoyage des champs parasites impossible.', e); }
     await reglagesParDefaut();
     _ok(_db);
     return _db;
