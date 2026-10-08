@@ -50,7 +50,7 @@ function el(tag, attrs = {}, ...enfants) {
     else if (k.startsWith('on')) n.addEventListener(k.slice(2), v);
     else n.setAttribute(k, v === true ? '' : v);
   }
-  for (const e of enfants.flat()) { if (e == null || e === false) continue; if (typeof e === 'object' && typeof e.then === 'function') { console.error('el : Promise reçue'); n.append(document.createTextNode('Erreur d'affichage')); continue; } n.append(e.nodeType ? e : document.createTextNode(e)); }
+  for (const e of enfants.flat()) { if (e == null || e === false) continue; if (typeof e === 'object' && typeof e.then === 'function') { console.error('el : Promise reçue'); n.append(document.createTextNode("Erreur d’affichage")); continue; } n.append(e.nodeType ? e : document.createTextNode(e)); }
   return n;
 }
 
@@ -434,7 +434,7 @@ function vueHistorique(typeId) {
   }
     await dessiner();
   }
-  charger().catch(() => liste.replaceChildren(carte('Historique','Impossible de charger l’historique.')));
+  charger().catch((e) => { console.error('Chargement impossible', e); liste.replaceChildren(carte('Historique', 'Chargement impossible')); });
   return racine;
 }
 async function lireTypeSafe(id){ const r=await listerTypes(); return r.find(t=>t.id===Number(id))||null; }
@@ -477,7 +477,7 @@ window.addEventListener('hashchange', () => { void afficher(); }); void afficher
 
 function demanderVersion() { const ctrl = navigator.serviceWorker.controller; if (ctrl) ctrl.postMessage({ type: 'GET_VERSION' }); }
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.addEventListener('message', (e) => { if (e.data?.type === 'VERSION') { versionAppli = e.data.version; if (location.hash === '#/reglages') afficher(); }});
+  navigator.serviceWorker.addEventListener('message', (e) => { if (e.data?.type === 'VERSION') { versionAppli = e.data.version; if (location.hash === '#/reglages') void afficher(); }});
   navigator.serviceWorker.addEventListener('controllerchange', demanderVersion);
   navigator.serviceWorker.register('sw.js').then(demanderVersion).catch(() => { versionAppli = 'service worker indisponible'; });
 } else versionAppli = 'service worker non disponible';

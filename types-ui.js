@@ -13,7 +13,7 @@ export function el(tag, attrs = {}, ...enfants) {
   }
   for (const e of enfants.flat()) {
     if (e == null || e === false) continue;
-    if (typeof e === 'object' && typeof e.then === 'function') { console.error('el : Promise reçue'); n.append(document.createTextNode('Erreur d'affichage')); continue; }
+    if (typeof e === 'object' && typeof e.then === 'function') { console.error('el : Promise reçue'); n.append(document.createTextNode("Erreur d’affichage")); continue; }
     n.append(e.nodeType ? e : document.createTextNode(e));
   }
   return n;

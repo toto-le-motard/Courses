@@ -43,7 +43,7 @@ if (!principaux) {
 // ---- 2. Syntaxe des scripts ----------------------------------------------------------------
 const scripts = readdirSync(racine).filter((f) => f.endsWith('.js') || f.endsWith('.mjs'));
 for (const f of scripts) {
-  try { execSync('node --check ' + JSON.stringify(f), { stdio: 'pipe' }); }
+  try { execSync('node --experimental-default-type=module --check ' + JSON.stringify(f), { stdio: 'pipe' }); }
   catch (e) { ko('syntaxe ' + f + ' : ' + String(e.stderr || e.message).split('\n').slice(0, 3).join(' ')); }
 }
 if (!lignes.some((l) => l.startsWith('ECHEC') && l.includes('syntaxe'))) ok('syntaxe des scripts (' + scripts.join(', ') + ')');
@@ -101,7 +101,7 @@ if (playwright) {
     } else info('tests.html absent : tests du domaine sautés');
 
     // 5. Parcours de l'appli
-    const ctx = await navigateur.newContext({ viewport: { width: 390, height: 800 } });
+    const ctx = await navigateur.newContext({ viewport: { width: 390, height: 844 } });
     const page = await ctx.newPage();
     const erreurs = [];
     const verifierEcran = async (nom) => { const texte=await page.locator('body').innerText(); if(texte.includes('[object Promise]')) throw new Error(nom+' : [object Promise] présent'); if(texte.includes('Erreur d’affichage')) throw new Error(nom+' : Erreur d’affichage présente'); if(erreurs.length) throw new Error(nom+' : erreur console/pageerror : '+erreurs[0]); };
@@ -109,6 +109,7 @@ if (playwright) {
     page.on('console', (m) => { if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) erreurs.push('console : ' + m.text()); });
     try {
       await page.goto(base);
+      if (erreurs.length) throw new Error('chargement de l’appli : ' + erreurs[0]);
       await page.waitForSelector('#vue .carte', { timeout: 10000 });
       ok('l\u2019appli s\u2019affiche');
       for (const [route, titre] of [['liste', 'Liste'], ['types', 'Types'], ['bilan', 'Bilan'], ['magasin', 'Magasin']]) {
@@ -177,7 +178,7 @@ if (playwright) {
       const idCafe = await page.evaluate(() => window.__idCafe);
       const choisirType=async n=>{await page.fill('#champ-type',n);await page.waitForSelector('#suggestions-types .suggestion-type');await page.click('#suggestions-types .suggestion-type');};
       const verifierUnites=async a=>{const v=await page.locator('#champ-unite option').evaluateAll(es=>es.map(e=>e.value));if(JSON.stringify(v)!==JSON.stringify(a))throw new Error('unités incorrectes '+JSON.stringify(v));if(!await page.$eval('#champ-unite',e=>!!e.value))throw new Error('unité non sélectionnée');};
-      await aller('#/magasin');await page.waitForSelector('#champ-type');await choisirType('Café moulu');await verifierUnites(['g','kg']);await page.fill('#champ-prix','11,00');await page.fill('#champ-format','500');await page.selectOption('#champ-unite','g');await page.waitForFunction(()=>/22,00\s*€\/kg/.test(document.querySelector('.prix-normalise')?.textContent||''),null,{timeout:3000});await page.evaluate(()=>{const e=document.querySelector('#champ-unite');e.value='';e.dispatchEvent(new Event('change',{bubbles:true}));});if(!await page.$eval('#btn-enregistrer',e=>e.disabled))throw new Error('Enregistrer actif sans unité');await page.selectOption('#champ-unite','g');await page.click('#btn-enregistrer');await page.waitForTimeout(150);await choisirType('Café moulu');if(await page.inputValue('#champ-format')!=='500'||await page.inputValue('#champ-unite')!=='g')throw new Error('pré-remplissage 500 g incorrect');ok('B5 Magasin kg');
+      await aller('#/magasin');await page.waitForSelector('#champ-type');await choisirType('Café moulu');await verifierUnites(['g','kg']);await page.fill('#champ-prix','11,00');await page.fill('#champ-format','500');await page.selectOption('#champ-unite','g');await page.waitForFunction(()=>/22,00\s*€\/kg/.test(document.querySelector('.prix-normalise')?.textContent||''),null,{timeout:3000});await page.evaluate(()=>{const e=document.querySelector('#champ-unite');e.value='';e.dispatchEvent(new Event('change',{bubbles:true}));});if(!await page.$eval('#btn-enregistrer',e=>e.disabled))throw new Error('Enregistrer actif sans unité');await page.selectOption('#champ-unite','g');await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));await page.waitForTimeout(100);const positions=await page.evaluate(()=>{const v=document.getElementById('carte-verdict')?.getBoundingClientRect();const b=document.getElementById('btn-enregistrer')?.getBoundingClientRect();const t=document.querySelector('.tabs')?.getBoundingClientRect();return {verdictBottom:v?.bottom,buttonTop:b?.top,buttonBottom:b?.bottom,tabsTop:t?.top};});if(!(positions.verdictBottom<=positions.buttonTop&&positions.buttonBottom<=positions.tabsTop))throw new Error('carte verdict masquée par les actions ou les onglets: '+JSON.stringify(positions));ok('B7 carte verdict entièrement visible au-dessus du bouton et des onglets');await page.click('#btn-enregistrer');await page.waitForTimeout(150);await choisirType('Café moulu');if(await page.inputValue('#champ-format')!=='500'||await page.inputValue('#champ-unite')!=='g')throw new Error('pré-remplissage 500 g incorrect');ok('B5 Magasin kg');
       await aller('#/types');await creer('Lait liquide','l');await page.waitForFunction(()=>/Lait liquide/.test(document.getElementById('liste-types').textContent),null,{timeout:5000});await aller('#/magasin');await choisirType('Lait liquide');await verifierUnites(['ml','l']);await page.fill('#champ-prix','2,00');await page.fill('#champ-format','250');await page.selectOption('#champ-unite','ml');await page.waitForFunction(()=>/8,00\s*€\/l/.test(document.querySelector('.prix-normalise')?.textContent||''),null,{timeout:3000});ok('B5 Magasin l');
       await aller('#/types');await creer('Pain unitaire','unit');await page.waitForFunction(()=>/Pain unitaire/.test(document.getElementById('liste-types').textContent),null,{timeout:5000});await aller('#/magasin');await choisirType('Pain unitaire');await verifierUnites(['unit']);ok('B5 Magasin unit');
       await aller('#/types');await creer('Historique kg','kg');await page.waitForFunction(()=>/Historique kg/.test(document.getElementById('liste-types').textContent),null,{timeout:5000});const idHistorique=await page.evaluate(()=>new Promise((res,rej)=>{const rq=indexedDB.open('appli-courses');rq.onsuccess=()=>{const db=rq.result;const q=db.transaction('ProductType').objectStore('ProductType').getAll();q.onsuccess=()=>res(q.result.find(x=>x.nom==='Historique kg')?.id)};rq.onerror=()=>rej(rq.error)}));await aller('#/magasin');await choisirType('Historique kg');await verifierUnites(['g','kg']);await page.fill('#champ-prix','11,00');await page.fill('#champ-format','500');await page.selectOption('#champ-unite','g');await page.fill('input[type="date"]','2026-10-06');await page.check('#champ-promo');await page.click('#btn-enregistrer');await page.waitForTimeout(150);await choisirType('Historique kg');await page.fill('#champ-prix','12,00');await page.fill('#champ-format','500');await page.selectOption('#champ-unite','g');await page.fill('input[type="date"]','2026-10-07');await page.uncheck('#champ-promo');await page.click('#btn-enregistrer');await page.waitForTimeout(150);
@@ -206,7 +207,7 @@ if (playwright) {
       await page.waitForSelector('dialog:has-text("définitive")');
       await page.click('dialog button:has-text("Supprimer")');      await page.waitForFunction(() => /Aucun type pour/.test(document.getElementById('vue').textContent), null, { timeout: 5000 });
       ok('E2 liste vide : phrase d\u2019explication et lien d\u2019action');
-      await aller('#/reglages');await page.waitForFunction(()=>/Version v18/.test(document.getElementById('vue').textContent),null,{timeout:5000});await verifierEcran('Réglages');ok('B6 Réglages : version v18 visible');
+      await aller('#/reglages');await page.waitForFunction(()=>/Version v19/.test(document.getElementById('vue').textContent),null,{timeout:5000});await verifierEcran('Réglages');ok('B6 Réglages : version v18 visible');
       // service worker actif et page contrôlée, puis test hors ligne
       await page.evaluate(() => navigator.serviceWorker.ready);
       if (!(await page.evaluate(() => !!navigator.serviceWorker.controller))) { await page.reload(); await page.waitForSelector('#vue .carte'); }
