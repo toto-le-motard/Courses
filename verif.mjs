@@ -113,7 +113,9 @@ if (playwright) {
     const ctx = await navigateur.newContext({ viewport: { width: 390, height: 844 } });
     const page = await ctx.newPage();
     const erreurs = [];
-    const verifierEcran = async (nom) => { const texte=await page.locator('body').innerText(); if(texte.includes('[object Promise]')) throw new Error(nom+' : [object Promise] présent'); if(texte.includes('Erreur d’affichage')) throw new Error(nom+' : Erreur d’affichage présente'); if(erreurs.length) throw new Error(nom+' : erreur console/pageerror : '+erreurs[0]); };
+    const requetesExternes = [];
+    page.on('request', req => { const u=new URL(req.url()); if(u.origin!==new URL(base).origin && !['data:','blob:'].includes(u.protocol)) requetesExternes.push(req.url()); });
+    const verifierEcran = async (nom) => { const texte=await page.locator('body').innerText(); if(texte.includes('[object Promise]')) throw new Error(nom+' : [object Promise] présent'); if(texte.includes('Erreur d’affichage')) throw new Error(nom+' : Erreur d’affichage présente'); if(/\bundefined\b/.test(texte)) throw new Error(nom+' : texte undefined visible'); if(erreurs.length) throw new Error(nom+' : erreur console/pageerror : '+erreurs[0]); };
     const verifierOptionsNonVides = async (nom) => { const v=await page.locator('select option').evaluateAll(es=>es.map(e=>({value:e.value,text:e.textContent.trim()})).filter(e=>!e.text)); if(v.length) throw new Error(nom+' : option sans texte '+JSON.stringify(v)); };
     page.on('pageerror', (e) => erreurs.push('exception : ' + e.message));
     page.on('console', (m) => { if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) erreurs.push('console : ' + m.text()); });
@@ -195,9 +197,10 @@ if (playwright) {
       await page.evaluate(()=>window.scrollTo(0,0));await page.waitForTimeout(50);
       const apres844=await mesurer();info('MESURES APRES dock 390x844 '+JSON.stringify(apres844));
       if(!apres844.dock||apres844.scrollY!==0||apres844.type.top<0||apres844.prix.bottom>apres844.dock.top||apres844.format.bottom>apres844.dock.top||apres844.dock.bottom>apres844.tabs.top||apres844.verdict.top<apres844.dock.top||apres844.verdict.bottom>apres844.dock.bottom||apres844.bouton.top<apres844.dock.top||apres844.bouton.bottom>apres844.dock.bottom)throw new Error('dock ou champs hors zone visible à 390x844 : '+JSON.stringify(apres844));
+      const datePromo=await page.evaluate(()=>{const a=document.querySelector('.date-ligne').getBoundingClientRect(),b=document.querySelector('.promo-ligne').getBoundingClientRect();return {dateTop:Math.round(a.top),promoTop:Math.round(b.top),dateBottom:Math.round(a.bottom),promoBottom:Math.round(b.bottom)};});if(Math.abs(datePromo.dateTop-datePromo.promoTop)>4)throw new Error('Date et Promo ne sont pas sur une seule ligne : '+JSON.stringify(datePromo));
       await page.setViewportSize({width:390,height:500});await page.locator('#champ-prix').focus();await page.waitForTimeout(100);
       const apres500=await mesurer();info('MESURES APRES dock 390x500 '+JSON.stringify(apres500));
-      if(!apres500.dock||apres500.prix.top<0||apres500.prix.bottom>apres500.dock.top||apres500.dock.top<0||apres500.dock.bottom>apres500.tabs.top||apres500.dock.bottom>500)throw new Error('champ prix ou dock masqué à 390x500 : '+JSON.stringify(apres500));
+      if(!apres500.dock||apres500.prix.top<0||apres500.prix.bottom>apres500.dock.top||apres500.format.bottom>apres500.dock.top||apres500.dock.top<0||apres500.dock.bottom>apres500.tabs.top||apres500.dock.bottom>500)throw new Error('champ prix ou dock masqué à 390x500 : '+JSON.stringify(apres500));
       await page.setViewportSize({width:390,height:844});await page.evaluate(()=>window.scrollTo(0,0));await page.waitForTimeout(50);
       ok('3-8 dock fixe : verdict et Enregistrer visibles sans chevauchement à 390x844 et 390x500');const observationsAvantSauvegarde=await page.evaluate(()=>new Promise(res=>{const q=indexedDB.open('appli-courses');q.onsuccess=()=>{const db=q.result;const r=db.transaction('Observation').objectStore('Observation').count();r.onsuccess=()=>{db.close();res(r.result);};};}));
       await page.click('#btn-enregistrer');await page.waitForSelector('#bandeau-annulation',{timeout:3000});await page.waitForFunction(()=>document.activeElement?.id==='champ-type',null,{timeout:3000});
@@ -246,7 +249,7 @@ if (playwright) {
       await page.waitForSelector('dialog:has-text("définitive")');
       await page.click('dialog button:has-text("Supprimer")');      await page.waitForFunction(() => !/Lessive liquide/.test((document.getElementById('vue')?.textContent || '')), null, { timeout: 5000 });
       ok('E2 suppression de Lessive liquide : le type supprimé disparaît sans affecter les autres');
-      await aller('#/reglages');await page.waitForFunction(()=>/v31/.test((document.getElementById('vue')?.textContent || '')),null,{timeout:5000});await verifierEcran('Réglages');ok('B6 Réglages : version v31 visible');
+      await aller('#/reglages');await page.waitForFunction(()=>/v32/.test((document.getElementById('vue')?.textContent || '')),null,{timeout:5000});await verifierEcran('Réglages');ok('B6 Réglages : version v32 visible');
       // service worker actif et page contrôlée, puis test hors ligne
       await page.evaluate(() => navigator.serviceWorker.ready);
       if (!(await page.evaluate(() => !!navigator.serviceWorker.controller))) { await page.reload(); await page.waitForSelector('#vue .carte'); }
@@ -264,6 +267,7 @@ if (playwright) {
     } catch (e) { ko('parcours de l\u2019appli : ' + String(e.message).split('\n')[0]); }
     if (erreurs.length) ko('erreurs dans la page : ' + erreurs.slice(0, 3).join(' | '));
     else ok('aucune erreur dans la console de la page');
+    if (requetesExternes.length) ko('appels réseau externes détectés : '+requetesExternes.slice(0,5).join(', ')); else ok('aucun appel réseau externe pendant le parcours IHM');
     await ctx.close();
   } finally { await navigateur.close(); }
 }

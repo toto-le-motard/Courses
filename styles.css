@@ -43,7 +43,7 @@ body {
   font-family: var(--police-texte);
   font-size: 16px;
   line-height: 1.45;
-  padding-bottom: calc(var(--hauteur-tabs) + 24px + env(safe-area-inset-bottom, 0px));
+  padding-bottom: calc(var(--hauteur-tabs) + var(--dock-hauteur, 0px) + 36px + env(safe-area-inset-bottom, 0px));
 }
 
 .topbar {

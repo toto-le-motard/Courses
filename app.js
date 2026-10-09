@@ -31,6 +31,7 @@ function actualiserPositionDock() {
   document.documentElement.style.setProperty('--dock-bottom', position.bottomDock + 'px');
   document.documentElement.style.setProperty('--annulation-bottom', position.bottomAnnulation + 'px');
   document.documentElement.style.setProperty('--hauteur-visible', (vv ? vv.height : window.innerHeight) + 'px');
+  document.documentElement.style.setProperty('--dock-hauteur', dock.getBoundingClientRect().height + 'px');
 }
 window.addEventListener('resize', actualiserPositionDock);
 window.visualViewport?.addEventListener('resize', actualiserPositionDock);
@@ -45,7 +46,9 @@ function garderChampVisible(champ) {
     const hautVisible = vv ? vv.offsetTop : 0;
     const basVisible = vv ? vv.offsetTop + vv.height : window.innerHeight;
     const limiteBasse = Math.min(basVisible, dock.getBoundingClientRect().top) - 8;
-    if (r.bottom > limiteBasse) window.scrollBy({ top: r.bottom - limiteBasse, behavior: 'auto' });
+    const suivant = champ.id === 'champ-prix' ? document.getElementById('champ-format') : null;
+    const basNecessaire = suivant ? Math.max(r.bottom, suivant.getBoundingClientRect().bottom) : r.bottom;
+    if (basNecessaire > limiteBasse) window.scrollBy({ top: basNecessaire - limiteBasse, behavior: 'auto' });
     else if (r.top < hautVisible + 8) window.scrollBy({ top: r.top - hautVisible - 8, behavior: 'auto' });
   });
 }
@@ -506,7 +509,7 @@ const ROUTES = {
 
 async function afficher() {
   const [nom, param] = (location.hash.replace('#/', '') || 'magasin').split('/');
-  if (nom !== 'magasin') { document.getElementById('dock-magasin')?.remove(); dockResizeObserver?.disconnect(); }
+  if (nom !== 'magasin') { document.getElementById('dock-magasin')?.remove(); dockResizeObserver?.disconnect(); document.documentElement.style.setProperty('--dock-hauteur', '0px'); }
   const r = ROUTES[nom] || ROUTES.magasin;
   titre.textContent = r.titre; document.title = r.titre + ' · Appli Courses';
   vue.replaceChildren(await r.vue(param));
