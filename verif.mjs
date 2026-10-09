@@ -49,12 +49,12 @@ for (const f of scripts) {
 if (!lignes.some((l) => l.startsWith('ECHEC') && l.includes('syntaxe'))) ok('syntaxe des scripts (' + scripts.join(', ') + ')');
 const sondeSyntaxe = join(racine, '.verif-sonde-syntaxe.mjs');
 try {
-  writeFileSync(sondeSyntaxe, 'export const sonde = ;\\n', 'utf8');
+  writeFileSync(sondeSyntaxe, "const phrase = 'aujourd'hui';\\n", 'utf8');
   let rejetee = false;
   try { execSync('node --experimental-default-type=module --check ' + JSON.stringify(sondeSyntaxe), { stdio: 'pipe' }); }
   catch { rejetee = true; }
-  if (rejetee) ok('auto-test syntaxe : Node ' + process.versions.node + ' rejette une erreur de syntaxe injectée temporairement');
-  else ko('auto-test syntaxe : Node accepte à tort une erreur de syntaxe injectée');
+  if (rejetee) ok('auto-test syntaxe : Node ' + process.versions.node + ' rejette une apostrophe non échappée dans une chaîne temporaire');
+  else ko('auto-test syntaxe : Node accepte à tort une apostrophe non échappée');
 } finally { try { unlinkSync(sondeSyntaxe); } catch {} }
 
 // ---- 3. Version du cache -------------------------------------------------------------------
@@ -250,7 +250,7 @@ if (playwright) {
       await page.waitForSelector('dialog:has-text("définitive")');
       await page.click('dialog button:has-text("Supprimer")');      await page.waitForFunction(() => !/Lessive liquide/.test((document.getElementById('vue')?.textContent || '')), null, { timeout: 5000 });
       ok('E2 suppression de Lessive liquide : le type supprimé disparaît sans affecter les autres');
-      await aller('#/reglages');await page.waitForFunction(()=>/v33/.test((document.getElementById('vue')?.textContent || '')),null,{timeout:5000});await verifierEcran('Réglages');ok('B6 Réglages : version v33 visible');
+      await aller('#/reglages');await page.waitForFunction(()=>/v34/.test((document.getElementById('vue')?.textContent || '')),null,{timeout:5000});await verifierEcran('Réglages');ok('B6 Réglages : version v34 visible');
       // service worker actif et page contrôlée, puis test hors ligne
       await page.evaluate(() => navigator.serviceWorker.ready);
       if (!(await page.evaluate(() => !!navigator.serviceWorker.controller))) { await page.reload(); await page.waitForSelector('#vue .carte'); }
