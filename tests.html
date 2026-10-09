@@ -9,6 +9,7 @@ li { padding:6px 0; border-bottom:1px solid rgba(255,255,255,.1); } .exi { color
 </style></head>
 <body><h1>Tests du domaine</h1><div id="bilan">…</div><ul id="liste"></ul>
 <script type="module">
+const calculerPositionDock = await import('./domain.js').then(m => m.calculerPositionDock);
 import { MAGASIN, VERDICT, UNITES, LIBELLE_UNITE, normaliserNom, nomTypeValide, unitesCompatibles, estCompatible, versUniteDeBase, convertir, verifierFormat, arrondirCentimes, analyserPrixSaisie, formaterPrixEuros, formaterPrixNormalise, prixNormalise, joursEntre, mediane, referenceLeclerc, habituelIntermarche, prixHabituel, prixHabituelAutreMagasin, calculerVerdict, estPrixIncoherent, decisionDoublon, analyserDoublon, cleDoublon, formatAffichage, trierReleves } from './domain.js';
 const resultats={reussis:0,echecs:0,details:[]},lignes=[]; function test(exigence,nom,fn){let msg=null;try{fn()}catch(e){msg=e.message}if(msg){resultats.echecs++;resultats.details.push(exigence+' '+nom+' : '+msg)}else resultats.reussis++;lignes.push({ok:!msg,exigence,nom,msg});}
 function egal(a,b,msg=''){if(JSON.stringify(a)!==JSON.stringify(b))throw new Error(msg+' attendu '+JSON.stringify(b)+', obtenu '+JSON.stringify(a));}
@@ -68,6 +69,8 @@ test('FR5 / UX 3.1','unitesCompatibles : unit = unité',()=>egal(unitesCompatibl
 test('FR5 / UX 3.1','libellés : chaque unité compatible a un texte non vide',()=>{for(const type of UNITES)for(const u of unitesCompatibles(type))if(typeof LIBELLE_UNITE[u]!=='string'||!LIBELLE_UNITE[u].trim())throw new Error('libellé absent pour '+u);});
 test('FR5 / UX 3.1','libellé unit = unités',()=>egal(LIBELLE_UNITE.unit,'unités'));
 test('FR5 / UX 3.1','libellés petites unités g et ml',()=>egal([LIBELLE_UNITE.g,LIBELLE_UNITE.ml],['g','ml']));
+test('3-8','position du dock sans clavier',()=>{if(typeof calculerPositionDock!=='function')throw new Error('fonction calculerPositionDock absente');egal(calculerPositionDock({hauteurFenetre:844,offsetTop:0,hauteurVisible:844,hauteurDock:150,hauteurOnglets:76,zoneSecurite:12}),{clavierInset:0,bottomDock:100,topDock:594,bottomAnnulation:278});});
+test('3-8','position du dock avec clavier',()=>{if(typeof calculerPositionDock!=='function')throw new Error('fonction calculerPositionDock absente');egal(calculerPositionDock({hauteurFenetre:844,offsetTop:0,hauteurVisible:500,hauteurDock:150,hauteurOnglets:76,zoneSecurite:12}),{clavierInset:344,bottomDock:444,topDock:250,bottomAnnulation:622});});
 const extraTests=[
 ()=>egal(normaliserNom('Café'),'cafe'),()=>egal(normaliserNom('  A  B  '),'a b'),()=>egal(nomTypeValide('x'),true),()=>egal(nomTypeValide('a'.repeat(61)),false),
 ()=>egal(unitesCompatibles('xx'),[]),()=>egal(estCompatible('l','ml'),true),()=>egal(estCompatible('unit','g'),false),()=>egal(versUniteDeBase(2,'kg'),2000),()=>egal(versUniteDeBase(2,'l'),2000),()=>egal(versUniteDeBase(1,'unit'),1),
