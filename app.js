@@ -400,8 +400,8 @@ function vueHistorique(typeId) {
   function menuReleve(o){
     const d=el('dialog',{class:'feuille'},el('h2',{text:'Relevé du '+dateAffichee(o.date)}),
       el('div',{class:'feuille-actions'},
-        el('button',{type:'button',class:'btn btn-primaire',text:'Modifier',onclick:()=>{d.addEventListener('close',()=>{d.remove();afficherEdition(o);},{once:true});d.close();}}),
-        el('button',{type:'button',class:'btn btn-danger',text:'Supprimer',onclick:()=>{d.close();confirmerSuppressionReleve(o);}}),
+        el('button',{type:'button',class:'btn btn-primaire',text:'Modifier',onclick:()=>{d.close();d.remove();afficherEdition(o);}}),
+        el('button',{type:'button',class:'btn btn-danger',text:'Supprimer',onclick:()=>{d.close();d.remove();confirmerSuppressionReleve(o);}}),
         el('button',{type:'button',class:'btn btn-secondaire',text:'Fermer',onclick:()=>d.close()})));
     d.addEventListener('close',()=>d.remove());document.body.append(d);d.showModal();
   }
