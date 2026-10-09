@@ -223,7 +223,7 @@ if (playwright) {
       await page.waitForSelector('dialog:has-text("définitive")');
       await page.click('dialog button:has-text("Supprimer")');      await page.waitForFunction(() => /Aucun type pour/.test((document.getElementById('vue')?.textContent || '')), null, { timeout: 5000 });
       ok('E2 liste vide : phrase d\u2019explication et lien d\u2019action');
-      await aller('#/reglages');await page.waitForFunction(()=>/Version v22/.test((document.getElementById('vue')?.textContent || '')),null,{timeout:5000});await verifierEcran('Réglages');ok('B6 Réglages : version v21 visible');
+      await aller('#/reglages');await page.waitForFunction(()=>/v23/.test((document.getElementById('vue')?.textContent || '')),null,{timeout:5000});await verifierEcran('Réglages');ok('B6 Réglages : version v23 visible');
       // service worker actif et page contrôlée, puis test hors ligne
       await page.evaluate(() => navigator.serviceWorker.ready);
       if (!(await page.evaluate(() => !!navigator.serviceWorker.controller))) { await page.reload(); await page.waitForSelector('#vue .carte'); }
