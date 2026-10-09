@@ -12,7 +12,7 @@ const EPSILON = 1e-9;
 
 // Fonctions E2 conservées lors de la fusion avec le lot C.
 export const UNITES = ['kg', 'l', 'unit'];
-export const LIBELLE_UNITE = { kg: 'kg', l: 'l', unit: 'unité' };
+export const LIBELLE_UNITE = Object.freeze({ g: 'g', kg: 'kg', ml: 'ml', l: 'l', unit: 'unités' });
 export function normaliserNom(texte) {
   return String(texte == null ? '' : texte).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
 }
