@@ -6,6 +6,27 @@
 export const MAGASIN = Object.freeze({ LECLERC: 'leclerc', INTERMARCHE: 'intermarche' });
 export const VERDICT = Object.freeze({ ACHETER_ICI: 'acheter ici', ATTENDRE: 'attendre', INDIFFERENT: 'indifférent', INSUFFISANT: 'données insuffisantes' });
 export const SEUIL_DEFAUT_PCT = 5;
+/**
+ * Calcule les positions du dock et du bandeau d'annulation dans le viewport.
+ * hauteurFenetre : hauteur du layout viewport ; hauteurVisible / offsetTop : visualViewport.
+ */
+export function calculerPositionDock({ hauteurFenetre, offsetTop = 0, hauteurVisible, hauteurDock, hauteurOnglets, zoneSecurite = 12 }) {
+  const hFenetre = Number.isFinite(hauteurFenetre) && hauteurFenetre > 0 ? hauteurFenetre : 0;
+  const hVisible = Number.isFinite(hauteurVisible) && hauteurVisible > 0 ? hauteurVisible : hFenetre;
+  const topVisible = Math.max(0, Number.isFinite(offsetTop) ? offsetTop : 0);
+  const inset = Math.max(0, hFenetre - (topVisible + hVisible));
+  const hDock = Math.max(0, Number.isFinite(hauteurDock) ? hauteurDock : 0);
+  const hOnglets = Math.max(0, Number.isFinite(hauteurOnglets) ? hauteurOnglets : 0);
+  const marge = Math.max(0, Number.isFinite(zoneSecurite) ? zoneSecurite : 0);
+  const bottomDock = inset + hOnglets + marge * 2;
+  return {
+    clavierInset: inset,
+    bottomDock,
+    topDock: hFenetre - bottomDock - hDock,
+    bottomAnnulation: bottomDock + hDock + 28,
+  };
+}
+
 export const FENETRE_JOURS = 56;
 export const MIN_RELEVES_REFERENCE = 3;
 const EPSILON = 1e-9;

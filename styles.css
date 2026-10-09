@@ -26,6 +26,10 @@
   --police-titre: "Bricolage Grotesque", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --police-texte: "DM Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --hauteur-tabs: 76px;
+  --clavier-inset: 0px;
+  --dock-bottom: 100px;
+  --annulation-bottom: 278px;
+  --hauteur-visible: 100vh;
 }
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -74,7 +78,7 @@ svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width:
 /* Barre d'onglets flottante */
 .tabs {
   position: fixed; left: 12px; right: 12px; z-index: 6;
-  bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  bottom: calc(var(--clavier-inset, 0px) + 12px + env(safe-area-inset-bottom, 0px));
   display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; padding: 6px;
   border-radius: 28px; border: 1px solid var(--bordure);
   background: rgba(24, 27, 36, 0.96);
@@ -165,14 +169,29 @@ svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width:
 .suggestions { display:grid; gap:6px; margin-top:-6px; margin-bottom:4px; }
 .suggestion-type { min-height:48px; padding:8px 14px; text-align:left; border:1px solid var(--bordure); border-radius:14px; background:#151821; color:var(--texte); font:600 16px var(--police-texte); }
 .prix-normalise { min-height:24px; margin:2px 0 12px; color:var(--lime); font:600 17px var(--police-titre); }
-.date-ligne { position:relative; display:flex; align-items:center; gap:10px; min-height:48px; margin:6px 0; }
-.lien-date { min-height:48px; display:inline-flex; align-items:center; border:0; background:none; color:var(--texte2); text-decoration:underline; font:600 15px var(--police-texte); padding:12px 4px; }
-.date-texte { color:var(--texte); font-size:15px; }
+.date-promo-ligne { display:flex; align-items:center; justify-content:space-between; gap:8px; min-height:48px; margin:4px 0; }
+.date-ligne { position:relative; display:flex; align-items:center; gap:8px; min-height:48px; min-width:0; margin:0; }
+.lien-date { min-height:48px; display:inline-flex; align-items:center; border:0; background:none; color:var(--texte2); text-decoration:underline; font:600 15px var(--police-texte); padding:10px 4px; white-space:nowrap; }
+.date-texte { color:var(--texte); font-size:14px; white-space:nowrap; }
 .date-cache { position:absolute; width:1px; height:1px; opacity:0; pointer-events:none; }
-.promo-ligne { min-height:52px; display:flex; align-items:center; gap:12px; color:var(--texte); }
+.promo-ligne { min-height:48px; display:flex; align-items:center; gap:8px; color:var(--texte); white-space:nowrap; margin:0; }
 .interrupteur { width:48px; height:28px; accent-color:var(--lime); }
-.btn-enregistrer { position:sticky; bottom:calc(88px + env(safe-area-inset-bottom,0px)); z-index:4; margin-top:12px; }
-.formulaire-releve { padding-bottom:calc(164px + env(safe-area-inset-bottom,0px)); }
+.btn-enregistrer { width:100%; margin:0; min-height:48px; }
+.formulaire-releve { padding-bottom:12px; }
+.dock-magasin { position:fixed; left:12px; right:12px; bottom:calc(var(--dock-bottom,100px) + env(safe-area-inset-bottom,0px)); z-index:7; display:grid; grid-template-areas:"verdict" "actions"; gap:8px; padding:8px; border:1px solid var(--bordure); border-radius:22px; background:rgba(18,21,29,.97); box-shadow:0 8px 30px rgba(0,0,0,.32); max-height:calc(var(--hauteur-visible,100vh) - 24px); overflow-y:auto; }
+@supports (backdrop-filter:blur(1px)){.dock-magasin{-webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px);background:rgba(24,27,36,.94)}}
+.dock-verdict-zone { grid-area:verdict; min-width:0; }
+.dock-actions { grid-area:actions; min-width:0; }
+.dock-actions .btn { min-height:48px; }
+.dock-verdict-zone:empty { display:none; }
+.dock-verdict-zone .verdict-carte { margin:0; padding:10px 12px; border-radius:17px; animation:none; }
+.dock-verdict-zone .verdict-ligne1 { gap:8px; }
+.dock-verdict-zone .verdict-ligne1 strong { font-size:23px; line-height:1.12; }
+.dock-verdict-zone .verdict-icone { width:34px; height:34px; font-size:20px; }
+.dock-verdict-zone .verdict-economie { margin-top:6px !important; font-size:13px !important; line-height:1.25; }
+.dock-verdict-zone .verdict-rappel,.dock-verdict-zone .verdict-habituel { margin-top:4px !important; font-size:12px !important; line-height:1.25; }
+.dock-verdict-zone .badge-promo { min-height:24px; margin-top:6px; padding:2px 9px; font-size:12px; }
+.dock-magasin #carte-verdict[hidden] { display:none; }
 .message-succes { min-height:22px; margin:8px 0; color:var(--lime); font-weight:700; }
 .message-succes[hidden] { display:none; }
 
@@ -196,7 +215,7 @@ svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width:
 .badge-promo { display:inline-flex; min-height:32px; align-items:center; padding:4px 12px; margin-top:12px; border-radius:999px; background:var(--lime); color:var(--fond); font-weight:800; }
 
 /* ---- Stories 3-6 / 3-7 -------------------------------------------------------------- */
-.bandeau-annulation{position:fixed;left:12px;right:12px;bottom:calc(82px + env(safe-area-inset-bottom,0px));z-index:8;min-height:56px;padding:6px 10px 6px 16px;display:flex;align-items:center;justify-content:space-between;gap:10px;border:1px solid var(--bordure);border-radius:20px;background:rgba(24,27,36,.94);box-shadow:0 8px 30px rgba(0,0,0,.28)}
+.bandeau-annulation{position:fixed;left:12px;right:12px;bottom:calc(var(--annulation-bottom,278px) + env(safe-area-inset-bottom,0px));z-index:8;min-height:56px;padding:6px 10px 6px 16px;display:flex;align-items:center;justify-content:space-between;gap:10px;border:1px solid var(--bordure);border-radius:20px;background:rgba(24,27,36,.94);box-shadow:0 8px 30px rgba(0,0,0,.28)}
 @supports (backdrop-filter:blur(1px)){.bandeau-annulation{-webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px);background:rgba(255,255,255,.08)}}
 .btn-annuler-enregistrement{min-height:48px;padding:0 14px;border:0;border-radius:14px;background:transparent;color:var(--lime);font:700 16px var(--police-texte)}
 .historique{display:grid;gap:10px}.ligne-releve{min-height:78px;padding:10px 8px 10px 14px}.ligne-releve-contenu{flex:1;min-width:0}.ligne-releve-haut,.ligne-releve-bas{display:flex;align-items:center;gap:8px;justify-content:space-between}.ligne-releve-bas{margin-top:5px}.ligne-releve-bas strong{font:700 18px var(--police-titre)}.releve-date{color:var(--texte2);font-size:14px}.magasin-leclerc{color:#5B8CFF}.magasin-intermarche{color:#FF6B5E}.puce.magasin-leclerc,.puce.magasin-intermarche{background:transparent;border:1px solid currentColor}.feuille-edition{max-height:calc(100vh - 32px);overflow:auto}

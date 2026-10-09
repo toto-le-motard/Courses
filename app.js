@@ -1,6 +1,6 @@
 // app.js — interface et navigation (stories 1.2 à 3-2).
 import { initDb, dbPrete, listerTypes, lireDernierReleve, lireObservations, dernierReleve, trouverDoublon, enregistrerReleves, analyserDoublons, annulerEnregistrement, listerReleves, modifierReleve, supprimerReleve, demanderStockagePersistant, lireReglage, ecrireReglage, compter, STORES, VERSION_SCHEMA } from './db.js';
-import { MAGASIN, UNITES, LIBELLE_UNITE, VERDICT, analyserPrixSaisie, verifierFormat, prixNormalise, formaterPrixEuros, formaterPrixNormalise, calculerVerdict, prixHabituel, estPrixIncoherent, unitesCompatibles, formatAffichage } from './domain.js';
+import { MAGASIN, UNITES, LIBELLE_UNITE, VERDICT, analyserPrixSaisie, verifierFormat, prixNormalise, formaterPrixEuros, formaterPrixNormalise, calculerVerdict, prixHabituel, estPrixIncoherent, unitesCompatibles, formatAffichage, calculerPositionDock } from './domain.js';
 import { accueilVide, vueTypes, vueTypeForm } from './types-ui.js';
 
 const vue = document.getElementById('vue');
@@ -13,6 +13,43 @@ let diagnostic = { base: 'ouverture…', persistant: '…', lancements: '…', c
 let magasinCourant = MAGASIN.LECLERC;
 let annulationActive = null;
 let annulationTimer = null;
+
+let dockResizeObserver = null;
+function actualiserPositionDock() {
+  const dock = document.getElementById('dock-magasin');
+  if (!dock) return;
+  const vv = window.visualViewport;
+  const position = calculerPositionDock({
+    hauteurFenetre: window.innerHeight,
+    offsetTop: vv ? vv.offsetTop : 0,
+    hauteurVisible: vv ? vv.height : window.innerHeight,
+    hauteurDock: dock.getBoundingClientRect().height,
+    hauteurOnglets: document.querySelector('.tabs')?.getBoundingClientRect().height || 76,
+    zoneSecurite: 12
+  });
+  document.documentElement.style.setProperty('--clavier-inset', position.clavierInset + 'px');
+  document.documentElement.style.setProperty('--dock-bottom', position.bottomDock + 'px');
+  document.documentElement.style.setProperty('--annulation-bottom', position.bottomAnnulation + 'px');
+  document.documentElement.style.setProperty('--hauteur-visible', (vv ? vv.height : window.innerHeight) + 'px');
+}
+window.addEventListener('resize', actualiserPositionDock);
+window.visualViewport?.addEventListener('resize', actualiserPositionDock);
+window.visualViewport?.addEventListener('scroll', actualiserPositionDock);
+
+function garderChampVisible(champ) {
+  requestAnimationFrame(() => {
+    const dock = document.getElementById('dock-magasin');
+    if (!dock || !champ.isConnected) return;
+    const r = champ.getBoundingClientRect();
+    const vv = window.visualViewport;
+    const hautVisible = vv ? vv.offsetTop : 0;
+    const basVisible = vv ? vv.offsetTop + vv.height : window.innerHeight;
+    const limiteBasse = Math.min(basVisible, dock.getBoundingClientRect().top) - 8;
+    if (r.bottom > limiteBasse) window.scrollBy({ top: r.bottom - limiteBasse, behavior: 'auto' });
+    else if (r.top < hautVisible + 8) window.scrollBy({ top: r.top - hautVisible - 8, behavior: 'auto' });
+  });
+}
+
 
 function afficherErreur(msg) {
   const zone = document.querySelector('.message-succes');
@@ -126,6 +163,7 @@ function demanderRemplacement(prixExistant, promo) {
   });
 }
 function vueMagasin() {
+  document.getElementById('dock-magasin')?.remove(); dockResizeObserver?.disconnect();
   const racine = el('div', { class: 'ecran-magasin' });
   const entete = el('div', { class: 'selecteur-magasin ' + classeMagasin(magasinCourant) });
   const boutonsMagasin = [MAGASIN.LECLERC, MAGASIN.INTERMARCHE].map((m) =>
@@ -145,6 +183,7 @@ function vueMagasin() {
   let typeChoisi = null;
   let dernier = null;
   let date = aujourdHui();
+  let calculVerdictToken = 0;
 
   function erreur(msg) { message.textContent = msg || ''; message.hidden = !msg; }
   function prixValide() { return analyserPrixSaisie(prix.value); }
@@ -262,6 +301,7 @@ function vueMagasin() {
   }
 
   async function actualiserVerdict() {
+    const jetonCalcul = ++calculVerdictToken;
     if (!typeChoisi || !estFormulaireValide()) { verdictCarte.hidden = true; return; }
     const p = prixValide();
     const f = verifierFormat(typeChoisi.unite, Number(valeurFormat.value), uniteFormat.value);
@@ -269,6 +309,7 @@ function vueMagasin() {
     try {
       const observations = await lireObservations(typeChoisi.id);
       const seuilPct = await lireReglage('seuilIndifference', 5);
+      if (jetonCalcul !== calculVerdictToken || !typeChoisi || !estFormulaireValide()) { verdictCarte.hidden = true; return; }
       const v = calculerVerdict({ prixCentimes:p, formatBase:f.formatBase, typeUnit:typeChoisi.unite, magasin:magasinCourant, observations, aujourdhui:date, seuilPct, promo:promo.checked });
       dessinerVerdict(v, observations);
     } catch { verdictCarte.hidden = true; }
@@ -287,8 +328,8 @@ function vueMagasin() {
     verdictCarte.append(el('div',{class:'verdict-ligne1'},el('span',{class:'verdict-icone',text:icone}),el('strong',{text:libelle})));
     if(v.resultat!==VERDICT.INSUFFISANT){
       const signe=v.differenceFormatCentimes<0?'−':v.differenceFormatCentimes>0?'+':'';
-      const uniteTexte=typeChoisi.unite==='unit'?'pour cette unité':'le '+LIBELLE_UNITE[typeChoisi.unite];
-      verdictCarte.append(el('p',{class:'verdict-economie',text:signe+formaterPrixEuros(Math.abs(v.differenceUniteCentimes))+' '+uniteTexte+' · '+signe+formaterPrixEuros(Math.abs(v.differenceFormatCentimes))+' pour ce format'}));
+      const uniteTexte=typeChoisi.unite==='unit'?'par unité':'le '+LIBELLE_UNITE[typeChoisi.unite];
+      verdictCarte.append(el('p',{class:'verdict-economie',text:signe+formaterPrixEuros(Math.abs(v.differenceUniteCentimes))+' '+uniteTexte+' · '+signe+formaterPrixEuros(Math.abs(v.differenceFormatCentimes))+' pour ce paquet'}));
       const h=v.habituelAutre;
       if(h){
         const prixRef=formaterPrixNormalise(h.valeur,typeChoisi.unite);
@@ -299,11 +340,9 @@ function vueMagasin() {
       const d=v.dernierConnu;
       verdictCarte.append(el('p',{class:'verdict-rappel',text:autre+' : '+(d?'dernier prix connu le '+dateAffichee(d.date):'aucun relevé')}));
     }
-    if(promo.checked){
-      verdictCarte.append(el('span',{class:'badge-promo',text:'Promo'}));
-      const h=prixHabituel(observations,magasinCourant,typeChoisi.unite,date);
-      if(h.ok) verdictCarte.append(el('p',{class:'verdict-habituel',text:'Habituel chez '+libelleMagasin(magasinCourant)+' : '+formaterPrixNormalise(h.valeur,typeChoisi.unite)}));
-    }
+    if(promo.checked) verdictCarte.append(el('span',{class:'badge-promo',text:'Promo'}));
+    const habituel = prixHabituel(observations,magasinCourant,typeChoisi.unite,date);
+    if(habituel.ok) verdictCarte.append(el('p',{class:'verdict-habituel',text:'Habituel chez '+libelleMagasin(magasinCourant)+' : '+formaterPrixNormalise(habituel.valeur,typeChoisi.unite)}));
   }
 
   function verifier() {
@@ -337,10 +376,23 @@ function vueMagasin() {
     el('label', { class: 'etiquette', for: 'champ-type', text: 'Type' }), recherche, suggestions,
     el('label', { class: 'etiquette', for: 'champ-prix', text: 'Prix' }), prixZone,
     el('label', { class: 'etiquette', text: 'Format' }), formatBloc, formatErreur, prixNormaliseAffiche,
-    el('div', { class: 'date-ligne' }, dateLien, dateTexte, dateInput),
-    el('label', { class: 'promo-ligne' }, promo, el('span', { text: 'Promo' })),
-    prixHorsPromoBloc, horsPromoAvertissement, verdictCarte, message, bouton
+    el('div', { class: 'date-promo-ligne' },
+      el('div', { class: 'date-ligne' }, dateLien, dateTexte, dateInput),
+      el('label', { class: 'promo-ligne' }, promo, el('span', { text: 'Promo' }))
+    ),
+    prixHorsPromoBloc, horsPromoAvertissement, message
   );
+  const dock = el('div', { id: 'dock-magasin', class: 'dock-magasin' },
+    el('div', { class: 'dock-verdict-zone', id: 'dock-verdict-zone' }, verdictCarte),
+    el('div', { class: 'dock-actions', id: 'dock-actions' }, bouton)
+  );
+  document.body.append(dock);
+  actualiserPositionDock();
+  if (typeof ResizeObserver !== 'undefined') {
+    dockResizeObserver = new ResizeObserver(actualiserPositionDock);
+    dockResizeObserver.observe(dock);
+  }
+  [recherche, prix, valeurFormat, prixHorsPromo].forEach(champ => champ.addEventListener('focus', () => garderChampVisible(champ)));
 
   async function chargerFormulaire() {
     types = await lireTypesAvecDerniers();
@@ -454,6 +506,7 @@ const ROUTES = {
 
 async function afficher() {
   const [nom, param] = (location.hash.replace('#/', '') || 'magasin').split('/');
+  if (nom !== 'magasin') { document.getElementById('dock-magasin')?.remove(); dockResizeObserver?.disconnect(); }
   const r = ROUTES[nom] || ROUTES.magasin;
   titre.textContent = r.titre; document.title = r.titre + ' · Appli Courses';
   vue.replaceChildren(await r.vue(param));
