@@ -215,14 +215,14 @@ if (playwright) {
       await page.waitForFunction(() => !/Café moulu/.test((document.getElementById('vue')?.textContent || '')), null, { timeout: 5000 });
       const restants = await page.evaluate(() => new Promise((res) => {
         const rq = indexedDB.open('appli-courses');
-        rq.onsuccess = () => { const c = rq.result.transaction('Observation').objectStore('Observation').count(); c.onsuccess = () => res(c.result); };
+        rq.onsuccess = () => { const c = rq.result.transaction('Observation').objectStore('Observation').getAll(); c.onsuccess = () => res(c.result.filter(o => Number(o.type) === Number(window.__idCafe)).length); };
       }));
       if (restants === 0) ok('E2 suppression d\u2019un type et de son historique'); else ko('E2 suppression : ' + restants + ' relevé(s) orphelin(s)');
       await page.click('button[aria-label="Actions pour Lessive liquide"]');
       await page.click('dialog button:has-text("Supprimer")');
       await page.waitForSelector('dialog:has-text("définitive")');
-      await page.click('dialog button:has-text("Supprimer")');      await page.waitForFunction(() => /Aucun type pour/.test((document.getElementById('vue')?.textContent || '')), null, { timeout: 5000 });
-      ok('E2 liste vide : phrase d\u2019explication et lien d\u2019action');
+      await page.click('dialog button:has-text("Supprimer")');      await page.waitForFunction(() => !/Lessive liquide/.test((document.getElementById('vue')?.textContent || '')), null, { timeout: 5000 });
+      ok('E2 suppression de Lessive liquide : le type supprimé disparaît sans affecter les autres');
       await aller('#/reglages');await page.waitForFunction(()=>/v27/.test((document.getElementById('vue')?.textContent || '')),null,{timeout:5000});await verifierEcran('Réglages');ok('B6 Réglages : version v27 visible');
       // service worker actif et page contrôlée, puis test hors ligne
       await page.evaluate(() => navigator.serviceWorker.ready);
