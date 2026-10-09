@@ -162,7 +162,7 @@ svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width:
 .magasin-leclerc .magasin-btn[aria-pressed="true"] { background:var(--leclerc); color:var(--texte); }
 .magasin-intermarche .magasin-btn[aria-pressed="true"] { background:var(--intermarche); color:var(--texte); }
 .prix-zone { position:relative; margin-bottom:12px; }
-.prix-zone .champ { margin:0; padding-right:54px; height:86px; font:76px/1 var(--police-titre); letter-spacing:-2px; }
+.prix-zone .champ { margin:0; padding-right:54px; height:60px; font:56px/1 var(--police-titre); letter-spacing:-2px; }
 .suffixe-euro { position:absolute; right:16px; top:50%; transform:translateY(-50%); color:var(--texte2); font:600 20px var(--police-titre); }
 .format-ligne { display:grid; grid-template-columns:2fr 1fr; gap:8px; }
 .format-ligne .champ { margin-bottom:0; }

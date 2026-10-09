@@ -201,7 +201,7 @@ if (playwright) {
       const datePromo=await page.evaluate(()=>{const a=document.querySelector('.date-ligne').getBoundingClientRect(),b=document.querySelector('.promo-ligne').getBoundingClientRect();return {dateTop:Math.round(a.top),promoTop:Math.round(b.top),dateBottom:Math.round(a.bottom),promoBottom:Math.round(b.bottom)};});if(Math.abs(datePromo.dateTop-datePromo.promoTop)>4)throw new Error('Date et Promo ne sont pas sur une seule ligne : '+JSON.stringify(datePromo));
       await page.setViewportSize({width:390,height:500});await page.locator('#champ-prix').focus();await page.waitForTimeout(100);
       const apres500=await mesurer();info('MESURES APRES dock 390x500 '+JSON.stringify(apres500));
-      if(!apres500.dock||apres500.prix.top<0||apres500.prix.bottom>apres500.dock.top||apres500.format.bottom>apres500.dock.top||apres500.dock.top<0||apres500.dock.bottom>apres500.tabs.top||apres500.dock.bottom>500)throw new Error('champ prix ou dock masqué à 390x500 : '+JSON.stringify(apres500));
+      if(!apres500.dock||apres500.type.top<0||apres500.prix.top<0||apres500.prix.bottom>apres500.dock.top||apres500.format.bottom>apres500.dock.top||apres500.dock.top<0||apres500.dock.bottom>apres500.tabs.top||apres500.dock.bottom>500)throw new Error('champ prix ou dock masqué à 390x500 : '+JSON.stringify(apres500));
       await page.setViewportSize({width:390,height:844});await page.evaluate(()=>window.scrollTo(0,0));await page.waitForTimeout(50);
       ok('3-8 dock fixe : verdict et Enregistrer visibles sans chevauchement à 390x844 et 390x500');const observationsAvantSauvegarde=await page.evaluate(()=>new Promise(res=>{const q=indexedDB.open('appli-courses');q.onsuccess=()=>{const db=q.result;const r=db.transaction('Observation').objectStore('Observation').count();r.onsuccess=()=>{db.close();res(r.result);};};}));
       await page.click('#btn-enregistrer');await page.waitForSelector('#bandeau-annulation',{timeout:3000});await page.waitForFunction(()=>document.activeElement?.id==='champ-type',null,{timeout:3000});
@@ -250,7 +250,7 @@ if (playwright) {
       await page.waitForSelector('dialog:has-text("définitive")');
       await page.click('dialog button:has-text("Supprimer")');      await page.waitForFunction(() => !/Lessive liquide/.test((document.getElementById('vue')?.textContent || '')), null, { timeout: 5000 });
       ok('E2 suppression de Lessive liquide : le type supprimé disparaît sans affecter les autres');
-      await aller('#/reglages');await page.waitForFunction(()=>/v35/.test((document.getElementById('vue')?.textContent || '')),null,{timeout:5000});await verifierEcran('Réglages');ok('B6 Réglages : version v35 visible');
+      await aller('#/reglages');await page.waitForFunction(()=>/v36/.test((document.getElementById('vue')?.textContent || '')),null,{timeout:5000});await verifierEcran('Réglages');ok('B6 Réglages : version v36 visible');
       // service worker actif et page contrôlée, puis test hors ligne
       await page.evaluate(() => navigator.serviceWorker.ready);
       if (!(await page.evaluate(() => !!navigator.serviceWorker.controller))) { await page.reload(); await page.waitForSelector('#vue .carte'); }
