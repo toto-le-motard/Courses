@@ -321,7 +321,7 @@ if (playwright) {
       await page.evaluate(()=>{const e=new Event('beforeinstallprompt',{cancelable:true});e.prompt=async()=>{};e.userChoice=Promise.resolve({outcome:'dismissed'});window.dispatchEvent(e)});
       await page.waitForSelector('button:has-text("Installer l’appli")',{timeout:5000});
       await page.click('button:has-text("Installer l’appli")');
-      await page.waitForFunction(()=>!document.querySelector('button[aria-label="Installer l’appli"]'),null,{timeout:5000}).catch(()=>{});
+      await page.waitForFunction(()=>!Array.from(document.querySelectorAll('button')).some(b=>b.textContent.trim()==='Installer l’appli'),null,{timeout:5000});
       ok('E8.4 seuil mémorisé avec exemple et installation conditionnée à l’événement');
       // service worker actif et page contrôlée, puis test hors ligne
       await page.evaluate(() => navigator.serviceWorker.ready);

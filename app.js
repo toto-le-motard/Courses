@@ -15,6 +15,7 @@ let magasinCourant = MAGASIN.LECLERC;
 let annulationActive = null;
 let annulationTimer = null;
 let rappelMasqueSession = false;
+let evenementInstallation = null;
 
 let dockResizeObserver = null;
 let modeSaisieForce = null;
@@ -42,6 +43,11 @@ function actualiserPositionDock() {
   const actifFormulaire = document.activeElement;
   if (actifFormulaire?.matches?.('#champ-type, #champ-prix, #champ-format, #champ-prix-hors-promo')) garderChampVisible(actifFormulaire);
 }
+window.addEventListener('beforeinstallprompt', (event) => {
+  event.preventDefault();
+  evenementInstallation = event;
+  if (location.hash === '#/reglages') void afficher();
+});
 window.addEventListener('resize', actualiserPositionDock);
 window.visualViewport?.addEventListener('resize', actualiserPositionDock);
 window.visualViewport?.addEventListener('scroll', actualiserPositionDock);
@@ -216,7 +222,38 @@ async function vueReglages() {
   }
   sauvegarde.append(boutonExport, boutonImport, fichierImport, message);
   d.append(sauvegarde);
-  const c = carte('À propos et diagnostic');
+  const seuilInitial = Number(await lireReglage('seuilIndifference', 5));
+  const libelleSeuil = el('label', { for: 'seuil-indifference', id: 'libelle-seuil-indifference', text: 'Seuil : ' + seuilInitial + ' %' });
+  const exempleSeuil = el('p', { text: 'Exemple : avec un prix habituel de 2,00 €, un seuil de 5 % considère comme indifférents les prix entre 1,90 € et 2,10 €.' });
+  const seuilMessage = el('p', { class: 'message-sauvegarde', role: 'status', hidden: true });
+  const curseurSeuil = el('input', { id: 'seuil-indifference', type: 'range', min: 0, max: 20, step: 1, value: String(seuilInitial),
+    oninput: e => { libelleSeuil.textContent = 'Seuil : ' + e.target.value + ' %'; },
+    onchange: async e => {
+      const valeur = Number(e.target.value);
+      try { await ecrireReglage('seuilIndifference', valeur); seuilMessage.textContent = 'Seuil enregistré : ' + valeur + ' %.'; seuilMessage.hidden = false; }
+      catch { seuilMessage.textContent = 'Impossible d’enregistrer le seuil.'; seuilMessage.hidden = false; }
+    }
+  });
+  const carteSeuil = carte('Seuil « indifférent »');
+  carteSeuil.classList.add('reglage-seuil');
+  carteSeuil.append(libelleSeuil, curseurSeuil, exempleSeuil, seuilMessage);
+  d.append(carteSeuil);
+  if (evenementInstallation) {
+    const boutonInstaller = el('button', { type: 'button', class: 'btn btn-secondaire', text: 'Installer l’appli', onclick: async () => {
+      const event = evenementInstallation;
+      try { await event.prompt(); await event.userChoice; }
+      catch (e) { console.error('Installation de la PWA impossible', e); }
+      evenementInstallation = null;
+      await afficher();
+    }});
+    const carteInstallation = carte('Installation');
+    carteInstallation.append(el('p', { text: 'Ajoutez Appli Courses à l’écran d’accueil.' }), boutonInstaller);
+    d.append(carteInstallation);
+  }
+  const c = carte('À propos');
+  c.append(el('p', { text: 'Appli Courses conserve vos données sur cet appareil. L’export JSON permet de les sauvegarder et de les restaurer.' }));
+  const diagnosticCarte = carte('Diagnostic');
+  const c = diagnosticCarte;
   const p = el('p', { class: 'diag' });
   const lignes = [
     ['Version du cache', versionAppli === '…' ? 'inconnue' : versionAppli], ['Version de l’appli', versionAppli], ['Base de données', diagnostic.base],

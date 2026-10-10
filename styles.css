@@ -242,3 +242,9 @@ svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width:
 .bandeau-rappel-export, .avertissement-stockage { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:14px; margin:0 0 12px; border:1px solid var(--ambre); border-radius:16px; background:#302512; color:var(--texte); }
 .avertissement-stockage { display:block; line-height:1.4; }
 .btn-fermer-rappel { flex:0 0 auto; min-height:48px; padding:8px 12px; border:1px solid var(--bordure); border-radius:12px; background:transparent; color:var(--texte); }
+
+
+/* FR16 / E8.4 — réglage accessible du seuil de décision. */
+.reglage-seuil input[type="range"] { display:block; width:100%; min-height:48px; accent-color:var(--lime); }
+.reglage-seuil label { display:block; font-weight:700; margin-bottom:8px; }
+.reglage-seuil p { color:var(--texte2); }
