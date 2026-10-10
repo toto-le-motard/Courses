@@ -356,3 +356,33 @@ export async function exporterCollections() {
   ]);
   return { types, articles, releves, achats, reglages };
 }
+
+
+// FR20 / E8.2 — remplacement atomique des cinq collections après validation et confirmation UI.
+export function remplacerCollections(payload) {
+  const correspondances = [
+    ['ProductType', payload.types], ['Article', payload.articles], ['Observation', payload.releves],
+    ['Purchase', payload.achats], ['Settings', payload.reglages]
+  ];
+  if (correspondances.some(([, valeurs]) => !Array.isArray(valeurs))) {
+    return Promise.reject(new Error('Sauvegarde invalide : collections manquantes.'));
+  }
+  return new Promise((resolve, reject) => {
+    let transaction;
+    try {
+      transaction = _db.transaction(correspondances.map(([nom]) => nom), 'readwrite');
+      for (const [nom, valeurs] of correspondances) {
+        const store = transaction.objectStore(nom);
+        store.clear();
+        for (const valeur of valeurs) store.add(valeur);
+      }
+    } catch (e) {
+      try { transaction?.abort(); } catch {}
+      reject(e);
+      return;
+    }
+    transaction.oncomplete = () => resolve();
+    transaction.onerror = () => reject(transaction.error || new Error('Import impossible.'));
+    transaction.onabort = () => reject(transaction.error || new Error('Import annulé : les données actuelles ont été conservées.'));
+  });
+}

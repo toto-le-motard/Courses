@@ -1,8 +1,8 @@
 // app.js — interface et navigation (stories 1.2 à 3-2).
-import { initDb, dbPrete, listerTypes, lireDernierReleve, lireObservations, dernierReleve, trouverDoublon, enregistrerReleves, analyserDoublons, annulerEnregistrement, listerReleves, modifierReleve, supprimerReleve, demanderStockagePersistant, lireReglage, ecrireReglage, compter, STORES, VERSION_SCHEMA, exporterCollections } from './db.js';
+import { initDb, dbPrete, listerTypes, lireDernierReleve, lireObservations, dernierReleve, trouverDoublon, enregistrerReleves, analyserDoublons, annulerEnregistrement, listerReleves, modifierReleve, supprimerReleve, demanderStockagePersistant, lireReglage, ecrireReglage, compter, STORES, VERSION_SCHEMA, exporterCollections, remplacerCollections } from './db.js';
 import { MAGASIN, UNITES, LIBELLE_UNITE, VERDICT, analyserPrixSaisie, verifierFormat, prixNormalise, formaterPrixEuros, formaterPrixNormalise, calculerVerdict, prixHabituel, estPrixIncoherent, unitesCompatibles, formatAffichage, calculerPositionDock, modeSaisieActif, positionDefilement } from './domain.js';
 import { accueilVide, vueTypes, vueTypeForm } from './types-ui.js';
-import { creerSauvegarde } from './backup.js';
+import { creerSauvegarde, validerSauvegarde } from './backup.js';
 
 const vue = document.getElementById('vue');
 const titre = document.getElementById('titre-ecran');
@@ -137,6 +137,23 @@ window.addEventListener('online', majReseau);
 window.addEventListener('offline', majReseau);
 majReseau();
 
+function confirmerRemplacementSauvegarde() {
+  return new Promise(resolve => {
+    const dialogue = el('dialog', { class: 'feuille' },
+      el('h2', { text: 'Remplace toutes les données actuelles ?' }),
+      el('p', { text: 'La sauvegarde validée remplacera les types, relevés, achats, codes-barres et réglages. Cette opération ne peut pas être annulée.' }),
+      el('div', { class: 'feuille-actions' },
+        el('button', { type: 'button', class: 'btn btn-primaire', text: 'Remplacer toutes les données', onclick: () => { dialogue.close(); resolve(true); } }),
+        el('button', { type: 'button', class: 'btn btn-secondaire', text: 'Annuler', onclick: () => { dialogue.close(); resolve(false); } })
+      )
+    );
+    dialogue.addEventListener('click', e => { if (e.target === dialogue) dialogue.close(); });
+    dialogue.addEventListener('close', () => { dialogue.remove(); resolve(false); });
+    document.body.append(dialogue);
+    dialogue.showModal();
+  });
+}
+
 async function vueReglages() {
   const d = document.createElement('div');
   const sauvegarde = carte('Sauvegarde', 'Exportez toutes vos données dans un fichier JSON versionné. Conservez ce fichier en lieu sûr.');
@@ -166,7 +183,34 @@ async function vueReglages() {
       console.error('Export de sauvegarde impossible', e);
     } finally { boutonExport.disabled = false; }
   }});
-  sauvegarde.append(boutonExport, message);
+  const fichierImport = el('input', { id: 'fichier-sauvegarde', type: 'file', accept: '.json,application/json', hidden: true, onchange: async () => {
+    const fichier = fichierImport.files?.[0];
+    if (!fichier) return;
+    message.hidden = true;
+    try {
+      let payload;
+      try { payload = JSON.parse(await fichier.text()); }
+      catch { throw new Error('Le fichier ne contient pas un JSON lisible.'); }
+      const validation = validerSauvegarde(payload, VERSION_SCHEMA);
+      if (!validation.ok) throw new Error(validation.erreur);
+      const confirmer = await confirmerRemplacementSauvegarde();
+      if (!confirmer) {
+        message.textContent = 'Restauration annulée. Aucune donnée modifiée.';
+        message.hidden = false;
+        return;
+      }
+      await remplacerCollections(validation.valeur);
+      message.textContent = 'Sauvegarde restaurée. Toutes les données ont été remplacées.';
+      message.hidden = false;
+      const n = (await lireReglage('lancements', 0));
+      diagnostic.comptes = (await Promise.all(STORES.map(async s => s + ' ' + (await compter(s))))).join(' · ');
+    } catch (e) {
+      message.textContent = e.message || 'Import impossible. Aucune donnée modifiée.';
+      message.hidden = false;
+    } finally { fichierImport.value = ''; }
+  }});
+  const boutonImport = el('button', { type: 'button', class: 'btn btn-secondaire', text: 'Importer une sauvegarde', onclick: () => fichierImport.click() });
+  sauvegarde.append(boutonExport, boutonImport, fichierImport, message);
   d.append(sauvegarde);
   const c = carte('À propos et diagnostic');
   const p = el('p', { class: 'diag' });
