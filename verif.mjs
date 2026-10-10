@@ -139,7 +139,7 @@ if (playwright) {
       ok('base IndexedDB ouverte (' + (diag.match(/Lancements enregistrés : (\d+)/) || [])[0] + ')');
 
       // ---- Épic E2 : catalogue de types de produits (FR1, FR2) ----
-      const aller = async (h) => { await page.evaluate((x) => { location.hash = x; }, h); };
+      const aller = async (h) => { await page.evaluate((x) => { location.hash = x; }, h); await page.waitForFunction((x)=>window.__routeAffichee===x,h,{timeout:8000}); };
       await aller('#/magasin');
       await page.waitForFunction(() => /Ajouter mon premier type/.test((document.getElementById('vue')?.textContent || '')), null, { timeout: 8000 });
       ok('E2 premier lancement : bouton « Ajouter mon premier type »');

@@ -15,6 +15,7 @@ let magasinCourant = MAGASIN.LECLERC;
 let annulationActive = null;
 let annulationTimer = null;
 let rappelMasqueSession = false;
+let sequenceAffichage = 0;
 let evenementInstallation = null;
 
 let dockResizeObserver = null;
@@ -642,15 +643,20 @@ const ROUTES = {
 };
 
 async function afficher() {
+  const sequence = ++sequenceAffichage;
   const [nom, param] = (location.hash.replace('#/', '') || 'magasin').split('/');
   if (nom !== 'magasin') { document.getElementById('dock-magasin')?.remove(); dockResizeObserver?.disconnect(); document.documentElement.style.setProperty('--dock-hauteur', '0px'); }
   const r = ROUTES[nom] || ROUTES.magasin;
   titre.textContent = r.titre; document.title = r.titre + ' · Appli Courses';
-  vue.replaceChildren(await r.vue(param));
+  const contenu = await r.vue(param);
+  if (sequence !== sequenceAffichage) return;
+  vue.replaceChildren(contenu);
   if (nom === 'magasin' && !rappelMasqueSession) {
     try {
       await dbPrete;
+      if (sequence !== sequenceAffichage) return;
       const dateExport = await lireReglage('dernierExport', null);
+      if (sequence !== sequenceAffichage) return;
       const etatRappel = etatRappelExport(dateExport, aujourdHui(), 30);
       if (etatRappel !== 'ok') {
         const texte = etatRappel === 'jamais'
@@ -668,6 +674,7 @@ async function afficher() {
   vue.style.animation = 'none'; void vue.offsetWidth; vue.style.animation = '';
   onglets.forEach((a) => a.dataset.route === r.onglet ? a.setAttribute('aria-current', 'page') : a.removeAttribute('aria-current'));
   window.scrollTo(0, 0);
+  window.__routeAffichee = location.hash;
 }
 if (!location.hash) history.replaceState(null, '', '#/magasin');
 window.addEventListener('hashchange', () => { void afficher(); }); void afficher();
