@@ -504,22 +504,6 @@ function vueMagasin() {
       el('input', { id: 'scan-nom', class: 'champ', value: articleExistant?.nom || '' }),
       el('p', { id: 'scan-rattacher-message', class: 'erreur', role: 'alert', hidden: true }),
       el('div', { class: 'feuille-actions' },
-        el('button', { type: 'button', class: 'btn btn-secondaire', text: 'Compléter', onclick: async () => {
-          const marque = dialogue.querySelector('#scan-marque');
-          const nom = dialogue.querySelector('#scan-nom');
-          try {
-            const url = 'https://world.openfoodfacts.org/api/v2/product/' + encodeURIComponent(code) + '.json';
-            const reponse = await fetch(url);
-            if (!reponse.ok) throw new Error('Indisponible');
-            const donnees = await reponse.json();
-            const produit = donnees.product || {};
-            if (!marque.value.trim()) marque.value = String(produit.brands || '').split(',')[0].trim();
-            if (!nom.value.trim()) nom.value = produit.product_name || produit.product_name_fr || '';
-            if (!marque.value.trim() && !nom.value.trim()) throw new Error('Aucune information disponible');
-          } catch {
-            const m=dialogue.querySelector('#scan-rattacher-message'); m.textContent='Complément en ligne indisponible. Vous pouvez continuer manuellement.'; m.hidden=false;
-          }
-        }}),
         el('button', { type: 'button', class: 'btn btn-primaire', text: 'Rattacher ce code', onclick: async () => {
           const id = dialogue.dataset.typeId;
           const type = types.find(x => String(x.type.id) === String(id))?.type;

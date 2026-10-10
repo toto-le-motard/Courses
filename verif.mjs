@@ -114,8 +114,7 @@ if (playwright) {
     const page = await ctx.newPage();
     const erreurs = [];
     const requetesExternes = [];
-    let offMockActif = false;
-    page.on('request', req => { const u=new URL(req.url()); if(u.origin!==new URL(base).origin && !['data:','blob:'].includes(u.protocol) && !(offMockActif && u.hostname==='world.openfoodfacts.org')) requetesExternes.push(req.url()); });
+    page.on('request', req => { const u=new URL(req.url()); if(u.origin!==new URL(base).origin && !['data:','blob:'].includes(u.protocol)) requetesExternes.push(req.url()); });
     const verifierEcran = async (nom) => { const texte=await page.locator('body').innerText(); if(texte.includes('[object Promise]')) throw new Error(nom+' : [object Promise] présent'); if(texte.includes('Erreur d’affichage')) throw new Error(nom+' : Erreur d’affichage présente'); if(/\bundefined\b/.test(texte)) throw new Error(nom+' : texte undefined visible'); if(erreurs.length) throw new Error(nom+' : erreur console/pageerror : '+erreurs[0]); };
     const verifierOptionsNonVides = async (nom) => { const v=await page.locator('select option').evaluateAll(es=>es.map(e=>({value:e.value,text:e.textContent.trim()})).filter(e=>!e.text)); if(v.length) throw new Error(nom+' : option sans texte '+JSON.stringify(v)); };
     page.on('pageerror', (e) => erreurs.push('exception : ' + e.message));
@@ -399,19 +398,12 @@ if (playwright) {
       await page.fill('#scan-type-search','ZZ mensuel test');
       await page.click('button.suggestion-rattacher');
       await page.fill('#scan-format','500'); await page.selectOption('#scan-unite','g');
-       etapeParcours = 'E6.4 complément Open Food Facts';
-      offMockActif = true;
-       const routeOpenFoodFacts = route => route.request().url().startsWith('https://world.openfoodfacts.org/api/v2/product/') ? route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({status:1,product:{brands:'Marque test',product_name:'Produit OFF'}})}) : route.continue();
-       await page.route('**/*',routeOpenFoodFacts);
-      if(!await page.locator('dialog.dialog-rattacher').getByRole('button',{name:'Compléter',exact:true}).count()) throw new Error('bouton Open Food Facts absent en ligne');
-      await page.click('dialog.dialog-rattacher button:has-text("Compléter")');
-      await page.waitForFunction(()=>document.querySelector('#scan-marque')?.value==='Marque test',null,{timeout:5000});
        etapeParcours = 'E6.2 enregistrement du rattachement';
       await page.click('dialog.dialog-rattacher button:has-text("Rattacher ce code")');
       await page.waitForFunction(()=>document.querySelector('#champ-type')?.value==='ZZ mensuel test',null,{timeout:5000});
       const codeRattache=await page.evaluate(()=>new Promise((resolve,reject)=>{const rq=indexedDB.open('appli-courses');rq.onsuccess=()=>{const db=rq.result,q=db.transaction('Article').objectStore('Article').get('9999999999999');q.onsuccess=()=>resolve(q.result||null);q.onerror=()=>reject(q.error)};rq.onerror=()=>reject(rq.error)}));
       if(!codeRattache||codeRattache.type!==9992||codeRattache.format!==500) throw new Error('code inconnu non rattaché au type et format choisis');
-      ok('E6.2 code inconnu rattaché et E6.4 complément OFF simulé');
+      ok('E6.2 code inconnu rattaché avec type et format');
       await page.evaluate(()=>{Object.defineProperty(navigator.mediaDevices,'getUserMedia',{configurable:true,value:()=>Promise.reject(Object.assign(new Error('refus caméra'),{name:'NotAllowedError'}))})});
       await page.click('#btn-scanner');
       await page.waitForSelector('dialog.dialog-scan[open]',{timeout:5000});
@@ -420,7 +412,6 @@ if (playwright) {
       await page.click('dialog.dialog-scan button:has-text("Rechercher")');
       await page.waitForFunction(()=>document.querySelector('#champ-type')?.value==='ZZ mensuel test',null,{timeout:5000});
       ok('E6.3 caméra refusée : saisie manuelle retrouve le code connu');
-       await page.unroute('**/*',routeOpenFoodFacts); offMockActif = false;
       const versionCache = readFileSync(join(racine, 'sw.js'), 'utf8').match(/const CACHE_VERSION = '([^']+)'/)?.[1];
       await aller('#/reglages');await page.waitForFunction((v)=>(document.getElementById('vue')?.textContent || '').includes(v),versionCache,{timeout:5000});await verifierEcran('Réglages');ok('B6 Réglages : version '+versionCache+' visible');
       await page.evaluate(()=>new Promise((resolve,reject)=>{
