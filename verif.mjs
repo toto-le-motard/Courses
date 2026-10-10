@@ -315,6 +315,19 @@ if (playwright) {
       await page.waitForSelector('#liste-types .verdict-liste',{timeout:5000});
       if ((await page.locator('#liste-types .barre-comparaison').count()) < 2) throw new Error('barres comparatives absentes de la liste Types');
       ok('E4.2 liste Types : verdict-liste et barres comparatives visibles');
+      await aller('#/types');
+      await page.waitForSelector('a[href="#/releve-mensuel"]',{timeout:5000});
+      await page.click('a[href="#/releve-mensuel"]');
+      await page.waitForFunction(()=>(document.getElementById('titre-ecran')?.textContent||'')==='Relevé mensuel',null,{timeout:5000});
+      await page.waitForSelector('.releve-mensuel',{timeout:5000});
+      const progressionMensuelle = await page.locator('.progression-mensuelle').innerText();
+      if (!/^1\s*\/\s*\d+/.test(progressionMensuelle)) throw new Error('progression mensuelle initiale incorrecte : '+progressionMensuelle);
+      if (!(await page.locator('button:has-text("Passer")').count()) || !(await page.locator('button:has-text("Suivant")').count())) throw new Error('actions Passer/Suivant absentes');
+      await page.click('button:has-text("Passer")');
+      await page.waitForFunction(()=>/^2\s*\/\s*\d+/.test(document.querySelector('.progression-mensuelle')?.textContent||''),null,{timeout:5000});
+      await page.click('button:has-text("Quitter")');
+      await aller('#/types');
+      ok('E5.1 relevé mensuel enchaîné : progression, Passer, Suivant et sortie');
       const versionCache = readFileSync(join(racine, 'sw.js'), 'utf8').match(/const CACHE_VERSION = '([^']+)'/)?.[1];
       await aller('#/reglages');await page.waitForFunction((v)=>(document.getElementById('vue')?.textContent || '').includes(v),versionCache,{timeout:5000});await verifierEcran('Réglages');ok('B6 Réglages : version '+versionCache+' visible');
       await page.evaluate(()=>new Promise((resolve,reject)=>{
