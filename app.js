@@ -637,41 +637,53 @@ async function vueListeCourses() {
   const racine=el('div',{class:'liste-avant-courses'});
   const titreListe=el('h2',{text:'Avant les courses'});
   const aide=el('p',{class:'aide',text:'Comparaison des prix habituels, sans dépendance au réseau.'});
+  const recherche=el('input',{type:'search',class:'champ',placeholder:'Rechercher un type','aria-label':'Rechercher un type',autocomplete:'off'});
   const choix=el('div',{class:'selecteur-magasin'});
   const contenu=el('div',{class:'groupes-liste-courses'});
   let magasinListe=await lireReglage('magasinCourant',MAGASIN.LECLERC);
   const boutons=[MAGASIN.LECLERC,MAGASIN.INTERMARCHE].map(m=>el('button',{type:'button',class:'magasin-btn','aria-pressed':m===magasinListe,text:libelleMagasin(m),onclick:async()=>{magasinListe=m;magasinCourant=m;await ecrireReglage('magasinCourant',m);boutons.forEach(b=>b.setAttribute('aria-pressed',String(b.textContent===libelleMagasin(m))));await dessiner();}}));
-  choix.append(...boutons);
-  racine.append(titreListe,aide,choix,contenu);
-  const groupes=[[VERDICT.ACHETER_ICI,'Acheter ici'],[VERDICT.ATTENDRE,'Attendre l’autre magasin'],[VERDICT.INDIFFERENT,'Indifférent'],[VERDICT.INSUFFISANT,'Données insuffisantes']];
+  choix.append(...boutons); racine.append(titreListe,aide,recherche,choix,contenu);
+  const groupes=[
+    [VERDICT.ACHETER_ICI,()=>libelleMagasin(magasinListe)],
+    [VERDICT.ATTENDRE,()=>libelleMagasin(magasinListe===MAGASIN.LECLERC?MAGASIN.INTERMARCHE:MAGASIN.LECLERC)],
+    [VERDICT.INDIFFERENT,()=> 'Indifférent'],
+    [VERDICT.INSUFFISANT,()=> 'Données insuffisantes']
+  ];
   async function dessiner(){
-    const types=(await listerTypes()).filter(t=>!t.archive).sort((a,b)=>a.nom.localeCompare(b.nom,'fr'));
-    const seuilPct=Number(await lireReglage('seuilIndifference',5)), dateDuJour=aujourdHui();
+    const q=recherche.value.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
+    const types=(await listerTypes()).filter(t=>!t.archive&&t.nomNormalise.includes(q)).sort((a,b)=>a.nom.localeCompare(b.nom,'fr'));
+    const seuilPct=Number(await lireReglage('seuilIndifference',5)),dateDuJour=aujourdHui();
     const analyses=await Promise.all(types.map(async type=>{
-      const observations=await lireObservations(type.id);
-      const courant=prixHabituel(observations,magasinListe,type.unite,dateDuJour);
-      let resultat=VERDICT.INSUFFISANT, details='Aucun prix habituel exploitable.';
-      if(courant.ok){
+      const observations=await lireObservations(type.id),autreMagasin=magasinListe===MAGASIN.LECLERC?MAGASIN.INTERMARCHE:MAGASIN.LECLERC;
+      const courant=prixHabituel(observations,magasinListe,type.unite,dateDuJour),autre=prixHabituel(observations,autreMagasin,type.unite,dateDuJour);
+      let resultat=VERDICT.INSUFFISANT,details='Aucun prix connu.';
+      if(courant.ok&&autre.ok){
         const formatBase=type.unite==='unit'?1:1000;
-        const verdict=calculerVerdict({prixCentimes:Math.round(courant.valeur),formatBase,typeUnit:type.unite,magasin:magasinListe,observations,aujourdhui:dateDuJour,seuilPct});
-        resultat=verdict.resultat;
-        details='Prix habituel ici : '+formaterPrixNormalise(courant.valeur,type.unite);
-        if(Number.isFinite(verdict.differenceUniteCentimes)) details+=' · écart : '+formaterPrixEuros(Math.abs(verdict.differenceUniteCentimes))+(verdict.differenceUniteCentimes<0?' moins cher':verdict.differenceUniteCentimes>0?' plus cher':'');
+        const v=calculerVerdict({prixCentimes:Math.round(courant.valeur),formatBase,typeUnit:type.unite,magasin:magasinListe,observations,aujourdhui:dateDuJour,seuilPct});
+        resultat=v.resultat;
+        const moinsCher=Math.min(courant.valeur,autre.valeur);
+        details='Prix normalisé le moins cher : '+formaterPrixNormalise(moinsCher,type.unite);
+        if(Number.isFinite(v.ecart))details+=' · écart '+String(Math.round(Math.abs(v.ecart)*1000)/10).replace('.',',')+' %';
+      }else{
+        const dernier=courant.dernierConnu||autre.dernierConnu;
+        if(dernier)details='Dernier prix connu : '+formaterPrixNormalise(dernier.valeur,type.unite)+' · '+dateAffichee(dernier.date);
+        else if(courant.ok)details='Prix habituel ici : '+formaterPrixNormalise(courant.valeur,type.unite)+' · comparaison insuffisante';
+        else if(autre.ok)details='Prix habituel autre magasin : '+formaterPrixNormalise(autre.valeur,type.unite)+' · comparaison insuffisante';
       }
       return {type,resultat,details};
     }));
     contenu.replaceChildren();
     for(const [resultat,titreGroupe] of groupes){
       const lignes=analyses.filter(a=>a.resultat===resultat),liste=el('div',{class:'lignes-groupe'});
-      if(lignes.length) liste.append(...lignes.map(a=>el('a',{class:'ligne-liste-course',href:'#/fiche/'+a.type.id},
+      if(lignes.length)liste.append(...lignes.map(a=>el('a',{class:'ligne-liste-course',href:'#/fiche/'+a.type.id},
         el('strong',{text:a.type.nom}),el('span',{class:'puce',text:LIBELLE_UNITE[a.type.unite]}),el('span',{class:'detail-prix-liste',text:a.details}))));
       else liste.append(el('p',{class:'aide',text:'Aucun type dans ce groupe.'}));
-      contenu.append(el('section',{class:'carte groupe-liste-courses'},el('h3',{text:titreGroupe+' ('+lignes.length+')'}),liste));
+      contenu.append(el('details',{class:'carte groupe-liste-courses',open:true},el('summary',{text:titreGroupe()+' ('+lignes.length+')'}),liste));
     }
-    if(!types.length) contenu.prepend(el('section',{class:'carte',text:'Aucun type actif. Créez un type ou restaurez-en un depuis la liste Types.'}));
+    if(!types.length)contenu.prepend(el('section',{class:'carte',text:q?'Aucun type ne correspond à cette recherche.':'Aucun type actif. Créez un type ou restaurez-en un depuis la liste Types.'}));
   }
-  await dessiner();
-  return racine;
+  recherche.addEventListener('input',()=>{void dessiner().catch(()=>contenu.replaceChildren(carte('Liste indisponible','Impossible de calculer la liste.')));});
+  await dessiner(); return racine;
 }
 async function vueReleveMensuel() {
   await dbPrete;
@@ -737,6 +749,7 @@ async function vueReleveMensuel() {
     contenu.replaceChildren(el('h2',{text:typeActuel.nom}),el('label',{class:'etiquette',for:'mensuel-prix',text:'Prix'}),champPrix,
       el('label',{class:'etiquette',for:'mensuel-format',text:'Format'}),champFormat,champUnite,libellePromo,erreur);
     boutonSuivant.disabled = true; boutonPasser.disabled = false; void actualiserMiniVerdict();
+    requestAnimationFrame(()=>{ if(racine.isConnected) champPrix.focus(); });
   }
   async function avancer(estPasse=false) {
     if (estPasse) passes++;
@@ -789,6 +802,7 @@ async function vueReleveMensuel() {
   champPrix.addEventListener('input',()=>void actualiserMiniVerdict()); champFormat.addEventListener('input',()=>void actualiserMiniVerdict()); champUnite.addEventListener('change',()=>void actualiserMiniVerdict());promo.addEventListener('change',()=>void actualiserMiniVerdict());
   champFormat.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();champFormat.blur();}});
   await chargerCarte();
+  if(types.length) requestAnimationFrame(()=>champPrix.focus());
   return racine;
 }
 

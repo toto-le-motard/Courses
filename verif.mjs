@@ -362,7 +362,7 @@ if (playwright) {
       await aller('#/liste');
       await page.waitForSelector('.liste-avant-courses',{timeout:5000});
       const texteListeCourses=await page.locator('.liste-avant-courses').innerText();
-      for(const groupe of ['Acheter ici','Attendre l’autre magasin','Indifférent','Données insuffisantes']) if(!texteListeCourses.includes(groupe)) throw new Error('groupe absent de la liste avant courses : '+groupe);
+      for(const groupe of ['Leclerc','Intermarché','Indifférent','Données insuffisantes']) if(!texteListeCourses.includes(groupe)) throw new Error('groupe absent de la liste avant courses : '+groupe);
       if(/undefined|>\s*<\/h[23]>/.test(await page.locator('.liste-avant-courses').innerHTML())) throw new Error('libellé vide ou undefined dans la liste avant courses');
       if(await page.locator('.liste-avant-courses').getByText('Archive mensuel test',{exact:true}).count()) throw new Error('type archivé présent dans la liste avant courses');
       await page.setViewportSize({width:390,height:500}); await verifierEcran('Avant les courses 390x500'); await page.setViewportSize({width:390,height:844});
