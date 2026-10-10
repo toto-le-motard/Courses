@@ -315,19 +315,50 @@ if (playwright) {
       await page.waitForSelector('#liste-types .verdict-liste',{timeout:5000});
       if ((await page.locator('#liste-types .barre-comparaison').count()) < 2) throw new Error('barres comparatives absentes de la liste Types');
       ok('E4.2 liste Types : verdict-liste et barres comparatives visibles');
+      await page.evaluate(()=>new Promise((resolve,reject)=>{
+        const rq=indexedDB.open('appli-courses');rq.onsuccess=()=>{const db=rq.result;const tx=db.transaction(['ProductType','Observation'],'readwrite');const t=tx.objectStore('ProductType'),s=tx.objectStore('Observation');
+          t.put({id:9992,nom:'ZZ mensuel test',nomNormalise:'zz mensuel test',unite:'kg',marque:'',nomArticle:'',archive:0});
+          t.put({id:9993,nom:'Archive mensuel test',nomNormalise:'archive mensuel test',unite:'kg',marque:'',nomArticle:'',archive:1});
+          s.put({id:9921,type:9992,magasin:'leclerc',date:'2026-10-01',prixCentimes:1000,format:1000,promo:0});
+          s.put({id:9922,type:9992,magasin:'leclerc',date:'2026-10-02',prixCentimes:1200,format:1000,promo:0});
+          s.put({id:9923,type:9992,magasin:'leclerc',date:'2026-10-03',prixCentimes:1400,format:1000,promo:0});
+          tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error);
+        };rq.onerror=()=>reject(rq.error);
+      }));
       await aller('#/types');
       await page.waitForSelector('a[href="#/releve-mensuel"]',{timeout:5000});
+      await page.setViewportSize({width:390,height:500});
       await page.click('a[href="#/releve-mensuel"]');
       await page.waitForFunction(()=>(document.getElementById('titre-ecran')?.textContent||'')==='Relevé mensuel',null,{timeout:5000});
       await page.waitForSelector('.releve-mensuel',{timeout:5000});
       const progressionMensuelle = await page.locator('.progression-mensuelle').innerText();
-      if (!/^1\s*\/\s*\d+/.test(progressionMensuelle)) throw new Error('progression mensuelle initiale incorrecte : '+progressionMensuelle);
+      const actifCount = await page.evaluate(()=>new Promise((resolve,reject)=>{const rq=indexedDB.open('appli-courses');rq.onsuccess=()=>{const db=rq.result,q=db.transaction('ProductType').objectStore('ProductType').getAll();q.onsuccess=()=>resolve(q.result.filter(t=>!t.archive).length);q.onerror=()=>reject(q.error)};rq.onerror=()=>reject(rq.error)}));
+      const nTotalMensuel = Number(progressionMensuelle.split('/')[1]?.trim());
+      if (!/^1\s*\/\s*\d+/.test(progressionMensuelle) || nTotalMensuel!==actifCount) throw new Error('progression mensuelle ou exclusion des types archivés incorrecte : '+progressionMensuelle);
       if (!(await page.locator('button:has-text("Passer")').count()) || !(await page.locator('button:has-text("Suivant")').count())) throw new Error('actions Passer/Suivant absentes');
+      await page.locator('#mensuel-prix').focus();
+      await page.evaluate(()=>window.__forcerModeSaisie(true));
+      await page.waitForFunction(()=>document.body.classList.contains('mode-saisie'),null,{timeout:3000});
+      const mesuresMensuel=await page.evaluate(()=>({tabs:getComputedStyle(document.querySelector('.tabs')).display,prix:document.querySelector('#mensuel-prix').getBoundingClientRect().toJSON()}));
+      if (mesuresMensuel.tabs!=='none' || mesuresMensuel.prix.top<0 || mesuresMensuel.prix.bottom>500) throw new Error('mode saisie mensuel : onglets visibles ou champ hors écran '+JSON.stringify(mesuresMensuel));
+      await page.evaluate(()=>window.__forcerModeSaisie(false));
+      await page.setViewportSize({width:390,height:844});
       await page.click('button:has-text("Passer")');
       await page.waitForFunction(()=>/^2\s*\/\s*\d+/.test(document.querySelector('.progression-mensuelle')?.textContent||''),null,{timeout:5000});
-      await page.click('button:has-text("Quitter")');
-      await aller('#/types');
-      ok('E5.1 relevé mensuel enchaîné : progression, Passer, Suivant et sortie');
+      for(let i=2;i<nTotalMensuel;i++){
+        await page.click('button:has-text("Passer")');
+        await page.waitForFunction((n)=>new RegExp('^'+n+'\\s*\\/').test(document.querySelector('.progression-mensuelle')?.textContent||''),i+1,{timeout:5000});
+      }
+      if (!(await page.locator('#mensuel-prix').count())) throw new Error('dernière carte mensuelle absente');
+      await page.fill('#mensuel-prix','1,00'); await page.fill('#mensuel-format','1'); await page.selectOption('#mensuel-unite','kg');
+      await page.waitForFunction(()=>/Acheter ici/.test(document.querySelector('.mini-verdict-mensuel')?.textContent||''),null,{timeout:5000});
+      await page.click('button:has-text("Suivant")');
+      await page.waitForFunction(()=>/1 saisi/.test(document.querySelector('.carte-mensuelle')?.textContent||''),null,{timeout:5000});
+      const achatMensuelEnregistre=await page.evaluate(()=>new Promise((resolve,reject)=>{const rq=indexedDB.open('appli-courses');rq.onsuccess=()=>{const db=rq.result,q=db.transaction('Observation').objectStore('Observation').getAll();q.onsuccess=()=>resolve(q.result.some(o=>o.type===9992&&o.magasin==='intermarche'&&o.prixCentimes===100&&o.format===1000&&!o.promo));q.onerror=()=>reject(q.error)};rq.onerror=()=>reject(rq.error)}));
+      if(!achatMensuelEnregistre)throw new Error('le relevé mensuel validé n’a pas été enregistré');
+      await page.click('button:has-text("Quitter")'); await aller('#/types');
+      ok('E5.1/E5.2 relevé mensuel : archivés exclus, progression, Passer, mini-verdict partagé, sauvegarde et sortie');
+
       const versionCache = readFileSync(join(racine, 'sw.js'), 'utf8').match(/const CACHE_VERSION = '([^']+)'/)?.[1];
       await aller('#/reglages');await page.waitForFunction((v)=>(document.getElementById('vue')?.textContent || '').includes(v),versionCache,{timeout:5000});await verifierEcran('Réglages');ok('B6 Réglages : version '+versionCache+' visible');
       await page.evaluate(()=>new Promise((resolve,reject)=>{
