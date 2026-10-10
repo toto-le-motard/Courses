@@ -209,7 +209,6 @@ async function vueReglages() {
       await remplacerCollections(validation.valeur);
       message.textContent = 'Sauvegarde restaurée. Toutes les données ont été remplacées.';
       message.hidden = false;
-      const n = (await lireReglage('lancements', 0));
       diagnostic.comptes = (await Promise.all(STORES.map(async s => s + ' ' + (await compter(s))))).join(' · ');
     } catch (e) {
       message.textContent = e.message || 'Import impossible. Aucune donnée modifiée.';
@@ -250,10 +249,10 @@ async function vueReglages() {
     carteInstallation.append(el('p', { text: 'Ajoutez Appli Courses à l’écran d’accueil.' }), boutonInstaller);
     d.append(carteInstallation);
   }
-  const c = carte('À propos');
-  c.append(el('p', { text: 'Appli Courses conserve vos données sur cet appareil. L’export JSON permet de les sauvegarder et de les restaurer.' }));
+  const aPropos = carte('À propos');
+  aPropos.append(el('p', { text: 'Appli Courses conserve vos données sur cet appareil. L’export JSON permet de les sauvegarder et de les restaurer.' }));
+  d.append(aPropos);
   const diagnosticCarte = carte('Diagnostic');
-  const c = diagnosticCarte;
   const p = el('p', { class: 'diag' });
   const lignes = [
     ['Version du cache', versionAppli === '…' ? 'inconnue' : versionAppli], ['Version de l’appli', versionAppli], ['Base de données', diagnostic.base],
@@ -261,7 +260,7 @@ async function vueReglages() {
     ['Contenu', diagnostic.comptes]
   ];
   lignes.forEach(([k,v], i) => { if (i) p.append(document.createElement('br')); p.append(el('strong', { text: k + ' : ' }), document.createTextNode(v)); });
-  c.appendChild(p); d.appendChild(c); return d;
+  diagnosticCarte.appendChild(p); d.appendChild(diagnosticCarte); return d;
 }
 
 async function lireTypesAvecDerniers() {
