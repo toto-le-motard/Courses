@@ -280,19 +280,21 @@ if (playwright) {
       await page.waitForSelector('dialog:has-text("définitive")');
       await page.click('dialog button:has-text("Supprimer")');      await page.waitForFunction(() => !/Lessive liquide/.test((document.getElementById('vue')?.textContent || '')), null, { timeout: 5000 });
       ok('E2 suppression de Lessive liquide : le type supprimé disparaît sans affecter les autres');
+      const idFicheE4 = 9991;
       await page.evaluate(id=>new Promise((resolve,reject)=>{
-        const rq=indexedDB.open('appli-courses');rq.onsuccess=()=>{const db=rq.result;const tx=db.transaction('Observation','readwrite');const s=tx.objectStore('Observation');
+        const rq=indexedDB.open('appli-courses');rq.onsuccess=()=>{const db=rq.result;const tx=db.transaction(['ProductType','Observation'],'readwrite');const t=tx.objectStore('ProductType'),s=tx.objectStore('Observation');
+          t.put({id,nom:'Comparaison E4',nomNormalise:'comparaison e4',unite:'kg',marque:'',nomArticle:'',archive:0});
           s.put({id:9901,type:id,magasin:'leclerc',date:'2026-10-05',prixCentimes:1000,format:1000,promo:0});
           s.put({id:9902,type:id,magasin:'leclerc',date:'2026-10-06',prixCentimes:1200,format:1000,promo:0});
           s.put({id:9903,type:id,magasin:'leclerc',date:'2026-10-07',prixCentimes:1400,format:1000,promo:0});
-          s.put({id:9904,type:id,magasin:'intermarche',date:'2026-10-08',prixCentimes:1200,format:500,promo:0});
+          s.put({id:9904,type:id,magasin:'intermarche',date:'2026-10-08',prixCentimes:2400,format:1000,promo:0});
           s.put({id:9905,type:id,magasin:'leclerc',date:'2026-10-09',prixCentimes:900,format:1000,promo:1});
           tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error);
         };rq.onerror=()=>reject(rq.error);
-      }),idHistorique);
+      }),idFicheE4);
       await aller('#/types');
       await page.waitForSelector('#liste-types');
-      const lienFiche = page.locator('a[href="#/fiche/'+idHistorique+'"]');
+      const lienFiche = page.locator('a[href="#/fiche/'+idFicheE4+'"]');
       if (!(await lienFiche.count())) throw new Error('lien Fiche absent dans la liste des types');
       await lienFiche.click();
       await page.waitForFunction(()=>(document.getElementById('titre-ecran')?.textContent||'')==='Fiche du type',null,{timeout:5000});
