@@ -120,6 +120,7 @@ if (playwright) {
     const verifierOptionsNonVides = async (nom) => { const v=await page.locator('select option').evaluateAll(es=>es.map(e=>({value:e.value,text:e.textContent.trim()})).filter(e=>!e.text)); if(v.length) throw new Error(nom+' : option sans texte '+JSON.stringify(v)); };
     page.on('pageerror', (e) => erreurs.push('exception : ' + e.message));
     page.on('console', (m) => { if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) erreurs.push('console : ' + m.text()); });
+    let etapeParcours = 'chargement initial';
     try {
       await page.goto(base);
       if (erreurs.length) throw new Error('chargement de l’appli : ' + erreurs[0]);
@@ -394,15 +395,18 @@ if (playwright) {
       await page.waitForSelector('dialog.dialog-scan[open]',{timeout:5000});
       await page.waitForSelector('dialog.dialog-rattacher[open]',{timeout:8000});
       if(!await page.locator('dialog.dialog-rattacher').getByText('Rattacher ce code',{exact:true}).count()) throw new Error('feuille de rattachement absente');
+       etapeParcours = 'E6.2 recherche du type';
       await page.fill('#scan-type-search','ZZ mensuel test');
       await page.click('button.suggestion-rattacher');
       await page.fill('#scan-format','500'); await page.selectOption('#scan-unite','g');
+       etapeParcours = 'E6.4 complément Open Food Facts';
       offMockActif = true;
        const matchOpenFoodFacts = url => url.hostname === 'world.openfoodfacts.org' && url.pathname.startsWith('/api/v2/product/');
        await page.route(matchOpenFoodFacts,route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({status:1,product:{brands:'Marque test',product_name:'Produit OFF'}})}));
       if(!await page.locator('dialog.dialog-rattacher').getByRole('button',{name:'Compléter',exact:true}).count()) throw new Error('bouton Open Food Facts absent en ligne');
       await page.click('dialog.dialog-rattacher button:has-text("Compléter")');
       await page.waitForFunction(()=>document.querySelector('#scan-marque')?.value==='Marque test',null,{timeout:5000});
+       etapeParcours = 'E6.2 enregistrement du rattachement';
       await page.click('dialog.dialog-rattacher button:has-text("Rattacher ce code")');
       await page.waitForFunction(()=>document.querySelector('#champ-type')?.value==='ZZ mensuel test',null,{timeout:5000});
       const codeRattache=await page.evaluate(()=>new Promise((resolve,reject)=>{const rq=indexedDB.open('appli-courses');rq.onsuccess=()=>{const db=rq.result,q=db.transaction('Article').objectStore('Article').get('9999999999999');q.onsuccess=()=>resolve(q.result||null);q.onerror=()=>reject(q.error)};rq.onerror=()=>reject(rq.error)}));
@@ -501,7 +505,7 @@ if (playwright) {
         else ko('hors ligne : la pastille « Hors ligne » n\u2019apparaît pas');
         await ctx.setOffline(false);
       }
-    } catch (e) { ko('parcours de l\u2019appli : ' + String(e.message).split('\n')[0]); }
+     } catch (e) { ko('parcours de l\u2019appli ['+etapeParcours+'] : ' + String(e.message).split('\n')[0]); }
     if (erreurs.length) ko('erreurs dans la page : ' + erreurs.slice(0, 3).join(' | '));
     else ok('aucune erreur dans la console de la page');
     if (requetesExternes.length) ko('appels réseau externes détectés : '+requetesExternes.slice(0,5).join(', ')); else ok('aucun appel réseau externe pendant le parcours IHM');
