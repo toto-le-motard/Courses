@@ -716,6 +716,11 @@ async function vueReleveMensuel() {
   }
   async function chargerCarte() {
     message.hidden = true; erreur.hidden = true; zoneMiniVerdict.hidden = true;
+    if (!types.length) {
+      progression.textContent = '0 / 0';
+      contenu.replaceChildren(el('h2',{text:'Aucun type actif'}),el('p',{text:'Créez un type ou restaurez-en un depuis la liste Types avant de lancer le relevé mensuel.'}));
+      actions.hidden = true; return;
+    }
     if (index >= types.length) {
       progression.textContent = 'Relevé terminé';
       contenu.replaceChildren(el('h2',{text:'Relevé mensuel terminé'}),el('p',{text:saisis+' saisi'+(saisis>1?'s':'')+', '+passes+' passé'+(passes>1?'s':'')+'.'}));
