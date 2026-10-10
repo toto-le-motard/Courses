@@ -1,6 +1,6 @@
 // app.js — interface et navigation (stories 1.2 à 3-2).
 import { initDb, dbPrete, listerTypes, lireDernierReleve, lireObservations, dernierReleve, trouverDoublon, enregistrerReleves, analyserDoublons, annulerEnregistrement, listerReleves, modifierReleve, supprimerReleve, demanderStockagePersistant, lireReglage, ecrireReglage, compter, STORES, VERSION_SCHEMA } from './db.js';
-import { MAGASIN, UNITES, LIBELLE_UNITE, VERDICT, analyserPrixSaisie, verifierFormat, prixNormalise, formaterPrixEuros, formaterPrixNormalise, calculerVerdict, prixHabituel, estPrixIncoherent, unitesCompatibles, formatAffichage, calculerPositionDock, modeSaisieActif, positionDefilement } from './domain.js';
+import { MAGASIN, UNITES, LIBELLE_UNITE, VERDICT, analyserPrixSaisie, verifierFormat, prixNormalise, formaterPrixEuros, formaterPrixNormalise, calculerVerdict, prixHabituel, estPrixIncoherent, unitesCompatibles, formatAffichage, calculerPositionDock } from './domain.js';
 import { accueilVide, vueTypes, vueTypeForm } from './types-ui.js';
 
 const vue = document.getElementById('vue');
@@ -15,21 +15,16 @@ let annulationActive = null;
 let annulationTimer = null;
 
 let dockResizeObserver = null;
-let modeSaisieForce = null;
-window.__forcerModeSaisie = (actif) => { modeSaisieForce = Boolean(actif); actualiserPositionDock(); };
 function actualiserPositionDock() {
   const dock = document.getElementById('dock-magasin');
   if (!dock) return;
   const vv = window.visualViewport;
-  const hauteurVisible = vv ? vv.height : window.innerHeight;
-  const actif = modeSaisieForce === null ? modeSaisieActif(window.innerHeight, hauteurVisible) : modeSaisieForce;
-  document.body.classList.toggle('mode-saisie', actif);
   const position = calculerPositionDock({
     hauteurFenetre: window.innerHeight,
     offsetTop: vv ? vv.offsetTop : 0,
-    hauteurVisible,
+    hauteurVisible: vv ? vv.height : window.innerHeight,
     hauteurDock: dock.getBoundingClientRect().height,
-    hauteurOnglets: actif ? 0 : (document.querySelector('.tabs')?.getBoundingClientRect().height || 76),
+    hauteurOnglets: document.querySelector('.tabs')?.getBoundingClientRect().height || 76,
     zoneSecurite: 12
   });
   document.documentElement.style.setProperty('--clavier-inset', position.clavierInset + 'px');
@@ -37,8 +32,6 @@ function actualiserPositionDock() {
   document.documentElement.style.setProperty('--annulation-bottom', position.bottomAnnulation + 'px');
   document.documentElement.style.setProperty('--hauteur-visible', (vv ? vv.height : window.innerHeight) + 'px');
   document.documentElement.style.setProperty('--dock-hauteur', dock.getBoundingClientRect().height + 'px');
-  const actifFormulaire = document.activeElement;
-  if (actifFormulaire?.matches?.('#champ-type, #champ-prix, #champ-format, #champ-prix-hors-promo')) garderChampVisible(actifFormulaire);
 }
 window.addEventListener('resize', actualiserPositionDock);
 window.visualViewport?.addEventListener('resize', actualiserPositionDock);
@@ -48,15 +41,15 @@ function garderChampVisible(champ) {
   requestAnimationFrame(() => {
     const dock = document.getElementById('dock-magasin');
     if (!dock || !champ.isConnected) return;
-    const label = document.querySelector('label[for="' + champ.id + '"]');
-    const rChamp = champ.getBoundingClientRect();
-    const rLabel = label?.getBoundingClientRect();
-    const rect = rLabel ? { top: Math.min(rLabel.top, rChamp.top), bottom: Math.max(rLabel.bottom, rChamp.bottom) } : { top: rChamp.top, bottom: rChamp.bottom };
+    const r = champ.getBoundingClientRect();
     const vv = window.visualViewport;
-    const hautVisible = Math.max(vv ? vv.offsetTop : 0, document.querySelector('.topbar')?.getBoundingClientRect().bottom || 0);
-    const basVisible = Math.min(vv ? vv.offsetTop + vv.height : window.innerHeight, dock.getBoundingClientRect().top);
-    const delta = positionDefilement(rect, hautVisible, basVisible, 12);
-    if (delta) window.scrollBy({ top: delta, behavior: 'auto' });
+    const hautVisible = vv ? vv.offsetTop : 0;
+    const basVisible = vv ? vv.offsetTop + vv.height : window.innerHeight;
+    const limiteBasse = Math.min(basVisible, dock.getBoundingClientRect().top) - 8;
+    const suivant = champ.id === 'champ-prix' ? document.getElementById('champ-format') : null;
+    const basNecessaire = suivant ? Math.max(r.bottom, suivant.getBoundingClientRect().bottom) : r.bottom;
+    if (basNecessaire > limiteBasse) window.scrollBy({ top: basNecessaire - limiteBasse, behavior: 'auto' });
+    else if (r.top < hautVisible + 8) window.scrollBy({ top: r.top - hautVisible - 8, behavior: 'auto' });
   });
 }
 
@@ -198,12 +191,12 @@ function vueMagasin() {
   function erreur(msg) { message.textContent = msg || ''; message.hidden = !msg; }
   function prixValide() { return analyserPrixSaisie(prix.value); }
 
-  const recherche = el('input', { type: 'search', class: 'champ', id: 'champ-type', enterkeyhint: 'next', placeholder: 'Type de produit', autocomplete: 'off', 'aria-label': 'Type de produit' });
+  const recherche = el('input', { type: 'search', class: 'champ', id: 'champ-type', placeholder: 'Type de produit', autocomplete: 'off', 'aria-label': 'Type de produit' });
   const suggestions = el('div', { class: 'suggestions', id: 'suggestions-types' });
   const prix = el('input', { type: 'text', class: 'champ champ-prix', id: 'champ-prix', inputmode: 'decimal', autocomplete: 'off', 'aria-label': 'Prix en euros', placeholder: '0,00', enterkeyhint: 'next' });
   const prixSuffixe = el('span', { class: 'suffixe-euro', text: '€' });
   const prixZone = el('div', { class: 'prix-zone' }, prix, prixSuffixe);
-  const valeurFormat = el('input', { type: 'number', class: 'champ', id: 'champ-format', enterkeyhint: 'done', inputmode: 'decimal', min: '0', step: 'any', 'aria-label': 'Valeur du format' });
+  const valeurFormat = el('input', { type: 'number', class: 'champ', id: 'champ-format', inputmode: 'decimal', min: '0', step: 'any', 'aria-label': 'Valeur du format' });
   const uniteFormat = el('select', { class: 'champ', id: 'champ-unite', 'aria-label': 'Unité du format' });
   const formatErreur = el('p', { class: 'erreur', role: 'alert', hidden: true });
   const dateLien = el('button', { type: 'button', class: 'lien-date', text: 'Aujourd’hui', onclick: () => dateInput.showPicker ? dateInput.showPicker() : dateInput.click() });
@@ -236,7 +229,6 @@ function vueMagasin() {
     suggestions.replaceChildren(...visibles.map((x) => el('button', { type: 'button', class: 'suggestion-type', 'data-id': x.type.id, text: x.type.nom })));
     verifier();
   });
-  valeurFormat.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); valeurFormat.blur(); } });
   prix.addEventListener('input', verifier);
   valeurFormat.addEventListener('input', verifier);
   uniteFormat.addEventListener('change', verifier);
@@ -285,7 +277,7 @@ function vueMagasin() {
       suggestions.replaceChildren(); prixHorsPromoBloc.hidden = true; prixHorsPromo.value = ''; horsPromoAvertissement.hidden = true; chargerFormulaire();
       message.hidden = true;
       if (jeton.ajoutes.length > 0) afficherAnnulation(jeton, magasinCourant);
-      document.activeElement?.blur();
+      recherche.focus();
     } catch (e) { erreur(e.message || 'Enregistrement impossible.'); }
     finally { bouton.disabled = !estFormulaireValide(); }
   });
@@ -386,7 +378,7 @@ function vueMagasin() {
   formulaire.append(
     el('label', { class: 'etiquette', for: 'champ-type', text: 'Type' }), recherche, suggestions,
     el('label', { class: 'etiquette', for: 'champ-prix', text: 'Prix' }), prixZone,
-    el('label', { class: 'etiquette', for: 'champ-format', text: 'Format' }), formatBloc, formatErreur, prixNormaliseAffiche,
+    el('label', { class: 'etiquette', text: 'Format' }), formatBloc, formatErreur, prixNormaliseAffiche,
     el('div', { class: 'date-promo-ligne' },
       el('div', { class: 'date-ligne' }, dateLien, dateTexte, dateInput),
       el('label', { class: 'promo-ligne' }, promo, el('span', { text: 'Promo' }))
