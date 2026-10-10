@@ -1,5 +1,5 @@
 // app.js — interface et navigation (stories 1.2 à 3-2).
-import { initDb, dbPrete, listerTypes, lireDernierReleve, lireObservations, dernierReleve, trouverDoublon, enregistrerReleves, analyserDoublons, annulerEnregistrement, listerReleves, modifierReleve, supprimerReleve, demanderStockagePersistant, lireReglage, ecrireReglage, compter, STORES, VERSION_SCHEMA, exporterCollections, remplacerCollections, lire, mettre } from './db.js';
+import { initDb, dbPrete, listerTypes, lireDernierReleve, lireObservations, dernierReleve, trouverDoublon, enregistrerReleves, analyserDoublons, annulerEnregistrement, listerReleves, modifierReleve, supprimerReleve, demanderStockagePersistant, lireReglage, ecrireReglage, compter, STORES, VERSION_SCHEMA, exporterCollections, remplacerCollections, lire, mettre, toutLire, supprimer } from './db.js';
 import { MAGASIN, UNITES, LIBELLE_UNITE, VERDICT, analyserPrixSaisie, verifierFormat, prixNormalise, formaterPrixEuros, formaterPrixNormalise, calculerVerdict, prixHabituel, estPrixIncoherent, unitesCompatibles, formatAffichage, calculerPositionDock, modeSaisieActif, positionDefilement, frequencePromos } from './domain.js';
 import { accueilVide, vueTypes, vueTypeForm } from './types-ui.js';
 import { creerSauvegarde, validerSauvegarde, etatRappelExport } from './backup.js';
@@ -973,9 +973,33 @@ async function vueFicheType(typeId) {
   const vals=[leclerc.ok?leclerc.valeur:null,inter.ok?inter.valeur:null].filter(Number.isFinite),max=vals.length?Math.max(...vals):0;
   const barre=(nom,r,magasin)=>{const valeur=r.ok?r.valeur:null,largeur=valeur!=null&&max>0?Math.max(0,Math.min(100,valeur/max*100)):0;return el('div',{class:'barre-comparaison'},el('span',{text:nom}),el('div',{class:'barre-fond',role:'img','aria-label':nom+' : '+(valeur==null?'données insuffisantes':formaterPrixNormalise(valeur,type.unite))},el('div',{class:'barre-remplissage '+(magasin===MAGASIN.LECLERC?'barre-leclerc':'barre-intermarche'),style:'width:'+largeur+'%'})),el('strong',{text:valeur==null?'—':formaterPrixNormalise(valeur,type.unite)}));};
   const barres=el('section',{class:'carte'},el('h3',{text:'Comparaison des prix habituels'}),el('div',{class:'barres-comparaison'},barre('Leclerc',leclerc,MAGASIN.LECLERC),barre('Intermarché',inter,MAGASIN.INTERMARCHE)));
+  const sectionCodes = el('section',{class:'carte codes-barres'},el('h3',{text:'Codes-barres rattachés'}));
+  const listeCodes = el('div',{class:'liste-codes-barres'});
+  const actualiserCodes = async () => {
+    const codes = (await toutLire('Article')).filter(a => Number(a.type) === Number(typeId)).sort((a,b)=>String(a.codeBarres).localeCompare(String(b.codeBarres)));
+    listeCodes.replaceChildren();
+    if (!codes.length) { listeCodes.append(el('p',{class:'aide',text:'Aucun code-barres rattaché.'})); return; }
+    for (const article of codes) {
+      const details = [article.nom,article.marque].filter(Boolean).join(' · ');
+      const format = Number(article.format)>0 ? formatAffichage(Number(article.format),type.unite) : null;
+      const formatTexte = format ? ' · '+String(format.valeur).replace('.',',')+' '+(format.unite||LIBELLE_UNITE[type.unite]) : '';
+      const ligne = el('div',{class:'ligne-code-barres'},
+        el('div',{class:'code-barres-infos'},
+          el('strong',{text:String(article.codeBarres)}),
+          el('span',{text:(details||'Article sans nom')+formatTexte})),
+        el('button',{type:'button',class:'btn btn-secondaire btn-supprimer-code',text:'Supprimer',onclick:async()=>{
+          try { await supprimer('Article',article.codeBarres); await actualiserCodes(); }
+          catch { afficherErreur('Impossible de supprimer ce code-barres.'); }
+        }})
+      );
+      listeCodes.append(ligne);
+    }
+  };
+  sectionCodes.append(listeCodes);
+  await actualiserCodes();
   racine.append(el('h2',{text:type.nom}),leclercCarte,interCarte,barres,
     el('p',{class:'aide note-biais-promo',text:'Attention : si vos relevés sont surtout effectués en promotion, la fréquence affichée peut être biaisée.'}),
-    el('h3',{text:'Historique des relevés'}),vueHistorique(typeId,true));
+    sectionCodes, el('h3',{text:'Historique des relevés'}),vueHistorique(typeId,true));
   return racine;
 }
 

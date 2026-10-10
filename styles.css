@@ -293,3 +293,9 @@ svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width:
 .dialog-scan video { display:block; width:100%; max-height:32vh; object-fit:cover; border-radius:12px; background:#111; margin:10px 0; }
 .dialog-scan .champ, .dialog-rattachement .champ { width:100%; margin-bottom:8px; }
 .dialog-rattachement .suggestions { position:static; max-height:140px; overflow-y:auto; }
+
+/* E6.5 — codes-barres rattachés à une fiche de type */
+.liste-codes-barres { display:flex; flex-direction:column; gap:8px; }
+.ligne-code-barres { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px 0; border-bottom:1px solid var(--bordure,rgba(255,255,255,.12)); }
+.code-barres-infos { display:flex; flex-direction:column; gap:4px; min-width:0; overflow-wrap:anywhere; }
+.btn-supprimer-code { min-height:48px; flex-shrink:0; }
