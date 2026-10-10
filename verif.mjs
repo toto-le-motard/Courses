@@ -283,13 +283,14 @@ if (playwright) {
       ok('E2 suppression de Lessive liquide : le type supprimé disparaît sans affecter les autres');
       const idFicheE4 = 9991;
       await page.evaluate(id=>new Promise((resolve,reject)=>{
-        const rq=indexedDB.open('appli-courses');rq.onsuccess=()=>{const db=rq.result;const tx=db.transaction(['ProductType','Observation'],'readwrite');const t=tx.objectStore('ProductType'),s=tx.objectStore('Observation');
+        const rq=indexedDB.open('appli-courses');rq.onsuccess=()=>{const db=rq.result;const tx=db.transaction(['ProductType','Observation','Article'],'readwrite');const t=tx.objectStore('ProductType'),s=tx.objectStore('Observation'),a=tx.objectStore('Article');
           t.put({id,nom:'Comparaison E4',nomNormalise:'comparaison e4',unite:'kg',marque:'',nomArticle:'',archive:0});
           s.put({id:9901,type:id,magasin:'leclerc',date:'2026-10-05',prixCentimes:1000,format:1000,promo:0});
           s.put({id:9902,type:id,magasin:'leclerc',date:'2026-10-06',prixCentimes:1200,format:1000,promo:0});
           s.put({id:9903,type:id,magasin:'leclerc',date:'2026-10-07',prixCentimes:1400,format:1000,promo:0});
           s.put({id:9904,type:id,magasin:'intermarche',date:'2026-10-08',prixCentimes:2400,format:1000,promo:0});
           s.put({id:9905,type:id,magasin:'leclerc',date:'2026-10-09',prixCentimes:900,format:1000,promo:1});
+          a.put({codeBarres:'9876543210987',type:id,format:500,marque:'Test fiche',nom:'Article lié'});
           tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error);
         };rq.onerror=()=>reject(rq.error);
       }),idFicheE4);
@@ -311,7 +312,15 @@ if (playwright) {
       await page.setViewportSize({width:390,height:500});
       await verifierEcran('Fiche du type 390x500');
       await page.setViewportSize({width:390,height:844});
-      ok('E4.2 fiche type : prix habituels, promos, fréquence, biais, barres et historique intégrés');
+      const codesFiche=page.locator('.fiche-type .codes-barres');
+       if (!(await codesFiche.count())) throw new Error('section des codes-barres absente de la fiche');
+       if (!(await codesFiche.getByText('9876543210987',{exact:true}).count())) throw new Error('code-barres lié au type absent de la fiche');
+       await codesFiche.getByRole('button',{name:/supprimer/i}).click();
+       await page.waitForFunction(()=>document.querySelector('.fiche-type .codes-barres')?.innerText.includes('Aucun code-barres'),null,{timeout:5000});
+       const codeSupprime=await page.evaluate(()=>new Promise((resolve,reject)=>{const r=indexedDB.open('appli-courses');r.onsuccess=()=>{const q=r.result.transaction('Article').objectStore('Article').get('9876543210987');q.onsuccess=()=>resolve(!q.result);q.onerror=()=>reject(q.error)};r.onerror=()=>reject(r.error)}));
+       if(!codeSupprime) throw new Error('le code-barres n’a pas été supprimé du catalogue');
+       ok('E6.5 fiche type : codes rattachés listés et supprimables');
+       ok('E4.2 fiche type : prix habituels, promos, fréquence, biais, barres et historique intégrés');
       await aller('#/types');
       await page.waitForSelector('#liste-types .verdict-liste',{timeout:5000});
       if ((await page.locator('#liste-types .barre-comparaison').count()) < 2) throw new Error('barres comparatives absentes de la liste Types');
