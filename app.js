@@ -1,5 +1,5 @@
 // app.js — interface et navigation (stories 1.2 à 3-2).
-import { initDb, dbPrete, listerTypes, lireDernierReleve, lireObservations, dernierReleve, trouverDoublon, enregistrerReleves, analyserDoublons, annulerEnregistrement, listerReleves, modifierReleve, supprimerReleve, demanderStockagePersistant, lireReglage, ecrireReglage, compter, STORES, VERSION_SCHEMA, exporterCollections, remplacerCollections } from './db.js';
+import { initDb, dbPrete, listerTypes, lireDernierReleve, lireObservations, dernierReleve, trouverDoublon, enregistrerReleves, analyserDoublons, annulerEnregistrement, listerReleves, modifierReleve, supprimerReleve, demanderStockagePersistant, lireReglage, ecrireReglage, compter, STORES, VERSION_SCHEMA, exporterCollections, remplacerCollections, lire, mettre } from './db.js';
 import { MAGASIN, UNITES, LIBELLE_UNITE, VERDICT, analyserPrixSaisie, verifierFormat, prixNormalise, formaterPrixEuros, formaterPrixNormalise, calculerVerdict, prixHabituel, estPrixIncoherent, unitesCompatibles, formatAffichage, calculerPositionDock, modeSaisieActif, positionDefilement, frequencePromos } from './domain.js';
 import { accueilVide, vueTypes, vueTypeForm } from './types-ui.js';
 import { creerSauvegarde, validerSauvegarde, etatRappelExport } from './backup.js';
@@ -326,6 +326,7 @@ function vueMagasin() {
   function erreur(msg) { message.textContent = msg || ''; message.hidden = !msg; }
   function prixValide() { return analyserPrixSaisie(prix.value); }
 
+  const boutonScanner = el('button', { type: 'button', class: 'btn btn-secondaire btn-scanner', id: 'btn-scanner', text: 'Scanner un code-barres', onclick: () => ouvrirScanner() });
   const recherche = el('input', { type: 'search', class: 'champ', id: 'champ-type', enterkeyhint: 'next', placeholder: 'Type de produit', autocomplete: 'off', 'aria-label': 'Type de produit' });
   const suggestions = el('div', { class: 'suggestions', id: 'suggestions-types' });
   const prix = el('input', { type: 'text', class: 'champ champ-prix', id: 'champ-prix', inputmode: 'decimal', autocomplete: 'off', 'aria-label': 'Prix en euros', placeholder: '0,00', enterkeyhint: 'next' });
@@ -417,6 +418,147 @@ function vueMagasin() {
     } catch (e) { erreur(e.message || 'Enregistrement impossible.'); }
     finally { bouton.disabled = !estFormulaireValide(); }
   });
+
+
+  async function ouvrirScanner() {
+    const dialogue = el('dialog', { class: 'feuille dialog-scan' },
+      el('h2', { text: 'Scanner un code-barres' }),
+      el('p', { text: 'Placez le code dans le cadre ou saisissez-le manuellement.' }),
+      el('video', { id: 'scan-video', autoplay: true, playsinline: true, 'aria-label': 'Aperçu caméra' }),
+      el('label', { class: 'etiquette', for: 'scan-code-manuel', text: 'Code-barres' }),
+      el('input', { id: 'scan-code-manuel', class: 'champ', inputmode: 'numeric', autocomplete: 'off', placeholder: 'EAN-13 ou autre code' }),
+      el('p', { id: 'scan-message', class: 'erreur', role: 'status', hidden: true }),
+      el('div', { class: 'feuille-actions' },
+        el('button', { type: 'button', class: 'btn btn-primaire', text: 'Rechercher', onclick: async () => traiterCode(dialogue.querySelector('#scan-code-manuel').value) }),
+        el('button', { type: 'button', class: 'btn btn-secondaire', text: 'Fermer', onclick: () => dialogue.close() })
+      )
+    );
+    let stream = null;
+    let actif = true;
+    const fermer = () => { actif = false; stream?.getTracks?.().forEach(t => t.stop()); dialogue.remove(); };
+    dialogue.addEventListener('close', fermer, { once: true });
+    async function traiterCode(valeur) {
+      const code = String(valeur || '').trim();
+      if (!code) { const m=dialogue.querySelector('#scan-message'); m.textContent='Saisissez un code-barres.'; m.hidden=false; return; }
+      try {
+        const article = await lire('Article', code);
+        dialogue.close();
+        if (article) {
+          const entree = types.find(x => String(x.type.id) === String(article.type));
+          if (!entree) { await ouvrirRattachement(code, article); return; }
+          typeChoisi = entree.type; recherche.value = entree.type.nom;
+          suggestions.replaceChildren(); chargerDernierEtFormat();
+          if (Number.isFinite(Number(article.format)) && Number(article.format) > 0) {
+            const affichage = formatAffichage(Number(article.format), typeChoisi.unite);
+            valeurFormat.value = String(affichage.valeur).replace(',', '.');
+            uniteFormat.value = affichage.unite || uniteFormat.value;
+          }
+          verifier(); recherche.focus(); garderChampVisible(recherche);
+        } else {
+          await ouvrirRattachement(code, null);
+        }
+      } catch {
+        const m=dialogue.querySelector('#scan-message'); m.textContent='Lecture impossible. Réessayez ou saisissez le code.'; m.hidden=false;
+      }
+    }
+    dialogue.showModal();
+    try {
+      if (!navigator.mediaDevices?.getUserMedia) throw new Error('Caméra indisponible');
+      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false });
+      const video = dialogue.querySelector('#scan-video'); video.srcObject = stream;
+      await video.play().catch(() => {});
+      if ('BarcodeDetector' in window) {
+        const detector = new window.BarcodeDetector({ formats: ['ean_13','ean_8','upc_a','upc_e','code_128'] });
+        const codes = await detector.detect(video);
+        if (actif && codes?.[0]?.rawValue) await traiterCode(codes[0].rawValue);
+      } else {
+        const m=dialogue.querySelector('#scan-message'); m.textContent='Détection automatique indisponible sur ce navigateur. Saisissez le code manuellement.'; m.hidden=false;
+      }
+    } catch {
+      if (actif) {
+        const m=dialogue.querySelector('#scan-message'); m.textContent='Caméra indisponible ou accès refusé. Vous pouvez saisir le code manuellement.'; m.hidden=false;
+      }
+    }
+  }
+
+  async function ouvrirRattachement(code, articleExistant) {
+    const dialogue = el('dialog', { class: 'feuille dialog-rattachement dialog-rattacher' },
+      el('h2', { text: 'Rattacher ce code' }),
+      el('p', { text: 'Associez ce code-barres à un type de produit existant.' }),
+      el('label', { class: 'etiquette', for: 'scan-type-search', text: 'Type de produit' }),
+      el('input', { id: 'scan-type-search', class: 'champ', type: 'search', placeholder: 'Rechercher un type' }),
+      el('div', { id: 'scan-suggestions', class: 'suggestions' }),
+      el('label', { class: 'etiquette', for: 'scan-format', text: 'Format' }),
+      el('input', { id: 'scan-format', class: 'champ', type: 'number', min: '0', step: 'any', value: articleExistant?.format ? String(articleExistant.format) : '' }),
+      el('label', { class: 'etiquette', for: 'scan-unite', text: 'Unité' }),
+      el('select', { id: 'scan-unite', class: 'champ' },
+        el('option', { value: 'g', text: 'g' }), el('option', { value: 'kg', text: 'kg' }),
+        el('option', { value: 'ml', text: 'ml' }), el('option', { value: 'l', text: 'l' }),
+        el('option', { value: 'unit', text: 'unité' })
+      ),
+      el('label', { class: 'etiquette', for: 'scan-marque', text: 'Marque (facultatif)' }),
+      el('input', { id: 'scan-marque', class: 'champ', value: articleExistant?.marque || '' }),
+      el('label', { class: 'etiquette', for: 'scan-nom', text: 'Nom de l’article (facultatif)' }),
+      el('input', { id: 'scan-nom', class: 'champ', value: articleExistant?.nom || '' }),
+      el('p', { id: 'scan-rattacher-message', class: 'erreur', role: 'alert', hidden: true }),
+      el('div', { class: 'feuille-actions' },
+        el('button', { type: 'button', class: 'btn btn-secondaire', text: 'Compléter', onclick: async () => {
+          const marque = dialogue.querySelector('#scan-marque');
+          const nom = dialogue.querySelector('#scan-nom');
+          try {
+            const url = 'https://world.openfoodfacts.org/api/v2/product/' + encodeURIComponent(code) + '.json';
+            const reponse = await fetch(url);
+            if (!reponse.ok) throw new Error('Indisponible');
+            const donnees = await reponse.json();
+            const produit = donnees.product || {};
+            if (!marque.value.trim()) marque.value = String(produit.brands || '').split(',')[0].trim();
+            if (!nom.value.trim()) nom.value = produit.product_name || produit.product_name_fr || '';
+            if (!marque.value.trim() && !nom.value.trim()) throw new Error('Aucune information disponible');
+          } catch {
+            const m=dialogue.querySelector('#scan-rattacher-message'); m.textContent='Complément en ligne indisponible. Vous pouvez continuer manuellement.'; m.hidden=false;
+          }
+        }}),
+        el('button', { type: 'button', class: 'btn btn-primaire', text: 'Rattacher ce code', onclick: async () => {
+          const id = dialogue.dataset.typeId;
+          const type = types.find(x => String(x.type.id) === String(id))?.type;
+          const format = Number(dialogue.querySelector('#scan-format').value);
+          const unite = dialogue.querySelector('#scan-unite').value;
+          const formatBase = format * (unite === 'kg' || unite === 'l' ? 1000 : 1);
+          if (!type) { const m=dialogue.querySelector('#scan-rattacher-message'); m.textContent='Choisissez un type de produit.'; m.hidden=false; return; }
+          if (!Number.isFinite(formatBase) || formatBase <= 0 || (type.unite === 'kg' && !['g','kg'].includes(unite)) || (type.unite === 'l' && !['ml','l'].includes(unite)) || (type.unite === 'unit' && unite !== 'unit')) {
+            const m=dialogue.querySelector('#scan-rattacher-message'); m.textContent='Saisissez un format valide dans une unité compatible avec le type.'; m.hidden=false; return;
+          }
+          try {
+            await mettre('Article', { codeBarres: code, type: type.id, format: Math.round(formatBase), marque: dialogue.querySelector('#scan-marque').value.trim(), nom: dialogue.querySelector('#scan-nom').value.trim() });
+            dialogue.close();
+            typeChoisi = type; recherche.value = type.nom; suggestions.replaceChildren();
+            chargerDernierEtFormat();
+            const affichage = formatAffichage(formatBase, type.unite);
+            valeurFormat.value = String(affichage.valeur).replace(',', '.'); uniteFormat.value = affichage.unite || uniteFormat.value;
+            verifier(); recherche.focus(); garderChampVisible(recherche);
+          } catch {
+            const m=dialogue.querySelector('#scan-rattacher-message'); m.textContent='Impossible d’enregistrer ce rattachement.'; m.hidden=false;
+          }
+        }}),
+        el('button', { type: 'button', class: 'btn btn-secondaire', text: 'Annuler', onclick: () => dialogue.close() })
+      )
+    );
+    const champ = dialogue.querySelector('#scan-type-search');
+    const zone = dialogue.querySelector('#scan-suggestions');
+    const afficherSuggestions = () => {
+      const q=champ.value.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
+      const candidats=types.filter(x=>x.type.nomNormalise.includes(q)).slice(0,8);
+      zone.replaceChildren(...candidats.map(x=>el('button',{type:'button',class:'suggestion-rattacher',text:x.type.nom,onclick:()=>{
+        dialogue.dataset.typeId=String(x.type.id); champ.value=x.type.nom; zone.replaceChildren();
+        const compatibles=unitesCompatibles(x.type.unite);
+        dialogue.querySelector('#scan-unite').replaceChildren(...compatibles.map(u=>el('option',{value:u,text:LIBELLE_UNITE[u]})));
+        const inputFormat=dialogue.querySelector('#scan-format');
+        if (!inputFormat.value) inputFormat.value=x.dernier?.format ? String(formatAffichage(Number(x.dernier.format),x.type.unite).valeur).replace(',','.') : '';
+      }})));
+    };
+    champ.addEventListener('input', afficherSuggestions);
+    dialogue.showModal();
+  }
 
   function chargerDernierEtFormat() {
     if (!typeChoisi) return;
@@ -512,7 +654,7 @@ function vueMagasin() {
   const prixNormaliseAffiche = el('p', { class: 'prix-normalise' });
   const formatBloc = el('div', { class: 'format-ligne' }, valeurFormat, uniteFormat);
   formulaire.append(
-    el('label', { class: 'etiquette', for: 'champ-type', text: 'Type' }), recherche, suggestions,
+    boutonScanner, el('label', { class: 'etiquette', for: 'champ-type', text: 'Type' }), recherche, suggestions,
     el('label', { class: 'etiquette', for: 'champ-prix', text: 'Prix' }), prixZone,
     el('label', { class: 'etiquette', for: 'champ-format', text: 'Format' }), formatBloc, formatErreur, prixNormaliseAffiche,
     el('div', { class: 'date-promo-ligne' },

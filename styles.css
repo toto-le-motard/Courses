@@ -283,3 +283,10 @@ svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width:
 .ligne-liste-course { display:flex; flex-direction:column; gap:5px; padding:12px; min-height:48px; border-radius:12px; background:var(--surface); color:var(--texte); text-decoration:none; }
 .ligne-liste-course .detail-prix-liste { color:var(--texte2); font-size:13px; }
 .groupe-liste-courses .aide { margin:4px 0; }
+
+/* Story E6 — saisie et rattachement d'un code-barres */
+.btn-scanner { width: 100%; min-height: 48px; margin-bottom: 10px; }
+.dialog-scan, .dialog-rattachement { width: min(92vw, 440px); max-height: 88dvh; overflow-y: auto; }
+.dialog-scan video { display: block; width: 100%; max-height: 32vh; object-fit: cover; border-radius: 12px; background: #111; margin: 10px 0; }
+.dialog-scan .champ, .dialog-rattachement .champ { width: 100%; margin-bottom: 8px; }
+.dialog-rattachement .suggestions { position: static; max-height: 140px; overflow-y: auto; }
