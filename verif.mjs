@@ -203,7 +203,11 @@ if (playwright) {
       const apres500=await mesurer();info('MESURES APRES dock 390x500 '+JSON.stringify(apres500));
       if(!apres500.dock||apres500.type.top<0||apres500.prix.top<0||apres500.prix.bottom>apres500.dock.top||apres500.format.bottom>apres500.dock.top||apres500.dock.top<0||apres500.dock.bottom>apres500.tabs.top||apres500.dock.bottom>500)throw new Error('champ prix ou dock masqué à 390x500 : '+JSON.stringify(apres500));
       // UX 3.1 / story 3.8 : simulation du clavier, car Playwright ne l'ouvre pas réellement.
-      await page.evaluate(()=>window.__forcerModeSaisie?.(true));
+      await page.locator('#champ-prix').fill('11,00');
+      const debutFrappe=Date.now();await page.locator('#champ-prix').press('End');await page.keyboard.type('1');
+      await page.waitForFunction(()=>{const e=document.querySelector('#carte-verdict');return e&&!e.hidden;},null,{timeout:2000});
+      if(Date.now()-debutFrappe>=2000)throw new Error('verdict après frappe du prix en 2 secondes ou plus');
+            await page.evaluate(()=>window.__forcerModeSaisie?.(true));
       const mesurerModeSaisie=async()=>page.evaluate(()=>{const r=s=>{const e=document.querySelector(s);if(!e)return null;const b=e.getBoundingClientRect();return {top:Math.round(b.top),bottom:Math.round(b.bottom),height:Math.round(b.height)};};return {labelType:r('label[for="champ-type"]'),labelPrix:r('label[for="champ-prix"]'),labelFormat:r('label[for="champ-format"]'),titre:r('.topbar'),prix:r('#champ-prix'),type:r('#champ-type'),format:r('#champ-format'),dock:r('#dock-magasin'),tabs:r('.tabs'),mode:document.body.classList.contains('mode-saisie'),verdict:!!document.querySelector('#carte-verdict:not([hidden])')};});
       await page.locator('#champ-prix').focus();await page.waitForTimeout(80);
       let clavier=await mesurerModeSaisie();info('MESURES MODE SAISIE focus Prix 390x500 '+JSON.stringify(clavier));
@@ -268,7 +272,7 @@ if (playwright) {
       await page.waitForSelector('dialog:has-text("définitive")');
       await page.click('dialog button:has-text("Supprimer")');      await page.waitForFunction(() => !/Lessive liquide/.test((document.getElementById('vue')?.textContent || '')), null, { timeout: 5000 });
       ok('E2 suppression de Lessive liquide : le type supprimé disparaît sans affecter les autres');
-      await aller('#/reglages');await page.waitForFunction(()=>/v40/.test((document.getElementById('vue')?.textContent || '')),null,{timeout:5000});await verifierEcran('Réglages');ok('B6 Réglages : version v40 visible');
+      await aller('#/reglages');await page.waitForFunction(()=>/v41/.test((document.getElementById('vue')?.textContent || '')),null,{timeout:5000});await verifierEcran('Réglages');ok('B6 Réglages : version v40 visible');
       // service worker actif et page contrôlée, puis test hors ligne
       await page.evaluate(() => navigator.serviceWorker.ready);
       if (!(await page.evaluate(() => !!navigator.serviceWorker.controller))) { await page.reload(); await page.waitForSelector('#vue .carte'); }

@@ -52,6 +52,11 @@ function garderChampVisible(champ) {
     const rChamp = champ.getBoundingClientRect();
     const rLabel = label?.getBoundingClientRect();
     const rect = rLabel ? { top: Math.min(rLabel.top, rChamp.top), bottom: Math.max(rLabel.bottom, rChamp.bottom) } : { top: rChamp.top, bottom: rChamp.bottom };
+    // En mode normal, garder aussi le format visible quand le prix reçoit le focus (régression du lot F).
+    if (champ.id === 'champ-prix' && !document.body.classList.contains('mode-saisie')) {
+      const format = document.getElementById('champ-format');
+      if (format) rect.bottom = Math.max(rect.bottom, format.getBoundingClientRect().bottom);
+    }
     const vv = window.visualViewport;
     const hautVisible = Math.max(vv ? vv.offsetTop : 0, document.querySelector('.topbar')?.getBoundingClientRect().bottom || 0);
     const basVisible = Math.min(vv ? vv.offsetTop + vv.height : window.innerHeight, dock.getBoundingClientRect().top);
