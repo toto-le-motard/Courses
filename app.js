@@ -163,6 +163,7 @@ function confirmerRemplacementSauvegarde() {
 }
 
 async function vueReglages() {
+  await dbPrete;
   const d = document.createElement('div');
   const sauvegarde = carte('Sauvegarde', 'Exportez toutes vos données dans un fichier JSON versionné. Conservez ce fichier en lieu sûr.');
   const message = el('p', { class: 'message-sauvegarde', role: 'status', hidden: true });
