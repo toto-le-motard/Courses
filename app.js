@@ -654,7 +654,7 @@ function vueMagasin() {
   const prixNormaliseAffiche = el('p', { class: 'prix-normalise' });
   const formatBloc = el('div', { class: 'format-ligne' }, valeurFormat, uniteFormat);
   formulaire.append(
-    boutonScanner, el('label', { class: 'etiquette', for: 'champ-type', text: 'Type' }), recherche, suggestions,
+    el('div', { class: 'type-entete' }, el('label', { class: 'etiquette', for: 'champ-type', text: 'Type' }), boutonScanner), recherche, suggestions,
     el('label', { class: 'etiquette', for: 'champ-prix', text: 'Prix' }), prixZone,
     el('label', { class: 'etiquette', for: 'champ-format', text: 'Format' }), formatBloc, formatErreur, prixNormaliseAffiche,
     el('div', { class: 'date-promo-ligne' },
