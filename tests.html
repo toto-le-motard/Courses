@@ -11,6 +11,7 @@ li { padding:6px 0; border-bottom:1px solid rgba(255,255,255,.1); } .exi { color
 <script type="module">
 const calculerPositionDock = await import('./domain.js').then(m => m.calculerPositionDock);
 import { creerSauvegarde, validerSauvegarde } from './backup.js';
+import { creerSauvegarde, validerSauvegarde } from './backup.js';
 import { modeSaisieActif, positionDefilement, MAGASIN, VERDICT, UNITES, LIBELLE_UNITE, normaliserNom, nomTypeValide, unitesCompatibles, estCompatible, versUniteDeBase, convertir, verifierFormat, arrondirCentimes, analyserPrixSaisie, formaterPrixEuros, formaterPrixNormalise, prixNormalise, joursEntre, mediane, referenceLeclerc, habituelIntermarche, prixHabituel, prixHabituelAutreMagasin, calculerVerdict, estPrixIncoherent, decisionDoublon, analyserDoublon, cleDoublon, formatAffichage, trierReleves } from './domain.js';
 const resultats={reussis:0,echecs:0,details:[]},lignes=[]; function test(exigence,nom,fn){let msg=null;try{fn()}catch(e){msg=e.message}if(msg){resultats.echecs++;resultats.details.push(exigence+' '+nom+' : '+msg)}else resultats.reussis++;lignes.push({ok:!msg,exigence,nom,msg});}
 function egal(a,b,msg=''){if(JSON.stringify(a)!==JSON.stringify(b))throw new Error(msg+' attendu '+JSON.stringify(b)+', obtenu '+JSON.stringify(a));}
@@ -102,6 +103,11 @@ test('UX 3.1 / story 3.8','défilement vers le haut si champ sous le dock',()=>e
 test('UX 3.1 / story 3.8','défilement vers le bas si champ au-dessus du titre',()=>egal(positionDefilement({top:60,bottom:100},100,300,12),-52));
 test('UX 3.1 / story 3.8','défilement nul si champ dans la zone avec marge de 12 px',()=>egal(positionDefilement({top:112,bottom:288},100,300,12),0));
 /* FR20 / E8.1 — export JSON versionné et validation avant restauration */
+test('FR20 / E8.1','création d’une sauvegarde versionnée avec toutes les collections',()=>{const p=creerSauvegarde({schemaVersion:1,types:[{id:1}],articles:[{codeBarres:'123'}],releves:[{id:2}],achats:[{id:3}],reglages:[{cle:'seuilIndifference',valeur:5}],dateExport:'2026-10-10'});egal(p.schemaVersion,1);egal(p.types.length,1);egal(p.articles.length,1);egal(p.releves.length,1);egal(p.achats.length,1);egal(p.reglages.length,1);egal(p.dateExport,'2026-10-10');});
+test('FR20 / E8.2','validation accepte une sauvegarde complète valide',()=>{const p={schemaVersion:1,dateExport:'2026-10-10',types:[],articles:[],releves:[],achats:[],reglages:[]};const r=validerSauvegarde(p,1);egal(r.ok,true);});
+test('FR20 / E8.2','validation refuse une version inconnue sans effet',()=>{const p={schemaVersion:99,dateExport:'2026-10-10',types:[],articles:[],releves:[],achats:[],reglages:[]};const r=validerSauvegarde(p,1);egal(r.ok,false);if(!r.erreur)throw new Error('message d’erreur absent');});
+test('FR20 / E8.2','validation refuse une collection absente',()=>{const p={schemaVersion:1,dateExport:'2026-10-10',types:[],articles:[],releves:[],achats:[],reglages:[]};delete p.achats;egal(validerSauvegarde(p,1).ok,false);});
+
 test('FR20 / E8.1','création d’une sauvegarde versionnée avec toutes les collections',()=>{const p=creerSauvegarde({schemaVersion:1,types:[{id:1}],articles:[{codeBarres:'123'}],releves:[{id:2}],achats:[{id:3}],reglages:[{cle:'seuilIndifference',valeur:5}],dateExport:'2026-10-10'});egal(p.schemaVersion,1);egal(p.types.length,1);egal(p.articles.length,1);egal(p.releves.length,1);egal(p.achats.length,1);egal(p.reglages.length,1);egal(p.dateExport,'2026-10-10');});
 test('FR20 / E8.2','validation accepte une sauvegarde complète valide',()=>{const p={schemaVersion:1,dateExport:'2026-10-10',types:[],articles:[],releves:[],achats:[],reglages:[]};const r=validerSauvegarde(p,1);egal(r.ok,true);});
 test('FR20 / E8.2','validation refuse une version inconnue sans effet',()=>{const p={schemaVersion:99,dateExport:'2026-10-10',types:[],articles:[],releves:[],achats:[],reglages:[]};const r=validerSauvegarde(p,1);egal(r.ok,false);if(!r.erreur)throw new Error('message d’erreur absent');});

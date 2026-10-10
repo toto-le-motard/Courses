@@ -348,3 +348,11 @@ export async function modifierReleve(id, champs) {
 }
 
 export const supprimerReleve = (id) => supprimer('Observation', id);
+
+// FR20 / E8.1 — lecture cohérente des collections pour l'export JSON.
+export async function exporterCollections() {
+  const [types, articles, releves, achats, reglages] = await Promise.all([
+    toutLire('ProductType'), toutLire('Article'), toutLire('Observation'), toutLire('Purchase'), toutLire('Settings')
+  ]);
+  return { types, articles, releves, achats, reglages };
+}

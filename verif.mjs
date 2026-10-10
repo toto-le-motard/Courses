@@ -280,7 +280,14 @@ if (playwright) {
       await page.waitForSelector('dialog:has-text("définitive")');
       await page.click('dialog button:has-text("Supprimer")');      await page.waitForFunction(() => !/Lessive liquide/.test((document.getElementById('vue')?.textContent || '')), null, { timeout: 5000 });
       ok('E2 suppression de Lessive liquide : le type supprimé disparaît sans affecter les autres');
-      await aller('#/reglages');await page.waitForFunction(()=>/v45/.test((document.getElementById('vue')?.textContent || '')),null,{timeout:5000});await verifierEcran('Réglages');ok('B6 Réglages : version v45 visible');
+      const versionCache = readFileSync(join(racine, 'sw.js'), 'utf8').match(/const CACHE_VERSION = '([^']+)'/)?.[1];
+      await aller('#/reglages');await page.waitForFunction((v)=>(document.getElementById('vue')?.textContent || '').includes(v),versionCache,{timeout:5000});await verifierEcran('Réglages');ok('B6 Réglages : version '+versionCache+' visible');
+      const [telechargement] = await Promise.all([page.waitForEvent('download'),page.click('button:has-text("Exporter une sauvegarde")')]);
+      const cheminSauvegarde = await telechargement.path();
+      if (!cheminSauvegarde) throw new Error('fichier de sauvegarde non disponible');
+      const sauvegardeJson = JSON.parse(readFileSync(cheminSauvegarde,'utf8'));
+      if (sauvegardeJson.schemaVersion !== 1 || !['types','articles','releves','achats','reglages'].every(k=>Array.isArray(sauvegardeJson[k]))) throw new Error('structure de sauvegarde incorrecte');
+      ok('E8.1 export JSON téléchargé et collections présentes');
       // service worker actif et page contrôlée, puis test hors ligne
       await page.evaluate(() => navigator.serviceWorker.ready);
       if (!(await page.evaluate(() => !!navigator.serviceWorker.controller))) { await page.reload(); await page.waitForSelector('#vue .carte'); }

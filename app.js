@@ -1,7 +1,8 @@
 // app.js — interface et navigation (stories 1.2 à 3-2).
-import { initDb, dbPrete, listerTypes, lireDernierReleve, lireObservations, dernierReleve, trouverDoublon, enregistrerReleves, analyserDoublons, annulerEnregistrement, listerReleves, modifierReleve, supprimerReleve, demanderStockagePersistant, lireReglage, ecrireReglage, compter, STORES, VERSION_SCHEMA } from './db.js';
+import { initDb, dbPrete, listerTypes, lireDernierReleve, lireObservations, dernierReleve, trouverDoublon, enregistrerReleves, analyserDoublons, annulerEnregistrement, listerReleves, modifierReleve, supprimerReleve, demanderStockagePersistant, lireReglage, ecrireReglage, compter, STORES, VERSION_SCHEMA, exporterCollections } from './db.js';
 import { MAGASIN, UNITES, LIBELLE_UNITE, VERDICT, analyserPrixSaisie, verifierFormat, prixNormalise, formaterPrixEuros, formaterPrixNormalise, calculerVerdict, prixHabituel, estPrixIncoherent, unitesCompatibles, formatAffichage, calculerPositionDock, modeSaisieActif, positionDefilement } from './domain.js';
 import { accueilVide, vueTypes, vueTypeForm } from './types-ui.js';
+import { creerSauvegarde } from './backup.js';
 
 const vue = document.getElementById('vue');
 const titre = document.getElementById('titre-ecran');
@@ -136,13 +137,41 @@ window.addEventListener('online', majReseau);
 window.addEventListener('offline', majReseau);
 majReseau();
 
-function vueReglages() {
+async function vueReglages() {
   const d = document.createElement('div');
-  d.appendChild(carte('Réglages', 'Seuil, sauvegarde et installation arrivent avec l’épic E8.'));
+  const sauvegarde = carte('Sauvegarde', 'Exportez toutes vos données dans un fichier JSON versionné. Conservez ce fichier en lieu sûr.');
+  const message = el('p', { class: 'message-sauvegarde', role: 'status', hidden: true });
+  const boutonExport = el('button', { type: 'button', class: 'btn btn-primaire', text: 'Exporter une sauvegarde', onclick: async () => {
+    boutonExport.disabled = true;
+    message.hidden = true;
+    try {
+      const collections = await exporterCollections();
+      const dateExport = aujourdHui();
+      const payload = creerSauvegarde({ schemaVersion: VERSION_SCHEMA, ...collections, dateExport });
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const lien = document.createElement('a');
+      lien.href = url;
+      lien.download = 'appli-courses-' + dateExport + '.json';
+      document.body.append(lien);
+      lien.click();
+      lien.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      await ecrireReglage('dernierExport', dateExport);
+      message.textContent = 'Sauvegarde téléchargée le ' + dateAffichee(dateExport) + '.';
+      message.hidden = false;
+    } catch (e) {
+      message.textContent = 'Export impossible. Vérifiez que le navigateur autorise le téléchargement.';
+      message.hidden = false;
+      console.error('Export de sauvegarde impossible', e);
+    } finally { boutonExport.disabled = false; }
+  }});
+  sauvegarde.append(boutonExport, message);
+  d.append(sauvegarde);
   const c = carte('À propos et diagnostic');
   const p = el('p', { class: 'diag' });
   const lignes = [
-    ['Version du cache', versionAppli === '…' ? 'v18' : versionAppli], ['Version de l’appli', versionAppli], ['Base de données', diagnostic.base],
+    ['Version du cache', versionAppli === '…' ? 'inconnue' : versionAppli], ['Version de l’appli', versionAppli], ['Base de données', diagnostic.base],
     ['Stockage persistant', diagnostic.persistant], ['Lancements enregistrés', diagnostic.lancements],
     ['Contenu', diagnostic.comptes]
   ];
