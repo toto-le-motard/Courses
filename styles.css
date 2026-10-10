@@ -311,3 +311,17 @@ svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width:
 
 .achat-actions > #btn-enregistrer { width:auto; min-width:0; min-height:48px; flex:1 1 0; padding:4px 4px; font-size:11px; white-space:nowrap; }
 .achat-actions > #btn-achat-confirme { min-width:0; min-height:48px; flex:1 1 0; padding:4px 4px; font-size:12px; white-space:nowrap; }
+
+
+/* Petits écrans : conserver Type, Prix et Format visibles au-dessus du dock. */
+@media (max-height: 600px) {
+  .dock-magasin { gap:4px; padding:6px; border-radius:16px; }
+  .dock-verdict-zone .verdict-carte { padding:4px 8px; border-radius:12px; }
+  .dock-verdict-zone .verdict-ligne1 { gap:6px; }
+  .dock-verdict-zone .verdict-ligne1 strong { font-size:16px; line-height:1.05; }
+  .dock-verdict-zone .verdict-icone { width:28px; height:28px; font-size:17px; }
+  .dock-verdict-zone .verdict-economie { margin-top:2px !important; font-size:12px !important; line-height:1.15; }
+  .dock-verdict-zone .verdict-rappel,
+  .dock-verdict-zone .verdict-habituel,
+  .dock-verdict-zone .badge-promo { display:none !important; }
+}
