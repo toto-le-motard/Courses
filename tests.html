@@ -10,7 +10,7 @@ li { padding:6px 0; border-bottom:1px solid rgba(255,255,255,.1); } .exi { color
 <body><h1>Tests du domaine</h1><div id="bilan">…</div><ul id="liste"></ul>
 <script type="module">
 const calculerPositionDock = await import('./domain.js').then(m => m.calculerPositionDock);
-import { creerSauvegarde, validerSauvegarde } from './backup.js';
+import { creerSauvegarde, validerSauvegarde, etatRappelExport } from './backup.js';
 import { modeSaisieActif, positionDefilement, MAGASIN, VERDICT, UNITES, LIBELLE_UNITE, normaliserNom, nomTypeValide, unitesCompatibles, estCompatible, versUniteDeBase, convertir, verifierFormat, arrondirCentimes, analyserPrixSaisie, formaterPrixEuros, formaterPrixNormalise, prixNormalise, joursEntre, mediane, referenceLeclerc, habituelIntermarche, prixHabituel, prixHabituelAutreMagasin, calculerVerdict, estPrixIncoherent, decisionDoublon, analyserDoublon, cleDoublon, formatAffichage, trierReleves } from './domain.js';
 const resultats={reussis:0,echecs:0,details:[]},lignes=[]; function test(exigence,nom,fn){let msg=null;try{fn()}catch(e){msg=e.message}if(msg){resultats.echecs++;resultats.details.push(exigence+' '+nom+' : '+msg)}else resultats.reussis++;lignes.push({ok:!msg,exigence,nom,msg});}
 function egal(a,b,msg=''){if(JSON.stringify(a)!==JSON.stringify(b))throw new Error(msg+' attendu '+JSON.stringify(b)+', obtenu '+JSON.stringify(a));}
@@ -107,6 +107,11 @@ test('FR20 / E8.1','création d’une sauvegarde versionnée avec toutes les col
 test('FR20 / E8.2','validation accepte une sauvegarde complète valide',()=>{const p={schemaVersion:1,dateExport:'2026-10-10',types:[],articles:[],releves:[],achats:[],reglages:[]};const r=validerSauvegarde(p,1);egal(r.ok,true);});
 test('FR20 / E8.2','validation refuse une version inconnue sans effet',()=>{const p={schemaVersion:99,dateExport:'2026-10-10',types:[],articles:[],releves:[],achats:[],reglages:[]};const r=validerSauvegarde(p,1);egal(r.ok,false);if(!r.erreur)throw new Error('message d’erreur absent');});
 test('FR20 / E8.2','validation refuse une collection absente',()=>{const p={schemaVersion:1,dateExport:'2026-10-10',types:[],articles:[],releves:[],achats:[],reglages:[]};delete p.achats;egal(validerSauvegarde(p,1).ok,false);});
+/* FR20 / E8.3 — rappel d'export calculé sur des dates simulées */
+test('FR20 / E8.3','rappel immédiat si aucun export enregistré',()=>egal(etatRappelExport(null,'2026-10-10',30),'jamais'));
+test('FR20 / E8.3','pas de rappel après 29 jours',()=>egal(etatRappelExport('2026-09-11','2026-10-10',30),'ok'));
+test('FR20 / E8.3','pas de rappel à exactement 30 jours',()=>egal(etatRappelExport('2026-09-10','2026-10-10',30),'ok'));
+test('FR20 / E8.3','rappel après 31 jours',()=>egal(etatRappelExport('2026-09-09','2026-10-10',30),'retard'));
 const ko=lignes.filter(r=>!r.ok), bilanTexte=ko.length?ko.length+' échec(s) sur '+lignes.length:'Tous les tests passent ('+lignes.length+')';
 if(typeof document==='undefined'){console.log(bilanTexte);ko.forEach(r=>console.log('ÉCHEC ['+r.exigence+'] '+r.nom+' — '+r.msg));if(ko.length)process.exitCode=1;}
 else{const bilan=document.getElementById('bilan');bilan.textContent=bilanTexte;bilan.className=ko.length?'ko':'ok';const ul=document.getElementById('liste');[...ko,...lignes.filter(r=>r.ok)].forEach(r=>{const li=document.createElement('li');li.className=r.ok?'ok':'ko';const ex=document.createElement('span');ex.className='exi';ex.textContent=r.exigence;li.append(ex,document.createTextNode((r.ok?'✓':'✗')+' '+r.nom));if(!r.ok){const m=document.createElement('span');m.className='msg';m.textContent=r.msg;li.append(m);}ul.append(li);});}

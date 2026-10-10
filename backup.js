@@ -29,3 +29,6 @@ export function validerSauvegarde(payload, schemaVersionAttendu) {
   }
   return { ok: true, valeur: payload };
 }
+
+// FR20 / E8.3 — état du rappel selon une date courante injectable pour les tests.
+export function etatRappelExport(dateDernierExport, dateCourante, delaiJours = 30) { return 'ok'; }

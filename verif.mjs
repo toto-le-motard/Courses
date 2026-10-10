@@ -300,6 +300,17 @@ if (playwright) {
       await page.click('dialog button:has-text("Remplacer toutes les données")');
       await page.waitForFunction(()=>/restaurée|importée/i.test(document.querySelector('.message-sauvegarde')?.textContent||''),null,{timeout:5000});
       ok('E8.2 import valide confirmé et terminé');
+      const dateRetard = new Date(Date.now()-31*86400000).toISOString().slice(0,10);
+      await page.evaluate(date=>new Promise((resolve,reject)=>{const rq=indexedDB.open('appli-courses');rq.onsuccess=()=>{const db=rq.result;const tx=db.transaction('Settings','readwrite');tx.objectStore('Settings').put({cle:'dernierExport',valeur:date});tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error)};rq.onerror=()=>reject(rq.error)}),dateRetard);
+      await aller('#/magasin');
+      await page.waitForSelector('.bandeau-rappel-export',{timeout:5000});
+      ok('E8.3 rappel de sauvegarde affiché après plus de 30 jours');
+      await page.click('.bandeau-rappel-export button:has-text("Fermer")');
+      if (await page.locator('.bandeau-rappel-export').count()) throw new Error('rappel non fermé');
+      await aller('#/reglages'); await aller('#/magasin');
+      if (await page.locator('.bandeau-rappel-export').count()) throw new Error('rappel réapparu pendant la même session');
+      await page.reload(); await page.waitForSelector('.bandeau-rappel-export',{timeout:5000});
+      ok('E8.3 rappel fermé réapparaît au lancement suivant');
       // service worker actif et page contrôlée, puis test hors ligne
       await page.evaluate(() => navigator.serviceWorker.ready);
       if (!(await page.evaluate(() => !!navigator.serviceWorker.controller))) { await page.reload(); await page.waitForSelector('#vue .carte'); }
