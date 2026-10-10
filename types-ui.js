@@ -52,6 +52,7 @@ export function vueTypes() {
   const liste = el('div', { id: 'liste-types' });
   const archives = el('details', { class: 'archives', id: 'types-archives' });
   racine.append(
+    el('a', { href: '#/releve-mensuel', class: 'btn btn-secondaire btn-bloc' }, 'Relevé mensuel'),
     el('a', { href: '#/type-nouveau', class: 'btn btn-primaire btn-bloc' }, '+ Nouveau type'),
     recherche, liste, archives);
   let types = [];

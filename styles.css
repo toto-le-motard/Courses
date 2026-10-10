@@ -265,3 +265,12 @@ svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width:
 .fiche-type .carte-prix p { margin:6px 0; }
 .note-biais-promo { padding:12px; border-left:3px solid var(--ambre); }
 @media (max-width:360px) { .barre-comparaison { grid-template-columns:88px minmax(24px,1fr) auto; gap:5px; font-size:12px; } }
+
+/* FR7 / E5.1 — parcours de relevé mensuel */
+.releve-mensuel .progression-mensuelle { font-weight:700; text-align:center; margin:12px 0; }
+.carte-mensuelle { display:flex; flex-direction:column; gap:12px; }
+.carte-mensuelle h2 { margin:0; font-family:var(--police-titre); }
+.carte-mensuelle .champ { min-height:48px; }
+.actions-mensuelles { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin:12px 0; }
+.actions-mensuelles .btn { min-height:48px; }
+.mini-verdict-mensuel { padding:10px 12px; border-radius:12px; background:var(--surface); font-weight:700; }

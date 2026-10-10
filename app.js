@@ -20,7 +20,7 @@ let evenementInstallation = null;
 
 let dockResizeObserver = null;
 let modeSaisieForce = null;
-window.__forcerModeSaisie = (actif) => { modeSaisieForce = Boolean(actif); actualiserPositionDock(); };
+window.__forcerModeSaisie = (actif) => { modeSaisieForce = Boolean(actif); actualiserPositionDock(); window.__actualiserModeMensuel?.(); };
 function actualiserPositionDock() {
   const dock = document.getElementById('dock-magasin');
   if (!dock) return;
@@ -630,6 +630,122 @@ function vueHistorique(typeId, integre = false) {
   charger().catch((e) => { console.error('Chargement impossible', e); liste.replaceChildren(carte('Historique', 'Chargement impossible')); });
   return racine;
 }
+
+// ---- Relevé mensuel enchaîné (FR7 / E5.1 / E5.2) --------------------------------------------
+async function vueReleveMensuel() {
+  await dbPrete;
+  const racine = el('div', { class: 'releve-mensuel' });
+  const types = (await listerTypes()).filter(t => !t.archive).sort((a,b)=>a.nom.localeCompare(b.nom,'fr'));
+  const contenu = el('section', { class: 'carte carte-mensuelle' });
+  const progression = el('p', { class: 'progression-mensuelle', 'aria-live': 'polite' });
+  const message = el('p', { class: 'message-succes', role: 'status', hidden: true });
+  const zoneMiniVerdict = el('p', { class: 'mini-verdict-mensuel', 'aria-live': 'polite', hidden: true });
+  const actions = el('div', { class: 'actions-mensuelles' });
+  const boutonPasser = el('button', { type: 'button', class: 'btn btn-secondaire', text: 'Passer', onclick: () => avancer(true) });
+  const boutonSuivant = el('button', { type: 'button', class: 'btn btn-primaire', text: 'Suivant', disabled: true, onclick: enregistrerEtAvancer });
+  const boutonQuitter = el('button', { type: 'button', class: 'btn btn-secondaire', text: 'Quitter', onclick: () => { location.hash = '#/types'; } });
+  actions.append(boutonPasser, boutonSuivant);
+  racine.append(boutonQuitter, progression, contenu, zoneMiniVerdict, message, actions);
+  let index = 0, saisis = 0, passes = 0, date = aujourdHui(), typeActuel = null, tokenVerdict = 0;
+  let dernier = null;
+  const champPrix = el('input', { id:'mensuel-prix', class:'champ champ-prix', inputmode:'decimal', enterkeyhint:'next', autocomplete:'off', placeholder:'0,00', 'aria-label':'Prix en euros' });
+  const champFormat = el('input', { id:'mensuel-format', class:'champ', type:'number', inputmode:'decimal', enterkeyhint:'done', min:'0', step:'any', 'aria-label':'Valeur du format' });
+  const champUnite = el('select', { id:'mensuel-unite', class:'champ', 'aria-label':'Unité du format' });
+  const promo = el('input', { id:'mensuel-promo', type:'checkbox' });
+  const libellePromo = el('label', { class:'promo-ligne', for:'mensuel-promo' }, promo, ' Promo');
+  const erreur = el('p', { class:'erreur', role:'alert', hidden:true });
+  function valide() {
+    if (!typeActuel) return false;
+    const prix = analyserPrixSaisie(champPrix.value);
+    const f = verifierFormat(typeActuel.unite, Number(champFormat.value), champUnite.value);
+    return Boolean(prix && champFormat.value.trim() && champUnite.value && f.ok);
+  }
+  async function actualiserMiniVerdict() {
+    const token = ++tokenVerdict;
+    if (!valide()) { zoneMiniVerdict.hidden = true; boutonSuivant.disabled = true; return; }
+    const prix = analyserPrixSaisie(champPrix.value), f = verifierFormat(typeActuel.unite, Number(champFormat.value), champUnite.value);
+    try {
+      const observations = await lireObservations(typeActuel.id), seuilPct = await lireReglage('seuilIndifference', 5);
+      if (token !== tokenVerdict || !valide()) return;
+      const v = calculerVerdict({ prixCentimes:prix, formatBase:f.formatBase, typeUnit:typeActuel.unite, magasin:MAGASIN.INTERMARCHE, observations, aujourdhui:date, seuilPct, promo:promo.checked });
+      const label = v.resultat === VERDICT.ACHETER_ICI ? 'Acheter ici' : v.resultat === VERDICT.ATTENDRE ? 'Attendre Leclerc' : v.resultat === VERDICT.INDIFFERENT ? 'Indifférent' : 'Données insuffisantes';
+      const ecart = Number.isFinite(v.ecart) ? ' · ' + (v.ecart>0?'+':'') + Math.round(v.ecart*100) + ' %' : '';
+      zoneMiniVerdict.textContent = label + ecart; zoneMiniVerdict.hidden = false; boutonSuivant.disabled = false;
+    } catch { zoneMiniVerdict.textContent = 'Données insuffisantes'; zoneMiniVerdict.hidden = false; boutonSuivant.disabled = false; }
+  }
+  async function chargerCarte() {
+    message.hidden = true; erreur.hidden = true; zoneMiniVerdict.hidden = true;
+    if (index >= types.length) {
+      progression.textContent = 'Relevé terminé';
+      contenu.replaceChildren(el('h2',{text:'Relevé mensuel terminé'}),el('p',{text:saisis+' saisi'+(saisis>1?'s':'')+', '+passes+' passé'+(passes>1?'s':'')+'.'}));
+      actions.hidden = true; return;
+    }
+    typeActuel = types[index]; dernier = await lireDernierReleve(typeActuel.id, MAGASIN.INTERMARCHE);
+    progression.textContent = (index+1)+' / '+types.length;
+    const compatibles = unitesCompatibles(typeActuel.unite), aff = dernier ? formatAffichage(Number(dernier.format),typeActuel.unite) : {valeur:'',unite:compatibles[0]||''};
+    champPrix.value = ''; champFormat.value = aff.valeur===''?'':String(aff.valeur).replace(',','.');
+    champUnite.replaceChildren(...compatibles.map(u=>el('option',{value:u,text:LIBELLE_UNITE[u]})));
+    champUnite.value = compatibles.includes(aff.unite)?aff.unite:(compatibles[0]||'');
+    if(champUnite.options.length&&!champUnite.value)champUnite.selectedIndex=0;
+    promo.checked = false;
+    contenu.replaceChildren(el('h2',{text:typeActuel.nom}),el('label',{class:'etiquette',for:'mensuel-prix',text:'Prix'}),champPrix,
+      el('label',{class:'etiquette',for:'mensuel-format',text:'Format'}),champFormat,champUnite,libellePromo,erreur);
+    boutonSuivant.disabled = true; boutonPasser.disabled = false; void actualiserMiniVerdict();
+  }
+  async function avancer(estPasse=false) {
+    if (estPasse) passes++;
+    index++;
+    if (index < types.length) await chargerCarte();
+    else {
+      await chargerCarte();
+      const fin = el('section',{class:'carte'},el('h2',{text:'Relevé mensuel terminé'}),el('p',{text:saisis+' saisi'+(saisis>1?'s':'')+', '+passes+' passé'+(passes>1?'s':'')+'.'}));
+      contenu.replaceChildren(fin); progression.textContent='Relevé terminé'; actions.hidden=true;
+    }
+  }
+  async function enregistrerEtAvancer() {
+    if (!valide()) return;
+    const prixCentimes=analyserPrixSaisie(champPrix.value),f=verifierFormat(typeActuel.unite,Number(champFormat.value),champUnite.value);
+    const observation={type:typeActuel.id,magasin:MAGASIN.INTERMARCHE,date,prixCentimes,format:f.formatBase,promo:promo.checked};
+    boutonSuivant.disabled=true;
+    try {
+      const nNouveau=prixNormalise(prixCentimes,f.formatBase,typeActuel.unite).centimesParUnite;
+      if (dernier) {
+        const nDernier=prixNormalise(dernier.prixCentimes,dernier.format,typeActuel.unite).centimesParUnite;
+        if (estPrixIncoherent(nNouveau,nDernier) && !await demanderConfirmationPrix(formaterPrixNormalise(nDernier,typeActuel.unite))) { boutonSuivant.disabled=false; return; }
+      }
+      const analyse=(await analyserDoublons([observation]))[0]; let remplace=false;
+      if(analyse.decision==='conserver') remplace=await demanderRemplacement(formaterPrixNormalise(analyse.nExistant,typeActuel.unite),observation.promo);
+      if(analyse.decision==='conserver'&&!remplace){boutonSuivant.disabled=false;return;}
+      const jeton=await enregistrerReleves([observation],{remplacements:[remplace]});
+      if(jeton.ajoutes.length) saisis++;
+      await avancer(false);
+    } catch(e) { erreur.textContent=e.message||'Enregistrement impossible.'; erreur.hidden=false; boutonSuivant.disabled=false; }
+  }
+  function modeMensuel() {
+    if(!racine.isConnected)return;
+    const vv=window.visualViewport, hauteur=vv?vv.height:window.innerHeight;
+    const actif=modeSaisieForce===null?modeSaisieActif(window.innerHeight,hauteur):modeSaisieForce;
+    document.body.classList.toggle('mode-saisie',actif);
+    const champ=document.activeElement;
+    if(actif&&champ?.matches?.('#mensuel-prix,#mensuel-format')) requestAnimationFrame(()=>{
+      const label=contenu.querySelector('label[for="'+champ.id+'"]'),rc=champ.getBoundingClientRect(),rl=label?.getBoundingClientRect();
+      const rect={top:Math.min(rc.top,rl?.top??rc.top),bottom:Math.max(rc.bottom,rl?.bottom??rc.bottom)};
+      const haut=Math.max(vv?.offsetTop||0,document.querySelector('.topbar')?.getBoundingClientRect().bottom||0);
+      const bas=(vv?.offsetTop||0)+(vv?.height||window.innerHeight)-12;
+      const delta=positionDefilement(rect,haut,bas,12); if(delta)window.scrollBy({top:delta,behavior:'auto'});
+    });
+  }
+  const viewport=()=>modeMensuel();
+  window.addEventListener('resize',viewport); window.visualViewport?.addEventListener('resize',viewport); window.visualViewport?.addEventListener('scroll',viewport);
+  window.__actualiserModeMensuel=modeMensuel;
+  window.__releveMensuelCleanup=()=>{window.removeEventListener('resize',viewport);window.visualViewport?.removeEventListener('resize',viewport);window.visualViewport?.removeEventListener('scroll',viewport);delete window.__actualiserModeMensuel;document.body.classList.remove('mode-saisie');};
+  champPrix.addEventListener('focus',modeMensuel); champFormat.addEventListener('focus',modeMensuel);
+  champPrix.addEventListener('input',()=>void actualiserMiniVerdict()); champFormat.addEventListener('input',()=>void actualiserMiniVerdict()); champUnite.addEventListener('change',()=>void actualiserMiniVerdict());promo.addEventListener('change',()=>void actualiserMiniVerdict());
+  champFormat.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();champFormat.blur();}});
+  await chargerCarte();
+  return racine;
+}
+
 async function vueFicheType(typeId) {
   await dbPrete;
   const type = await lireTypeSafe(typeId);
@@ -669,12 +785,14 @@ const ROUTES = {
   bilan: { titre: 'Bilan', onglet: 'bilan', vue: () => carte('Économies réalisées', 'Cet écran arrive avec l’épic E7.') },
   reglages: { titre: 'Réglages', onglet: null, vue: vueReglages },
   historique: { titre: 'Historique', onglet: 'types', vue: (p) => vueHistorique(Number(p)) },
-  fiche: { titre: 'Fiche du type', onglet: 'types', vue: (p) => vueFicheType(Number(p)) }
+  fiche: { titre: 'Fiche du type', onglet: 'types', vue: (p) => vueFicheType(Number(p)) },
+  'releve-mensuel': { titre: 'Relevé mensuel', onglet: 'types', vue: vueReleveMensuel }
 };
 
 async function afficher() {
   const sequence = ++sequenceAffichage;
   const [nom, param] = (location.hash.replace('#/', '') || 'magasin').split('/');
+  if (nom !== 'releve-mensuel') { window.__releveMensuelCleanup?.(); window.__releveMensuelCleanup=null; }
   if (nom !== 'magasin') { document.getElementById('dock-magasin')?.remove(); dockResizeObserver?.disconnect(); document.documentElement.style.setProperty('--dock-hauteur', '0px'); }
   const r = ROUTES[nom] || ROUTES.magasin;
   titre.textContent = r.titre; document.title = r.titre + ' · Appli Courses';
