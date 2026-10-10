@@ -65,7 +65,8 @@ export function vueTypes() {
 
   async function ligneActive(t) {
     const observations = await lireObservations(t.id);
-    const aujourdhui = new Date().toISOString().slice(0, 10);
+    const maintenant = new Date();
+    const aujourdhui = maintenant.getFullYear() + '-' + String(maintenant.getMonth()+1).padStart(2,'0') + '-' + String(maintenant.getDate()).padStart(2,'0');
     const leclerc = prixHabituel(observations, MAGASIN.LECLERC, t.unite, aujourdhui);
     const inter = prixHabituel(observations, MAGASIN.INTERMARCHE, t.unite, aujourdhui);
     const seuil = Number(await lireReglage('seuilIndifference', 5));

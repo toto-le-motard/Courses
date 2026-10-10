@@ -280,6 +280,16 @@ if (playwright) {
       await page.waitForSelector('dialog:has-text("définitive")');
       await page.click('dialog button:has-text("Supprimer")');      await page.waitForFunction(() => !/Lessive liquide/.test((document.getElementById('vue')?.textContent || '')), null, { timeout: 5000 });
       ok('E2 suppression de Lessive liquide : le type supprimé disparaît sans affecter les autres');
+      await page.evaluate(id=>new Promise((resolve,reject)=>{
+        const rq=indexedDB.open('appli-courses');rq.onsuccess=()=>{const db=rq.result;const tx=db.transaction('Observation','readwrite');const s=tx.objectStore('Observation');
+          s.put({id:9901,type:id,magasin:'leclerc',date:'2026-10-05',prixCentimes:1000,format:1000,promo:0});
+          s.put({id:9902,type:id,magasin:'leclerc',date:'2026-10-06',prixCentimes:1200,format:1000,promo:0});
+          s.put({id:9903,type:id,magasin:'leclerc',date:'2026-10-07',prixCentimes:1400,format:1000,promo:0});
+          s.put({id:9904,type:id,magasin:'intermarche',date:'2026-10-08',prixCentimes:1200,format:500,promo:0});
+          s.put({id:9905,type:id,magasin:'leclerc',date:'2026-10-09',prixCentimes:900,format:1000,promo:1});
+          tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error);
+        };rq.onerror=()=>reject(rq.error);
+      }),idHistorique);
       await aller('#/types');
       await page.waitForSelector('#liste-types');
       const lienFiche = page.locator('a[href="#/fiche/'+idHistorique+'"]');
@@ -290,6 +300,8 @@ if (playwright) {
       const texteFiche = await page.locator('.fiche-type').innerText();
       for (const texte of ['Leclerc','Intermarché','fréquence','biais','Historique des relevés']) if(!texteFiche.toLowerCase().includes(texte.toLowerCase())) throw new Error('fiche type incomplète : '+texte);
       if (!(await page.locator('.barre-comparaison').count()>=2)) throw new Error('barres comparatives à échelle commune absentes');
+      const largeursBarres = await page.locator('.fiche-type .barres-comparaison .barre-remplissage').evaluateAll(es=>es.map(e=>e.style.width));
+      if (largeursBarres.length!==2 || largeursBarres[0]!=='50%' || largeursBarres[1]!=='100%') throw new Error('barres de fiche non normalisées sur une échelle commune : '+JSON.stringify(largeursBarres));
       await page.waitForFunction(()=>document.querySelectorAll('.fiche-type .historique .ligne-releve').length>=1,null,{timeout:5000});
       if (!(await page.locator('.fiche-type .historique .ligne-releve').count()>=1)) throw new Error('historique non intégré à la fiche');
       await page.setViewportSize({width:390,height:500});
