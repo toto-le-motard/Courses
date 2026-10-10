@@ -114,7 +114,8 @@ if (playwright) {
     const page = await ctx.newPage();
     const erreurs = [];
     const requetesExternes = [];
-    page.on('request', req => { const u=new URL(req.url()); if(u.origin!==new URL(base).origin && !['data:','blob:'].includes(u.protocol)) requetesExternes.push(req.url()); });
+    let offMockActif = false;
+    page.on('request', req => { const u=new URL(req.url()); if(u.origin!==new URL(base).origin && !['data:','blob:'].includes(u.protocol) && !(offMockActif && u.hostname==='world.openfoodfacts.org')) requetesExternes.push(req.url()); });
     const verifierEcran = async (nom) => { const texte=await page.locator('body').innerText(); if(texte.includes('[object Promise]')) throw new Error(nom+' : [object Promise] présent'); if(texte.includes('Erreur d’affichage')) throw new Error(nom+' : Erreur d’affichage présente'); if(/\bundefined\b/.test(texte)) throw new Error(nom+' : texte undefined visible'); if(erreurs.length) throw new Error(nom+' : erreur console/pageerror : '+erreurs[0]); };
     const verifierOptionsNonVides = async (nom) => { const v=await page.locator('select option').evaluateAll(es=>es.map(e=>({value:e.value,text:e.textContent.trim()})).filter(e=>!e.text)); if(v.length) throw new Error(nom+' : option sans texte '+JSON.stringify(v)); };
     page.on('pageerror', (e) => erreurs.push('exception : ' + e.message));
@@ -387,7 +388,8 @@ if (playwright) {
       await page.fill('#scan-type-search','ZZ mensuel test');
       await page.click('button.suggestion-rattacher');
       await page.fill('#scan-format','500'); await page.selectOption('#scan-unite','g');
-      await page.route('https://world.openfoodfacts.org/api/v2/product/**',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({status:1,product:{brands:'Marque test',product_name:'Produit OFF'}})}));
+      offMockActif = true;
+       await page.route('**/api/v2/product/**',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({status:1,product:{brands:'Marque test',product_name:'Produit OFF'}})}));
       if(!await page.locator('dialog.dialog-rattacher').getByRole('button',{name:'Compléter',exact:true}).count()) throw new Error('bouton Open Food Facts absent en ligne');
       await page.click('dialog.dialog-rattacher button:has-text("Compléter")');
       await page.waitForFunction(()=>document.querySelector('#scan-marque')?.value==='Marque test',null,{timeout:5000});
@@ -404,7 +406,7 @@ if (playwright) {
       await page.click('dialog.dialog-scan button:has-text("Rechercher")');
       await page.waitForFunction(()=>document.querySelector('#champ-type')?.value==='ZZ mensuel test',null,{timeout:5000});
       ok('E6.3 caméra refusée : saisie manuelle retrouve le code connu');
-      await page.unroute('https://world.openfoodfacts.org/api/v2/product/**');
+      await page.unroute('**/api/v2/product/**'); offMockActif = false;
       const versionCache = readFileSync(join(racine, 'sw.js'), 'utf8').match(/const CACHE_VERSION = '([^']+)'/)?.[1];
       await aller('#/reglages');await page.waitForFunction((v)=>(document.getElementById('vue')?.textContent || '').includes(v),versionCache,{timeout:5000});await verifierEcran('Réglages');ok('B6 Réglages : version '+versionCache+' visible');
       await page.evaluate(()=>new Promise((resolve,reject)=>{
