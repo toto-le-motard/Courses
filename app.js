@@ -48,19 +48,26 @@ function garderChampVisible(champ) {
   requestAnimationFrame(() => {
     const dock = document.getElementById('dock-magasin');
     if (!dock || !champ.isConnected) return;
+    const vv = window.visualViewport;
+    const hautVisible = vv ? vv.offsetTop : 0;
+    const basVisible = vv ? vv.offsetTop + vv.height : window.innerHeight;
+    const dockTop = dock.getBoundingClientRect().top;
+    if (!document.body.classList.contains('mode-saisie')) {
+      const r = champ.getBoundingClientRect();
+      const limiteBasse = Math.min(basVisible, dockTop) - 8;
+      const suivant = champ.id === 'champ-prix' ? document.getElementById('champ-format') : null;
+      const basNecessaire = suivant ? Math.max(r.bottom, suivant.getBoundingClientRect().bottom) : r.bottom;
+      if (basNecessaire > limiteBasse) window.scrollBy({ top: basNecessaire - limiteBasse, behavior: 'auto' });
+      else if (r.top < hautVisible + 8) window.scrollBy({ top: r.top - hautVisible - 8, behavior: 'auto' });
+      return;
+    }
     const label = document.querySelector('label[for="' + champ.id + '"]');
     const rChamp = champ.getBoundingClientRect();
     const rLabel = label?.getBoundingClientRect();
     const rect = rLabel ? { top: Math.min(rLabel.top, rChamp.top), bottom: Math.max(rLabel.bottom, rChamp.bottom) } : { top: rChamp.top, bottom: rChamp.bottom };
-    // En mode normal, garder aussi le format visible quand le prix reçoit le focus (régression du lot F).
-    if (champ.id === 'champ-prix' && !document.body.classList.contains('mode-saisie')) {
-      const format = document.getElementById('champ-format');
-      if (format) rect.bottom = Math.max(rect.bottom, format.getBoundingClientRect().bottom);
-    }
-    const vv = window.visualViewport;
-    const hautVisible = Math.max(vv ? vv.offsetTop : 0, document.querySelector('.topbar')?.getBoundingClientRect().bottom || 0);
-    const basVisible = Math.min(vv ? vv.offsetTop + vv.height : window.innerHeight, dock.getBoundingClientRect().top);
-    const delta = positionDefilement(rect, hautVisible, basVisible, 12);
+    const hautZone = Math.max(hautVisible, document.querySelector('.topbar')?.getBoundingClientRect().bottom || 0);
+    const basZone = Math.min(basVisible, dockTop);
+    const delta = positionDefilement(rect, hautZone, basZone, 12);
     if (delta) window.scrollBy({ top: delta, behavior: 'auto' });
   });
 }
