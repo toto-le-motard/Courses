@@ -1,5 +1,5 @@
 // app.js — interface et navigation (stories 1.2 à 3-2).
-import { initDb, dbPrete, listerTypes, lireDernierReleve, lireObservations, dernierReleve, trouverDoublon, enregistrerReleves, analyserDoublons, annulerEnregistrement, listerReleves, modifierReleve, supprimerReleve, demanderStockagePersistant, lireReglage, ecrireReglage, compter, STORES, VERSION_SCHEMA, exporterCollections, remplacerCollections, lire, mettre, toutLire, supprimer } from './db.js';
+import { initDb, dbPrete, listerTypes, lireDernierReleve, lireObservations, dernierReleve, trouverDoublon, enregistrerReleves, analyserDoublons, annulerEnregistrement, listerReleves, modifierReleve, supprimerReleve, enregistrerAchat, demanderStockagePersistant, lireReglage, ecrireReglage, compter, STORES, VERSION_SCHEMA, exporterCollections, remplacerCollections, lire, mettre, toutLire, supprimer } from './db.js';
 import { MAGASIN, UNITES, LIBELLE_UNITE, VERDICT, analyserPrixSaisie, verifierFormat, prixNormalise, formaterPrixEuros, formaterPrixNormalise, calculerVerdict, prixHabituel, estPrixIncoherent, unitesCompatibles, formatAffichage, calculerPositionDock, modeSaisieActif, positionDefilement, frequencePromos } from './domain.js';
 import { accueilVide, vueTypes, vueTypeForm } from './types-ui.js';
 import { creerSauvegarde, validerSauvegarde, etatRappelExport } from './backup.js';
@@ -323,6 +323,8 @@ function vueMagasin() {
   let dernier = null;
   let date = aujourdHui();
   let calculVerdictToken = 0;
+  let quantiteAchat = 1;
+  let enregistrementEnCours = false;
 
   function erreur(msg) { message.textContent = msg || ''; message.hidden = !msg; }
   function prixValide() { return analyserPrixSaisie(prix.value); }
@@ -373,22 +375,27 @@ function vueMagasin() {
   dateInput.addEventListener('change', () => { date = dateInput.value || aujourdHui(); dateTexte.textContent = dateAffichee(date); void actualiserVerdict(); });
   promo.addEventListener('change', () => { prixHorsPromoBloc.hidden = !promo.checked; if (!promo.checked) prixHorsPromo.value = ''; verifier(); });
   prixHorsPromo.addEventListener('input', verifier);
-  bouton.addEventListener('click', async () => {
+  async function enregistrerReleve(statutAchat = null) {
+    if (enregistrementEnCours) return;
     const prixCentimes = prixValide();
+    if (!typeChoisi || !prixCentimes) return;
     const format = verifierFormat(typeChoisi.unite, Number(valeurFormat.value), uniteFormat.value);
-    if (!typeChoisi || !prixCentimes || !format.ok) return;
+    if (!format.ok) return;
+    const quantite = Number(quantiteAchat);
+    if (statutAchat !== null && (!Number.isInteger(quantite) || quantite < 1 || quantite > 999)) {
+      erreur('Saisissez une quantité entière entre 1 et 999.');
+      return;
+    }
+    enregistrementEnCours = true;
     bouton.disabled = true;
     try {
       const observations = [{ type: typeChoisi.id, magasin: magasinCourant, date, prixCentimes, format: format.formatBase, promo: promo.checked }];
       const horsPromoCentimes = prixHorsPromo.value.trim() ? analyserPrixSaisie(prixHorsPromo.value) : null;
-      if (promo.checked && prixHorsPromo.value.trim() && !horsPromoCentimes) {
-        throw new Error('Le prix hors promo doit être supérieur à 0.');
-      }
+      if (promo.checked && prixHorsPromo.value.trim() && !horsPromoCentimes) throw new Error('Le prix hors promo doit être supérieur à 0.');
       if (promo.checked && horsPromoCentimes) {
         if (horsPromoCentimes < prixCentimes) horsPromoAvertissement.hidden = false;
         observations.push({ type: typeChoisi.id, magasin: magasinCourant, date, prixCentimes: horsPromoCentimes, format: format.formatBase, promo: false });
       }
-      // Contrôle 1 : format incompatible déjà effectué ci-dessus.
       const nNouveau = prixNormalise(prixCentimes, format.formatBase, typeChoisi.unite).centimesParUnite;
       const dernierPourAlerte = await dernierReleve(typeChoisi.id, magasinCourant);
       if (dernierPourAlerte) {
@@ -400,7 +407,6 @@ function vueMagasin() {
           if (!ok) return;
         }
       }
-      // Contrôle 2 : doublon du jour. L'analyse est centralisée et propre à chaque observation.
       const analyses = await analyserDoublons(observations);
       const remplacements = analyses.map(() => false);
       for (let i = 0; i < analyses.length; i++) {
@@ -410,15 +416,43 @@ function vueMagasin() {
         if (!remplacer) return;
         remplacements[i] = true;
       }
+      let verdictAchat = null;
+      if (statutAchat !== null) {
+        const historiqueAvant = await lireObservations(typeChoisi.id);
+        const seuilPct = await lireReglage('seuilIndifference', 5);
+        verdictAchat = calculerVerdict({ prixCentimes, formatBase:format.formatBase, typeUnit:typeChoisi.unite, magasin:magasinCourant, observations:historiqueAvant, aujourdhui:date, seuilPct, promo:promo.checked });
+      }
       const jeton = await enregistrerReleves(observations, { remplacements });
+      if (statutAchat !== null) {
+        const observationId = jeton.ajoutes[0];
+        if (!observationId) throw new Error('Le relevé n’a pas été créé : achat non enregistré.');
+        const historiqueAvant = await lireObservations(typeChoisi.id);
+        const habituelMemeMagasin = prixHabituel(historiqueAvant.filter(o=>o.id!==observationId),magasinCourant,typeChoisi.unite,date);
+        const achatId = await enregistrerAchat({
+          type:typeChoisi.id, observation:observationId, magasin:magasinCourant, date,
+          achete:statutAchat, quantite, prixPayeCentimes:prixCentimes, format:format.formatBase,
+          prixComparaisonCentimes:verdictAchat?.habituelAutre?.valeur ?? null,
+          prixHabituelMemeMagasinCentimes:habituelMemeMagasin.ok ? habituelMemeMagasin.valeur : null
+        });
+        jeton.achats = [achatId];
+      }
       recherche.value = ''; typeChoisi = null; dernier = null; prix.value = ''; valeurFormat.value = ''; date = aujourdHui(); dateInput.value = date; dateTexte.textContent = dateAffichee(date); promo.checked = false;
-      suggestions.replaceChildren(); prixHorsPromoBloc.hidden = true; prixHorsPromo.value = ''; horsPromoAvertissement.hidden = true; chargerFormulaire();
-      message.hidden = true;
+      suggestions.replaceChildren(); prixHorsPromoBloc.hidden = true; prixHorsPromo.value = ''; horsPromoAvertissement.hidden = true;
+      quantiteAchat = 1;
+      await chargerFormulaire();
       if (jeton.ajoutes.length > 0) afficherAnnulation(jeton, magasinCourant);
+      message.textContent = statutAchat === null ? '' : (statutAchat ? 'Achat enregistré.' : 'Non-achat enregistré.');
+      message.hidden = statutAchat === null;
       document.activeElement?.blur();
     } catch (e) { erreur(e.message || 'Enregistrement impossible.'); }
-    finally { bouton.disabled = !estFormulaireValide(); }
-  });
+    finally {
+      enregistrementEnCours = false;
+      bouton.disabled = !estFormulaireValide();
+      const actions=document.getElementById('achat-actions');
+      if(actions) actions.querySelectorAll('button').forEach(b=>b.disabled=false);
+    }
+  }
+  bouton.addEventListener('click', () => { void enregistrerReleve(); });
 
 
   async function ouvrirScanner() {
@@ -611,6 +645,18 @@ function vueMagasin() {
     if(promo.checked) verdictCarte.append(el('span',{class:'badge-promo',text:'Promo'}));
     const habituel = prixHabituel(observations,magasinCourant,typeChoisi.unite,date);
     if(habituel.ok) verdictCarte.append(el('p',{class:'verdict-habituel',text:'Habituel chez '+libelleMagasin(magasinCourant)+' : '+formaterPrixNormalise(habituel.valeur,typeChoisi.unite)}));
+    const quantite = el('input', { id:'quantite-achat', class:'champ quantite-achat', type:'number', min:'1', max:'999', step:'1', value:String(quantiteAchat), inputmode:'numeric', 'aria-label':'Quantité achetée', onchange:e=>{ const n=Number(e.target.value); if(Number.isInteger(n)&&n>=1&&n<=999) quantiteAchat=n; else {quantiteAchat=1;e.target.value='1';} } });
+    const actionsAchat = el('div', { id:'achat-actions', class:'achat-actions' },
+      el('label', { for:'quantite-achat', class:'etiquette', text:'Quantité' }),
+      el('div', { class:'quantite-achat-controles' },
+        el('button', { id:'btn-achat-moins', type:'button', class:'btn btn-secondaire btn-quantite', text:'−', 'aria-label':'Diminuer la quantité', onclick:()=>{quantiteAchat=Math.max(1,quantiteAchat-1);quantite.value=String(quantiteAchat);} }),
+        quantite,
+        el('button', { id:'btn-achat-plus', type:'button', class:'btn btn-secondaire btn-quantite', text:'+', 'aria-label':'Augmenter la quantité', onclick:()=>{quantiteAchat=Math.min(999,quantiteAchat+1);quantite.value=String(quantiteAchat);} })
+      ),
+      el('button', { id:'btn-achat-confirme', type:'button', class:'btn btn-primaire', text:'Acheté', disabled:enregistrementEnCours, onclick:()=>enregistrerReleve(1) }),
+      el('button', { id:'btn-achat-non', type:'button', class:'btn btn-secondaire', text:'Pas acheté', disabled:enregistrementEnCours, onclick:()=>enregistrerReleve(0) })
+    );
+    verdictCarte.append(actionsAchat);
   }
 
   function verifier() {

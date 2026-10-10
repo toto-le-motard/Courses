@@ -272,10 +272,11 @@ export function enregistrerReleves(liste, { remplacements = [] } = {}) {
 export function annulerEnregistrement(jeton) {
   return new Promise((resolve, reject) => {
     if (!jeton) return resolve();
-    const t = _db.transaction('Observation', 'readwrite');
+    const t = _db.transaction(['Observation', 'Purchase'], 'readwrite');
     const s = t.objectStore('Observation');
     for (const id of jeton.ajoutes || []) s.delete(id);
     for (const original of jeton.remplaces || []) s.put(original);
+    for (const id of jeton.achats || []) t.objectStore('Purchase').delete(id);
     t.oncomplete = () => resolve();
     t.onerror = () => reject(t.error);
     t.onabort = () => reject(t.error || new Error('Annulation impossible'));
@@ -348,6 +349,25 @@ export async function modifierReleve(id, champs) {
 }
 
 export const supprimerReleve = (id) => supprimer('Observation', id);
+
+// FR23 / E7.1 — achat associé au relevé enregistré, sans dépendance réseau.
+export async function enregistrerAchat({ type, observation, magasin, date, achete, quantite = 1, prixPayeCentimes, format, prixComparaisonCentimes = null, prixHabituelMemeMagasinCentimes = null }) {
+  if (!Number.isInteger(type) || type <= 0 || !Number.isInteger(observation) || observation <= 0) {
+    throw new Error('Type ou relevé invalide pour cet achat.');
+  }
+  if (magasin !== MAGASIN.LECLERC && magasin !== MAGASIN.INTERMARCHE) throw new Error('Magasin invalide.');
+  if (!dateValide(date)) throw new Error('Date invalide.');
+  if (!Number.isInteger(prixPayeCentimes) || prixPayeCentimes <= 0) throw new Error('Prix payé invalide.');
+  if (!Number.isInteger(format) || format <= 0) throw new Error('Format invalide.');
+  if (!Number.isInteger(quantite) || quantite < 1 || quantite > 999) throw new Error('Quantité invalide.');
+  for (const valeur of [prixComparaisonCentimes, prixHabituelMemeMagasinCentimes]) {
+    if (valeur !== null && (!Number.isInteger(valeur) || valeur <= 0)) throw new Error('Prix de comparaison invalide.');
+  }
+  return ajouter('Purchase', {
+    type, observation, magasin, date, achete: achete ? 1 : 0, quantite,
+    prixPayeCentimes, format, prixComparaisonCentimes, prixHabituelMemeMagasinCentimes
+  });
+}
 
 // FR20 / E8.1 — lecture cohérente des collections pour l'export JSON.
 export function exporterCollections() {

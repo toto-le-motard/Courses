@@ -299,3 +299,12 @@ svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width:
 .ligne-code-barres { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px 0; border-bottom:1px solid var(--bordure,rgba(255,255,255,.12)); }
 .code-barres-infos { display:flex; flex-direction:column; gap:4px; min-width:0; overflow-wrap:anywhere; }
 .btn-supprimer-code { min-height:48px; flex-shrink:0; }
+
+
+/* E7.1 — saisie d'achat compacte et utilisable au pouce */
+.achat-actions { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:10px; padding-top:10px; border-top:1px solid var(--bordure, #d6d6d6); }
+.achat-actions > .etiquette { grid-column:1/-1; margin:0; }
+.quantite-achat-controles { grid-column:1/-1; display:flex; align-items:center; justify-content:center; gap:10px; }
+.quantite-achat-controles .quantite-achat { width:84px; min-height:48px; text-align:center; }
+.btn-quantite { width:48px; min-width:48px; min-height:48px; padding:0; font-size:24px; }
+.achat-actions > #btn-achat-confirme, .achat-actions > #btn-achat-non { min-height:48px; }

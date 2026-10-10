@@ -421,13 +421,13 @@ if (playwright) {
       await page.fill('#champ-prix','1,25');
       await page.fill('#champ-format','500');
       await page.selectOption('#champ-unite','g');
-      await page.locator('input[type="date"]').fill('2031-01-01');
+      await page.locator('input[type="date"]').evaluate(e=>{e.value='2031-01-01';e.dispatchEvent(new Event('change',{bubbles:true}));});
       await page.waitForSelector('#achat-actions',{timeout:5000});
       if(await page.locator('#quantite-achat').inputValue()!=='1') throw new Error('quantité initiale différente de 1');
       await page.click('#btn-achat-plus');
       if(await page.locator('#quantite-achat').inputValue()!=='2') throw new Error('incrément de quantité incorrect');
       await page.click('#btn-achat-confirme');
-      await page.waitForFunction(()=>window.__achatE71Termine===true,null,{timeout:8000});
+      await page.waitForFunction(()=>/Achat enregistré/.test(document.querySelector('.message-succes')?.textContent||''),null,{timeout:8000});
       const achatE71 = await page.evaluate(()=>new Promise((resolve,reject)=>{
         const rq=indexedDB.open('appli-courses');
         rq.onsuccess=()=>{const db=rq.result,tx=db.transaction(['Purchase','Observation'],'readonly');
