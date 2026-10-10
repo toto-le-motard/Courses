@@ -274,3 +274,12 @@ svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width:
 .actions-mensuelles { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin:12px 0; }
 .actions-mensuelles .btn { min-height:48px; }
 .mini-verdict-mensuel { padding:10px 12px; border-radius:12px; background:var(--surface); font-weight:700; }
+
+/* FR14 / E5.3 — liste groupée avant les courses */
+.liste-avant-courses h2 { margin:10px 0; font-family:var(--police-titre); }
+.selecteur-magasin { display:flex; gap:8px; margin:12px 0; }
+.groupe-liste-courses h3 { margin:0 0 10px; font-size:18px; }
+.lignes-groupe { display:grid; gap:8px; }
+.ligne-liste-course { display:flex; flex-direction:column; gap:5px; padding:12px; min-height:48px; border-radius:12px; background:var(--surface); color:var(--texte); text-decoration:none; }
+.ligne-liste-course .detail-prix-liste { color:var(--texte2); font-size:13px; }
+.groupe-liste-courses .aide { margin:4px 0; }

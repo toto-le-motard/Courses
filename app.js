@@ -632,6 +632,47 @@ function vueHistorique(typeId, integre = false) {
 }
 
 // ---- Relevé mensuel enchaîné (FR7 / E5.1 / E5.2) --------------------------------------------
+async function vueListeCourses() {
+  await dbPrete;
+  const racine=el('div',{class:'liste-avant-courses'});
+  const titreListe=el('h2',{text:'Avant les courses'});
+  const aide=el('p',{class:'aide',text:'Comparaison des prix habituels, sans dépendance au réseau.'});
+  const choix=el('div',{class:'selecteur-magasin'});
+  const contenu=el('div',{class:'groupes-liste-courses'});
+  let magasinListe=await lireReglage('magasinCourant',MAGASIN.LECLERC);
+  const boutons=[MAGASIN.LECLERC,MAGASIN.INTERMARCHE].map(m=>el('button',{type:'button',class:'magasin-btn','aria-pressed':m===magasinListe,text:libelleMagasin(m),onclick:async()=>{magasinListe=m;magasinCourant=m;await ecrireReglage('magasinCourant',m);boutons.forEach(b=>b.setAttribute('aria-pressed',String(b.textContent===libelleMagasin(m))));await dessiner();}}));
+  choix.append(...boutons);
+  racine.append(titreListe,aide,choix,contenu);
+  const groupes=[[VERDICT.ACHETER_ICI,'Acheter ici'],[VERDICT.ATTENDRE,'Attendre l’autre magasin'],[VERDICT.INDIFFERENT,'Indifférent'],[VERDICT.INSUFFISANT,'Données insuffisantes']];
+  async function dessiner(){
+    const types=(await listerTypes()).filter(t=>!t.archive).sort((a,b)=>a.nom.localeCompare(b.nom,'fr'));
+    const seuilPct=Number(await lireReglage('seuilIndifference',5)), dateDuJour=aujourdHui();
+    const analyses=await Promise.all(types.map(async type=>{
+      const observations=await lireObservations(type.id);
+      const courant=prixHabituel(observations,magasinListe,type.unite,dateDuJour);
+      let resultat=VERDICT.INSUFFISANT, details='Aucun prix habituel exploitable.';
+      if(courant.ok){
+        const formatBase=type.unite==='unit'?1:1000;
+        const verdict=calculerVerdict({prixCentimes:Math.round(courant.valeur),formatBase,typeUnit:type.unite,magasin:magasinListe,observations,aujourdhui:dateDuJour,seuilPct});
+        resultat=verdict.resultat;
+        details='Prix habituel ici : '+formaterPrixNormalise(courant.valeur,type.unite);
+        if(Number.isFinite(verdict.differenceUniteCentimes)) details+=' · écart : '+formaterPrixEuros(Math.abs(verdict.differenceUniteCentimes))+(verdict.differenceUniteCentimes<0?' moins cher':verdict.differenceUniteCentimes>0?' plus cher':'');
+      }
+      return {type,resultat,details};
+    }));
+    contenu.replaceChildren();
+    for(const [resultat,titreGroupe] of groupes){
+      const lignes=analyses.filter(a=>a.resultat===resultat),liste=el('div',{class:'lignes-groupe'});
+      if(lignes.length) liste.append(...lignes.map(a=>el('a',{class:'ligne-liste-course',href:'#/fiche/'+a.type.id},
+        el('strong',{text:a.type.nom}),el('span',{class:'puce',text:LIBELLE_UNITE[a.type.unite]}),el('span',{class:'detail-prix-liste',text:a.details}))));
+      else liste.append(el('p',{class:'aide',text:'Aucun type dans ce groupe.'}));
+      contenu.append(el('section',{class:'carte groupe-liste-courses'},el('h3',{text:titreGroupe+' ('+lignes.length+')'}),liste));
+    }
+    if(!types.length) contenu.prepend(el('section',{class:'carte',text:'Aucun type actif. Créez un type ou restaurez-en un depuis la liste Types.'}));
+  }
+  await dessiner();
+  return racine;
+}
 async function vueReleveMensuel() {
   await dbPrete;
   const racine = el('div', { class: 'releve-mensuel' });
@@ -778,7 +819,7 @@ async function lireTypeSafe(id){ const r=await listerTypes(); return r.find(t=>t
 
 const ROUTES = {
   magasin: { titre: 'Magasin', onglet: 'magasin', vue: vueMagasin },
-  liste: { titre: 'Liste', onglet: 'liste', vue: () => carte('Avant les courses', 'Cet écran arrive avec l’épic E5.') },
+  liste: { titre: 'Liste', onglet: 'liste', vue: vueListeCourses },
   types: { titre: 'Types', onglet: 'types', vue: vueTypes },
   'type-nouveau': { titre: 'Nouveau type', onglet: 'types', vue: () => vueTypeForm(null) },
   'type-edit': { titre: 'Modifier le type', onglet: 'types', vue: (p) => vueTypeForm(Number(p)) },
