@@ -208,10 +208,14 @@ if (playwright) {
       await page.waitForFunction(()=>{const e=document.querySelector('#carte-verdict');return e&&!e.hidden;},null,{timeout:2000});
       if(Date.now()-debutFrappe>=2000)throw new Error('verdict après frappe du prix en 2 secondes ou plus');
             await page.evaluate(()=>window.__forcerModeSaisie?.(true));
-      const mesurerModeSaisie=async()=>page.evaluate(()=>{const r=s=>{const e=document.querySelector(s);if(!e)return null;const b=e.getBoundingClientRect();return {top:Math.round(b.top),bottom:Math.round(b.bottom),height:Math.round(b.height)};};return {labelType:r('label[for="champ-type"]'),labelPrix:r('label[for="champ-prix"]'),labelFormat:r('label[for="champ-format"]'),titre:r('.topbar'),prix:r('#champ-prix'),type:r('#champ-type'),format:r('#champ-format'),dock:r('#dock-magasin'),tabs:r('.tabs'),mode:document.body.classList.contains('mode-saisie'),verdict:!!document.querySelector('#carte-verdict:not([hidden])')};});
+      const mesurerModeSaisie=async()=>page.evaluate(()=>{const r=s=>{const e=document.querySelector(s);if(!e)return null;const b=e.getBoundingClientRect();return {top:Math.round(b.top),bottom:Math.round(b.bottom),height:Math.round(b.height)};};return {labelType:r('label[for="champ-type"]'),labelPrix:r('label[for="champ-prix"]'),labelFormat:r('label[for="champ-format"]'),labelHorsPromo:r('label[for="champ-prix-hors-promo"]'),prixHorsPromo:r('#champ-prix-hors-promo'),titre:r('.topbar'),prix:r('#champ-prix'),type:r('#champ-type'),format:r('#champ-format'),dock:r('#dock-magasin'),tabs:r('.tabs'),mode:document.body.classList.contains('mode-saisie'),verdict:!!document.querySelector('#carte-verdict:not([hidden])')};});
       await page.locator('#champ-prix').focus();await page.waitForTimeout(80);
       let clavier=await mesurerModeSaisie();info('MESURES MODE SAISIE focus Prix 390x500 '+JSON.stringify(clavier));
       if(!clavier.mode||clavier.tabs&&clavier.tabs.height>0||!clavier.titre||clavier.titre.height>44||!clavier.dock||clavier.dock.height>130||!clavier.prix||clavier.prix.top<clavier.titre.bottom+12||clavier.prix.bottom>clavier.dock.top-12||!clavier.labelPrix||clavier.labelPrix.top<clavier.titre.bottom+12||clavier.labelPrix.bottom>clavier.dock.top-12||!clavier.verdict)throw new Error('mode saisie / champ Prix : '+JSON.stringify(clavier));
+      await page.evaluate(()=>{const e=document.querySelector('#champ-promo');e.checked=true;e.dispatchEvent(new Event('change',{bubbles:true}));});
+      await page.locator('#champ-prix-hors-promo').focus();await page.waitForTimeout(80);clavier=await mesurerModeSaisie();info('MESURES MODE SAISIE focus Prix hors promo 390x500 '+JSON.stringify(clavier));
+      if(!clavier.prixHorsPromo||clavier.prixHorsPromo.top<clavier.titre.bottom+12||clavier.prixHorsPromo.bottom>clavier.dock.top-12||!clavier.labelHorsPromo||clavier.labelHorsPromo.top<clavier.titre.bottom+12||clavier.labelHorsPromo.bottom>clavier.dock.top-12)throw new Error('champ Prix hors promo hors zone : '+JSON.stringify(clavier));
+      await page.evaluate(()=>{const e=document.querySelector('#champ-promo');e.checked=false;e.dispatchEvent(new Event('change',{bubbles:true}));});
       await page.locator('#champ-type').focus();await page.waitForTimeout(80);clavier=await mesurerModeSaisie();info('MESURES MODE SAISIE focus Type 390x500 '+JSON.stringify(clavier));
       if(!clavier.type||clavier.type.top<clavier.titre.bottom+12||clavier.type.bottom>clavier.dock.top-12||!clavier.labelType||clavier.labelType.top<clavier.titre.bottom+12||clavier.labelType.bottom>clavier.dock.top-12)throw new Error('champ Type hors zone en mode saisie : '+JSON.stringify(clavier));
       if(await page.getAttribute('#champ-type','enterkeyhint')!=='next'||await page.getAttribute('#champ-prix','enterkeyhint')!=='next'||await page.getAttribute('#champ-format','enterkeyhint')!=='done')throw new Error('enterkeyhint incorrect');
@@ -221,6 +225,10 @@ if (playwright) {
       await page.evaluate(()=>window.__forcerModeSaisie?.(false));await page.setViewportSize({width:390,height:844});await page.waitForTimeout(80);
       clavier=await mesurerModeSaisie();info('MESURES MODE NORMAL 390x844 '+JSON.stringify(clavier));
       if(clavier.mode||!clavier.tabs||clavier.tabs.height===0||!clavier.dock||clavier.dock.bottom>clavier.tabs.top)throw new Error('régression mode normal 390x844 : '+JSON.stringify(clavier));
+      const fondTitre=await page.locator('.topbar').evaluate(e=>getComputedStyle(e).backgroundColor);
+      if(fondTitre!=='rgb(11, 13, 18)')throw new Error('fond du titre non opaque : '+fondTitre);
+      const rappelsVisibles=await page.locator('#dock-magasin .verdict-rappel, #dock-magasin .verdict-habituel').evaluateAll(es=>es.filter(e=>getComputedStyle(e).display!=='none').length);
+      if(!rappelsVisibles)throw new Error('lignes de rappel absentes du dock en mode normal');
       ok('UX 3.1 / story 3.8 mode saisie : Type, Prix et Format visibles, dock compact, onglets masqués');
 
       await page.setViewportSize({width:390,height:844});await page.evaluate(()=>window.scrollTo(0,0));await page.waitForTimeout(50);
@@ -272,7 +280,7 @@ if (playwright) {
       await page.waitForSelector('dialog:has-text("définitive")');
       await page.click('dialog button:has-text("Supprimer")');      await page.waitForFunction(() => !/Lessive liquide/.test((document.getElementById('vue')?.textContent || '')), null, { timeout: 5000 });
       ok('E2 suppression de Lessive liquide : le type supprimé disparaît sans affecter les autres');
-      await aller('#/reglages');await page.waitForFunction(()=>/v44/.test((document.getElementById('vue')?.textContent || '')),null,{timeout:5000});await verifierEcran('Réglages');ok('B6 Réglages : version v40 visible');
+      await aller('#/reglages');await page.waitForFunction(()=>/v45/.test((document.getElementById('vue')?.textContent || '')),null,{timeout:5000});await verifierEcran('Réglages');ok('B6 Réglages : version v45 visible');
       // service worker actif et page contrôlée, puis test hors ligne
       await page.evaluate(() => navigator.serviceWorker.ready);
       if (!(await page.evaluate(() => !!navigator.serviceWorker.controller))) { await page.reload(); await page.waitForSelector('#vue .carte'); }
