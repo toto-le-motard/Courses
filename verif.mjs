@@ -288,6 +288,18 @@ if (playwright) {
       const sauvegardeJson = JSON.parse(readFileSync(cheminSauvegarde,'utf8'));
       if (sauvegardeJson.schemaVersion !== 1 || !['types','articles','releves','achats','reglages'].every(k=>Array.isArray(sauvegardeJson[k]))) throw new Error('structure de sauvegarde incorrecte');
       ok('E8.1 export JSON téléchargé et collections présentes');
+      const avantImport = await page.evaluate(() => new Promise((resolve,reject)=>{const rq=indexedDB.open('appli-courses');rq.onsuccess=()=>{const db=rq.result;const tx=db.transaction(['ProductType','Observation','Purchase','Article','Settings'],'readonly');const r=Promise.all(['ProductType','Observation','Purchase','Article','Settings'].map(n=>new Promise((res,rej)=>{const q=tx.objectStore(n).count();q.onsuccess=()=>res(q.result);q.onerror=()=>rej(q.error)})));r.then(resolve,reject);};rq.onerror=()=>reject(rq.error)}));
+      if (!await page.locator('button:has-text("Importer une sauvegarde")').count()) throw new Error('bouton import absent');
+      await page.locator('#fichier-sauvegarde').setInputFiles({name:'invalide.json',mimeType:'application/json',buffer:Buffer.from('{"schemaVersion":99}')});
+      await page.waitForFunction(()=>/invalide|inconnue|incompatible/i.test(document.querySelector('.message-sauvegarde')?.textContent||''),null,{timeout:5000});
+      const apresImportInvalide = await page.evaluate(() => new Promise((resolve,reject)=>{const rq=indexedDB.open('appli-courses');rq.onsuccess=()=>{const db=rq.result;const tx=db.transaction(['ProductType','Observation','Purchase','Article','Settings'],'readonly');Promise.all(['ProductType','Observation','Purchase','Article','Settings'].map(n=>new Promise((res,rej)=>{const q=tx.objectStore(n).count();q.onsuccess=()=>res(q.result);q.onerror=()=>rej(q.error)}))).then(resolve,reject)};rq.onerror=()=>reject(rq.error)}));
+      if (JSON.stringify(avantImport)!==JSON.stringify(apresImportInvalide)) throw new Error('le fichier invalide a modifié les données');
+      ok('E8.2 import invalide refusé sans modifier la base');
+      await page.locator('#fichier-sauvegarde').setInputFiles(cheminSauvegarde);
+      await page.waitForSelector('dialog:has-text("Remplace toutes les données actuelles")',{timeout:5000});
+      await page.click('dialog button:has-text("Remplacer toutes les données")');
+      await page.waitForFunction(()=>/restaurée|importée/i.test(document.querySelector('.message-sauvegarde')?.textContent||''),null,{timeout:5000});
+      ok('E8.2 import valide confirmé et terminé');
       // service worker actif et page contrôlée, puis test hors ligne
       await page.evaluate(() => navigator.serviceWorker.ready);
       if (!(await page.evaluate(() => !!navigator.serviceWorker.controller))) { await page.reload(); await page.waitForSelector('#vue .carte'); }
