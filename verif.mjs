@@ -290,6 +290,7 @@ if (playwright) {
       const texteFiche = await page.locator('.fiche-type').innerText();
       for (const texte of ['Leclerc','Intermarché','fréquence','biais','Historique des relevés']) if(!texteFiche.toLowerCase().includes(texte.toLowerCase())) throw new Error('fiche type incomplète : '+texte);
       if (!(await page.locator('.barre-comparaison').count()>=2)) throw new Error('barres comparatives à échelle commune absentes');
+      await page.waitForFunction(()=>document.querySelectorAll('.fiche-type .historique .ligne-releve').length>=2,null,{timeout:5000});
       if (!(await page.locator('.fiche-type .historique .ligne-releve').count()>=2)) throw new Error('historique non intégré à la fiche');
       await page.setViewportSize({width:390,height:500});
       await verifierEcran('Fiche du type 390x500');
