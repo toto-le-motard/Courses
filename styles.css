@@ -50,7 +50,7 @@ body {
   position: sticky; top: 0; z-index: 5;
   display: flex; align-items: center; justify-content: space-between;
   padding: calc(10px + env(safe-area-inset-top, 0px)) 16px 10px 20px;
-  background: rgba(11, 13, 18, 0.88);
+  background: #0B0D12;
 }
 .topbar h1 {
   margin: 0; font-family: var(--police-titre); font-size: 30px; font-weight: 700; line-height: 1.15;
@@ -220,3 +220,19 @@ svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width:
 .btn-annuler-enregistrement{min-height:48px;padding:0 14px;border:0;border-radius:14px;background:transparent;color:var(--lime);font:700 16px var(--police-texte)}
 .historique{display:grid;gap:10px}.ligne-releve{min-height:78px;padding:10px 8px 10px 14px}.ligne-releve-contenu{flex:1;min-width:0}.ligne-releve-haut,.ligne-releve-bas{display:flex;align-items:center;gap:8px;justify-content:space-between}.ligne-releve-bas{margin-top:5px}.ligne-releve-bas strong{font:700 18px var(--police-titre)}.releve-date{color:var(--texte2);font-size:14px}.magasin-leclerc{color:#5B8CFF}.magasin-intermarche{color:#FF6B5E}.puce.magasin-leclerc,.puce.magasin-intermarche{background:transparent;border:1px solid currentColor}.feuille-edition{max-height:calc(100vh - 32px);overflow:auto}
 .ligne-releve{touch-action:pan-y}.ligne-releve .btn-icone{min-width:48px}.ligne-releve .badge-promo{margin-top:0;min-height:28px}
+/* UX 3.1 / story 3.8 — mode clavier */
+.mode-saisie { padding-bottom: 12px; }
+.mode-saisie .topbar { min-height: 0; padding: 4px 12px; background: #0B0D12; }
+.mode-saisie .topbar h1 { font-size: 22px; line-height: 1.15; }
+.mode-saisie .topbar .reglages-btn { display: none; }
+.mode-saisie .tabs { display: none !important; }
+.mode-saisie .dock-magasin { gap: 4px; padding: 6px; border-radius: 16px; max-height: 130px; overflow: hidden; }
+.mode-saisie .dock-verdict-zone .verdict-carte { padding: 4px 8px; border-radius: 12px; }
+.mode-saisie .dock-verdict-zone .verdict-ligne1 { gap: 6px; }
+.mode-saisie .dock-verdict-zone .verdict-icone { width: 28px; height: 28px; font-size: 17px; }
+.mode-saisie .dock-verdict-zone .verdict-ligne1 strong { font-size: 15px; line-height: 1.05; }
+.mode-saisie .dock-verdict-zone .verdict-economie { margin-top: 2px !important; font-size: 12px !important; line-height: 1.15; }
+.mode-saisie .dock-verdict-zone .verdict-rappel,
+.mode-saisie .dock-verdict-zone .verdict-habituel,
+.mode-saisie .dock-verdict-zone .badge-promo { display: none !important; }
+.mode-saisie .dock-actions .btn { min-height: 48px; }

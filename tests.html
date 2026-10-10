@@ -92,6 +92,14 @@ test('UX 3.1 / story 3.8','défilement vers le haut si champ sous le dock',()=>e
 test('UX 3.1 / story 3.8','défilement vers le bas si champ au-dessus du titre',()=>egal(positionDefilement({top:60,bottom:100},100,300,12),-52));
 test('UX 3.1 / story 3.8','défilement nul si champ dans la zone avec marge de 12 px',()=>egal(positionDefilement({top:112,bottom:288},100,300,12),0));
 
+/* UX 3.1 / story 3.8 — mode clavier et défilement */
+test('UX 3.1 / story 3.8','mode saisie : écart exact de 150 px inactif',()=>egal(modeSaisieActif(800,650),false));
+test('UX 3.1 / story 3.8','mode saisie : écart de 151 px actif',()=>egal(modeSaisieActif(800,649),true));
+test('UX 3.1 / story 3.8','mode saisie : valeurs absentes inactives',()=>{egal(modeSaisieActif(undefined,500),false);egal(modeSaisieActif(800,undefined),false);});
+test('UX 3.1 / story 3.8','défilement nul si champ visible avec marge',()=>egal(positionDefilement({top:120,bottom:180},100,300,12),0));
+test('UX 3.1 / story 3.8','défilement vers le haut si champ sous le dock',()=>egal(positionDefilement({top:260,bottom:320},100,300,12),32));
+test('UX 3.1 / story 3.8','défilement vers le bas si champ au-dessus du titre',()=>egal(positionDefilement({top:60,bottom:100},100,300,12),-52));
+test('UX 3.1 / story 3.8','défilement nul si champ dans la zone avec marge de 12 px',()=>egal(positionDefilement({top:112,bottom:288},100,300,12),0));
 const ko=lignes.filter(r=>!r.ok), bilanTexte=ko.length?ko.length+' échec(s) sur '+lignes.length:'Tous les tests passent ('+lignes.length+')';
 if(typeof document==='undefined'){console.log(bilanTexte);ko.forEach(r=>console.log('ÉCHEC ['+r.exigence+'] '+r.nom+' — '+r.msg));if(ko.length)process.exitCode=1;}
 else{const bilan=document.getElementById('bilan');bilan.textContent=bilanTexte;bilan.className=ko.length?'ko':'ok';const ul=document.getElementById('liste');[...ko,...lignes.filter(r=>r.ok)].forEach(r=>{const li=document.createElement('li');li.className=r.ok?'ok':'ko';const ex=document.createElement('span');ex.className='exi';ex.textContent=r.exigence;li.append(ex,document.createTextNode((r.ok?'✓':'✗')+' '+r.nom));if(!r.ok){const m=document.createElement('span');m.className='msg';m.textContent=r.msg;li.append(m);}ul.append(li);});}
