@@ -359,6 +359,15 @@ if (playwright) {
       await page.click('button:has-text("Quitter")'); await aller('#/types');
       ok('E5.1/E5.2 relevé mensuel : archivés exclus, progression, Passer, mini-verdict partagé, sauvegarde et sortie');
 
+      await aller('#/liste');
+      await page.waitForSelector('.liste-avant-courses',{timeout:5000});
+      const texteListeCourses=await page.locator('.liste-avant-courses').innerText();
+      for(const groupe of ['Acheter ici','Attendre l’autre magasin','Indifférent','Données insuffisantes']) if(!texteListeCourses.includes(groupe)) throw new Error('groupe absent de la liste avant courses : '+groupe);
+      if(/undefined|>\s*<\/h[23]>/.test(await page.locator('.liste-avant-courses').innerHTML())) throw new Error('libellé vide ou undefined dans la liste avant courses');
+      if(await page.locator('.liste-avant-courses').getByText('Archive mensuel test',{exact:true}).count()) throw new Error('type archivé présent dans la liste avant courses');
+      await page.setViewportSize({width:390,height:500}); await verifierEcran('Avant les courses 390x500'); await page.setViewportSize({width:390,height:844});
+      await aller('#/types');
+      ok('E5.3 liste avant courses : quatre groupes, types archivés exclus et affichage mobile');
       const versionCache = readFileSync(join(racine, 'sw.js'), 'utf8').match(/const CACHE_VERSION = '([^']+)'/)?.[1];
       await aller('#/reglages');await page.waitForFunction((v)=>(document.getElementById('vue')?.textContent || '').includes(v),versionCache,{timeout:5000});await verifierEcran('Réglages');ok('B6 Réglages : version '+versionCache+' visible');
       await page.evaluate(()=>new Promise((resolve,reject)=>{
