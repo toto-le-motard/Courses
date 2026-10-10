@@ -647,7 +647,6 @@ function vueMagasin() {
     if(habituel.ok) verdictCarte.append(el('p',{class:'verdict-habituel',text:'Habituel chez '+libelleMagasin(magasinCourant)+' : '+formaterPrixNormalise(habituel.valeur,typeChoisi.unite)}));
     const quantite = el('input', { id:'quantite-achat', class:'champ quantite-achat', type:'number', min:'1', max:'999', step:'1', value:String(quantiteAchat), inputmode:'numeric', 'aria-label':'Quantité achetée', onchange:e=>{ const n=Number(e.target.value); if(Number.isInteger(n)&&n>=1&&n<=999) quantiteAchat=n; else {quantiteAchat=1;e.target.value='1';} } });
     const actionsAchat = el('div', { id:'achat-actions', class:'achat-actions' },
-      el('label', { for:'quantite-achat', class:'etiquette', text:'Quantité' }),
       el('div', { class:'quantite-achat-controles' },
         el('button', { id:'btn-achat-moins', type:'button', class:'btn btn-secondaire btn-quantite', text:'−', 'aria-label':'Diminuer la quantité', onclick:()=>{quantiteAchat=Math.max(1,quantiteAchat-1);quantite.value=String(quantiteAchat);} }),
         quantite,

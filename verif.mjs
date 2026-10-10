@@ -416,9 +416,10 @@ if (playwright) {
       // ---- Épic E7 : achat en un geste et quantité par défaut ----
       etapeParcours = 'E7.1 achat en un geste';
       await aller('#/magasin');
+      await page.fill('#champ-type','');
       await page.fill('#champ-type','ZZ mensuel test');
       await page.click('.suggestion-type[data-id="9992"]');
-      await page.fill('#champ-prix','1,25');
+      await page.fill('#champ-prix','5,00');
       await page.fill('#champ-format','500');
       await page.selectOption('#champ-unite','g');
       await page.locator('input[type="date"]').evaluate(e=>{e.value='2031-01-01';e.dispatchEvent(new Event('change',{bubbles:true}));});
