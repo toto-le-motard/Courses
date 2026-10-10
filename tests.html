@@ -11,6 +11,7 @@ li { padding:6px 0; border-bottom:1px solid rgba(255,255,255,.1); } .exi { color
 <script type="module">
 const calculerPositionDock = await import('./domain.js').then(m => m.calculerPositionDock);
 import { creerSauvegarde, validerSauvegarde, etatRappelExport } from './backup.js';
+import { frequencePromos } from './domain.js';
 import { modeSaisieActif, positionDefilement, MAGASIN, VERDICT, UNITES, LIBELLE_UNITE, normaliserNom, nomTypeValide, unitesCompatibles, estCompatible, versUniteDeBase, convertir, verifierFormat, arrondirCentimes, analyserPrixSaisie, formaterPrixEuros, formaterPrixNormalise, prixNormalise, joursEntre, mediane, referenceLeclerc, habituelIntermarche, prixHabituel, prixHabituelAutreMagasin, calculerVerdict, estPrixIncoherent, decisionDoublon, analyserDoublon, cleDoublon, formatAffichage, trierReleves } from './domain.js';
 const resultats={reussis:0,echecs:0,details:[]},lignes=[]; function test(exigence,nom,fn){let msg=null;try{fn()}catch(e){msg=e.message}if(msg){resultats.echecs++;resultats.details.push(exigence+' '+nom+' : '+msg)}else resultats.reussis++;lignes.push({ok:!msg,exigence,nom,msg});}
 function egal(a,b,msg=''){if(JSON.stringify(a)!==JSON.stringify(b))throw new Error(msg+' attendu '+JSON.stringify(b)+', obtenu '+JSON.stringify(a));}
@@ -112,6 +113,11 @@ test('FR20 / E8.3','rappel immédiat si aucun export enregistré',()=>egal(etatR
 test('FR20 / E8.3','pas de rappel après 29 jours',()=>egal(etatRappelExport('2026-09-11','2026-10-10',30),'ok'));
 test('FR20 / E8.3','pas de rappel à exactement 30 jours',()=>egal(etatRappelExport('2026-09-10','2026-10-10',30),'ok'));
 test('FR20 / E8.3','rappel après 31 jours',()=>egal(etatRappelExport('2026-09-09','2026-10-10',30),'retard'));
+/* FR12 / E4.1 — fréquence des promotions par magasin */
+test('FR12 / E4.1','aucun relevé : fréquence indisponible et résultat typé',()=>{const r=frequencePromos([],'leclerc');egal(r.ok,false);egal(r.raison,'aucun-releve');egal(r.nbReleves,0);egal(r.pourcentage,null);});
+test('FR12 / E4.1','tous les relevés en promo : fréquence de 100 %',()=>{const r=frequencePromos([{magasin:'leclerc',promo:1},{magasin:'leclerc',promo:true},{magasin:'leclerc',promo:1}],'leclerc');egal(r.ok,true);egal(r.nbPromos,3);egal(r.nbReleves,3);egal(r.pourcentage,100);});
+test('FR12 / E4.1','aucun relevé en promo : fréquence de 0 %',()=>{const r=frequencePromos([{magasin:'intermarche',promo:0},{magasin:'intermarche',promo:false}],'intermarche');egal(r.ok,true);egal(r.nbPromos,0);egal(r.nbReleves,2);egal(r.pourcentage,0);});
+test('FR12 / E4.1','les relevés d’un autre magasin sont exclus',()=>{const r=frequencePromos([{magasin:'leclerc',promo:1},{magasin:'intermarche',promo:0}],'leclerc');egal(r.nbPromos,1);egal(r.nbReleves,1);});
 const ko=lignes.filter(r=>!r.ok), bilanTexte=ko.length?ko.length+' échec(s) sur '+lignes.length:'Tous les tests passent ('+lignes.length+')';
 if(typeof document==='undefined'){console.log(bilanTexte);ko.forEach(r=>console.log('ÉCHEC ['+r.exigence+'] '+r.nom+' — '+r.msg));if(ko.length)process.exitCode=1;}
 else{const bilan=document.getElementById('bilan');bilan.textContent=bilanTexte;bilan.className=ko.length?'ko':'ok';const ul=document.getElementById('liste');[...ko,...lignes.filter(r=>r.ok)].forEach(r=>{const li=document.createElement('li');li.className=r.ok?'ok':'ko';const ex=document.createElement('span');ex.className='exi';ex.textContent=r.exigence;li.append(ex,document.createTextNode((r.ok?'✓':'✗')+' '+r.nom));if(!r.ok){const m=document.createElement('span');m.className='msg';m.textContent=r.msg;li.append(m);}ul.append(li);});}

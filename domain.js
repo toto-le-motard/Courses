@@ -236,3 +236,6 @@ export function calculerVerdict({ prixCentimes, formatBase, typeUnit, magasin, o
   const diffFormat = (diffUnite * formatBase) / DIVISEUR[typeUnit];
   return { ...base, resultat, ecart, seuil, prixJourNormalise: jour.centimesParUnite, habituelAutre: habituel, differenceUniteCentimes: arrondirCentimes(diffUnite), differenceFormatCentimes: arrondirCentimes(diffFormat) };
 }
+
+// FR12 / E4.1 — fonction typée ajoutée avant implémentation pour le test rouge.
+export function frequencePromos(observations, magasin) { return { ok: false, raison: 'non-implemente', nbPromos: 0, nbReleves: 0, pourcentage: null }; }
