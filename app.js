@@ -453,7 +453,7 @@ function vueMagasin() {
       if(actions) actions.querySelectorAll('button').forEach(b=>b.disabled=false);
     }
   }
-  bouton.addEventListener('click', () => { void enregistrerReleve(); });
+  bouton.addEventListener('click', () => { void enregistrerReleve(0); });
 
 
   async function ouvrirScanner() {
@@ -605,17 +605,17 @@ function vueMagasin() {
 
   async function actualiserVerdict() {
     const jetonCalcul = ++calculVerdictToken;
-    if (!typeChoisi || !estFormulaireValide()) { verdictCarte.hidden = true; dockActions?.replaceChildren(bouton); return; }
+    if (!typeChoisi || !estFormulaireValide()) { verdictCarte.hidden = true; bouton.textContent='Enregistrer'; dockActions?.replaceChildren(bouton); return; }
     const p = prixValide();
     const f = verifierFormat(typeChoisi.unite, Number(valeurFormat.value), uniteFormat.value);
-    if (!p || !f.ok) { verdictCarte.hidden = true; dockActions?.replaceChildren(bouton); return; }
+    if (!p || !f.ok) { verdictCarte.hidden = true; bouton.textContent='Enregistrer'; dockActions?.replaceChildren(bouton); return; }
     try {
       const observations = await lireObservations(typeChoisi.id);
       const seuilPct = await lireReglage('seuilIndifference', 5);
       if (jetonCalcul !== calculVerdictToken || !typeChoisi || !estFormulaireValide()) { verdictCarte.hidden = true; return; }
       const v = calculerVerdict({ prixCentimes:p, formatBase:f.formatBase, typeUnit:typeChoisi.unite, magasin:magasinCourant, observations, aujourdhui:date, seuilPct, promo:promo.checked });
       dessinerVerdict(v, observations);
-    } catch { verdictCarte.hidden = true; dockActions?.replaceChildren(bouton); }
+    } catch { verdictCarte.hidden = true; bouton.textContent='Enregistrer'; dockActions?.replaceChildren(bouton); }
   }
 
   function dessinerVerdict(v, observations) {
@@ -647,14 +647,15 @@ function vueMagasin() {
     const habituel = prixHabituel(observations,magasinCourant,typeChoisi.unite,date);
     if(habituel.ok) verdictCarte.append(el('p',{class:'verdict-habituel',text:'Habituel chez '+libelleMagasin(magasinCourant)+' : '+formaterPrixNormalise(habituel.valeur,typeChoisi.unite)}));
     const quantite = el('input', { id:'quantite-achat', class:'champ quantite-achat', type:'number', min:'1', max:'999', step:'1', value:String(quantiteAchat), inputmode:'numeric', 'aria-label':'Quantité achetée', onchange:e=>{ const n=Number(e.target.value); if(Number.isInteger(n)&&n>=1&&n<=999) quantiteAchat=n; else {quantiteAchat=1;e.target.value='1';} } });
+    bouton.textContent = 'Je n’achète pas';
     const actionsAchat = el('div', { id:'achat-actions', class:'achat-actions' },
       el('div', { class:'quantite-achat-controles' },
         el('button', { id:'btn-achat-moins', type:'button', class:'btn btn-secondaire btn-quantite', text:'−', 'aria-label':'Diminuer la quantité', onclick:()=>{quantiteAchat=Math.max(1,quantiteAchat-1);quantite.value=String(quantiteAchat);} }),
         quantite,
         el('button', { id:'btn-achat-plus', type:'button', class:'btn btn-secondaire btn-quantite', text:'+', 'aria-label':'Augmenter la quantité', onclick:()=>{quantiteAchat=Math.min(999,quantiteAchat+1);quantite.value=String(quantiteAchat);} })
       ),
-      el('button', { id:'btn-achat-confirme', type:'button', class:'btn btn-primaire', text:'Acheté', disabled:enregistrementEnCours, onclick:()=>enregistrerReleve(1) }),
-      el('button', { id:'btn-achat-non', type:'button', class:'btn btn-secondaire', text:'Pas acheté', disabled:enregistrementEnCours, onclick:()=>enregistrerReleve(0) })
+      el('button', { id:'btn-achat-confirme', type:'button', class:'btn btn-primaire', text:'J’achète', disabled:enregistrementEnCours, onclick:()=>enregistrerReleve(1) }),
+      bouton
     );
     dockActions?.replaceChildren(actionsAchat);
   }
