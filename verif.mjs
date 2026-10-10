@@ -292,8 +292,9 @@ if (playwright) {
           tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error);
         };rq.onerror=()=>reject(rq.error);
       }),idFicheE4);
-      await aller('#/types');
+      await aller('#/magasin'); await aller('#/types');
       await page.waitForSelector('#liste-types');
+      await page.waitForSelector('a[href="#/fiche/'+idFicheE4+'"]',{timeout:5000});
       const lienFiche = page.locator('a[href="#/fiche/'+idFicheE4+'"]');
       if (!(await lienFiche.count())) throw new Error('lien Fiche absent dans la liste des types');
       await lienFiche.click();
