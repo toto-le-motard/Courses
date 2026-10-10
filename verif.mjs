@@ -280,6 +280,22 @@ if (playwright) {
       await page.waitForSelector('dialog:has-text("définitive")');
       await page.click('dialog button:has-text("Supprimer")');      await page.waitForFunction(() => !/Lessive liquide/.test((document.getElementById('vue')?.textContent || '')), null, { timeout: 5000 });
       ok('E2 suppression de Lessive liquide : le type supprimé disparaît sans affecter les autres');
+      await aller('#/types');
+      await page.waitForSelector('#liste-types');
+      const lienFiche = page.locator('a[href="#/fiche/'+idHistorique+'"]');
+      if (!(await lienFiche.count())) throw new Error('lien Fiche absent dans la liste des types');
+      await lienFiche.click();
+      await page.waitForFunction(()=>(document.getElementById('titre-ecran')?.textContent||'')==='Fiche du type',null,{timeout:5000});
+      await page.waitForSelector('.fiche-type',{timeout:5000});
+      const texteFiche = await page.locator('.fiche-type').innerText();
+      for (const texte of ['Leclerc','Intermarché','fréquence','biais','Historique des relevés']) if(!texteFiche.toLowerCase().includes(texte.toLowerCase())) throw new Error('fiche type incomplète : '+texte);
+      if (!(await page.locator('.barre-comparaison').count()>=2)) throw new Error('barres comparatives à échelle commune absentes');
+      if (!(await page.locator('.fiche-type .historique .ligne-releve').count()>=2)) throw new Error('historique non intégré à la fiche');
+      await page.setViewportSize({width:390,height:500});
+      await verifierEcran('Fiche du type 390x500');
+      await page.setViewportSize({width:390,height:844});
+      ok('E4.2 fiche type : prix habituels, promos, fréquence, biais, barres et historique intégrés');
+      await aller('#/types');
       const versionCache = readFileSync(join(racine, 'sw.js'), 'utf8').match(/const CACHE_VERSION = '([^']+)'/)?.[1];
       await aller('#/reglages');await page.waitForFunction((v)=>(document.getElementById('vue')?.textContent || '').includes(v),versionCache,{timeout:5000});await verifierEcran('Réglages');ok('B6 Réglages : version '+versionCache+' visible');
       await page.evaluate(()=>new Promise((resolve,reject)=>{
