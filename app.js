@@ -325,6 +325,7 @@ function vueMagasin() {
   let calculVerdictToken = 0;
   let quantiteAchat = 1;
   let enregistrementEnCours = false;
+  let dockActions = null;
 
   function erreur(msg) { message.textContent = msg || ''; message.hidden = !msg; }
   function prixValide() { return analyserPrixSaisie(prix.value); }
@@ -604,17 +605,17 @@ function vueMagasin() {
 
   async function actualiserVerdict() {
     const jetonCalcul = ++calculVerdictToken;
-    if (!typeChoisi || !estFormulaireValide()) { verdictCarte.hidden = true; return; }
+    if (!typeChoisi || !estFormulaireValide()) { verdictCarte.hidden = true; dockActions?.replaceChildren(bouton); return; }
     const p = prixValide();
     const f = verifierFormat(typeChoisi.unite, Number(valeurFormat.value), uniteFormat.value);
-    if (!p || !f.ok) { verdictCarte.hidden = true; return; }
+    if (!p || !f.ok) { verdictCarte.hidden = true; dockActions?.replaceChildren(bouton); return; }
     try {
       const observations = await lireObservations(typeChoisi.id);
       const seuilPct = await lireReglage('seuilIndifference', 5);
       if (jetonCalcul !== calculVerdictToken || !typeChoisi || !estFormulaireValide()) { verdictCarte.hidden = true; return; }
       const v = calculerVerdict({ prixCentimes:p, formatBase:f.formatBase, typeUnit:typeChoisi.unite, magasin:magasinCourant, observations, aujourdhui:date, seuilPct, promo:promo.checked });
       dessinerVerdict(v, observations);
-    } catch { verdictCarte.hidden = true; }
+    } catch { verdictCarte.hidden = true; dockActions?.replaceChildren(bouton); }
   }
 
   function dessinerVerdict(v, observations) {
@@ -655,7 +656,7 @@ function vueMagasin() {
       el('button', { id:'btn-achat-confirme', type:'button', class:'btn btn-primaire', text:'Acheté', disabled:enregistrementEnCours, onclick:()=>enregistrerReleve(1) }),
       el('button', { id:'btn-achat-non', type:'button', class:'btn btn-secondaire', text:'Pas acheté', disabled:enregistrementEnCours, onclick:()=>enregistrerReleve(0) })
     );
-    verdictCarte.append(actionsAchat);
+    dockActions?.replaceChildren(actionsAchat);
   }
 
   function verifier() {
@@ -695,9 +696,11 @@ function vueMagasin() {
     ),
     prixHorsPromoBloc, horsPromoAvertissement, message
   );
+  const actionsDock = el('div', { class: 'dock-actions', id: 'dock-actions' }, bouton);
+  dockActions = actionsDock;
   const dock = el('div', { id: 'dock-magasin', class: 'dock-magasin' },
     el('div', { class: 'dock-verdict-zone', id: 'dock-verdict-zone' }, verdictCarte),
-    el('div', { class: 'dock-actions', id: 'dock-actions' }, bouton)
+    actionsDock
   );
   document.body.append(dock);
   actualiserPositionDock();
