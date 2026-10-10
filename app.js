@@ -2,7 +2,7 @@
 import { initDb, dbPrete, listerTypes, lireDernierReleve, lireObservations, dernierReleve, trouverDoublon, enregistrerReleves, analyserDoublons, annulerEnregistrement, listerReleves, modifierReleve, supprimerReleve, demanderStockagePersistant, lireReglage, ecrireReglage, compter, STORES, VERSION_SCHEMA, exporterCollections, remplacerCollections } from './db.js';
 import { MAGASIN, UNITES, LIBELLE_UNITE, VERDICT, analyserPrixSaisie, verifierFormat, prixNormalise, formaterPrixEuros, formaterPrixNormalise, calculerVerdict, prixHabituel, estPrixIncoherent, unitesCompatibles, formatAffichage, calculerPositionDock, modeSaisieActif, positionDefilement } from './domain.js';
 import { accueilVide, vueTypes, vueTypeForm } from './types-ui.js';
-import { creerSauvegarde, validerSauvegarde } from './backup.js';
+import { creerSauvegarde, validerSauvegarde, etatRappelExport } from './backup.js';
 
 const vue = document.getElementById('vue');
 const titre = document.getElementById('titre-ecran');
@@ -14,6 +14,7 @@ let diagnostic = { base: 'ouverture…', persistant: '…', lancements: '…', c
 let magasinCourant = MAGASIN.LECLERC;
 let annulationActive = null;
 let annulationTimer = null;
+let rappelMasqueSession = false;
 
 let dockResizeObserver = null;
 let modeSaisieForce = null;
@@ -210,6 +211,9 @@ async function vueReglages() {
     } finally { fichierImport.value = ''; }
   }});
   const boutonImport = el('button', { type: 'button', class: 'btn btn-secondaire', text: 'Importer une sauvegarde', onclick: () => fichierImport.click() });
+  if (diagnostic.persistant !== 'oui') {
+    sauvegarde.prepend(el('p', { class: 'avertissement-stockage', role: 'alert', text: 'Le navigateur n’a pas confirmé la protection du stockage. Exportez régulièrement une sauvegarde pour éviter une perte de données.' }));
+  }
   sauvegarde.append(boutonExport, boutonImport, fichierImport, message);
   d.append(sauvegarde);
   const c = carte('À propos et diagnostic');
@@ -606,6 +610,24 @@ async function afficher() {
   const r = ROUTES[nom] || ROUTES.magasin;
   titre.textContent = r.titre; document.title = r.titre + ' · Appli Courses';
   vue.replaceChildren(await r.vue(param));
+  if (nom === 'magasin' && !rappelMasqueSession) {
+    try {
+      await dbPrete;
+      const dateExport = await lireReglage('dernierExport', null);
+      const etatRappel = etatRappelExport(dateExport, aujourdHui(), 30);
+      if (etatRappel !== 'ok') {
+        const texte = etatRappel === 'jamais'
+          ? 'Aucune sauvegarde enregistrée. Exportez vos données pour éviter de les perdre.'
+          : 'Votre dernière sauvegarde date du ' + dateAffichee(dateExport) + '. Pensez à exporter vos données.';
+        let bandeau;
+        bandeau = el('aside', { class: 'bandeau-rappel-export', role: 'status' },
+          el('span', { text: texte }),
+          el('button', { type: 'button', class: 'btn-fermer-rappel', text: 'Fermer', onclick: () => { rappelMasqueSession = true; bandeau.remove(); } })
+        );
+        vue.prepend(bandeau);
+      }
+    } catch (e) { console.error('Lecture du rappel de sauvegarde impossible', e); }
+  }
   vue.style.animation = 'none'; void vue.offsetWidth; vue.style.animation = '';
   onglets.forEach((a) => a.dataset.route === r.onglet ? a.setAttribute('aria-current', 'page') : a.removeAttribute('aria-current'));
   window.scrollTo(0, 0);

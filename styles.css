@@ -236,3 +236,9 @@ svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width:
 .mode-saisie .dock-verdict-zone .verdict-habituel,
 .mode-saisie .dock-verdict-zone .badge-promo { display: none !important; }
 .mode-saisie .dock-actions .btn { min-height: 48px; }
+
+
+/* FR20 / E8.3 — rappel de sauvegarde et avertissement de stockage. */
+.bandeau-rappel-export, .avertissement-stockage { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:14px; margin:0 0 12px; border:1px solid var(--ambre); border-radius:16px; background:#302512; color:var(--texte); }
+.avertissement-stockage { display:block; line-height:1.4; }
+.btn-fermer-rappel { flex:0 0 auto; min-height:48px; padding:8px 12px; border:1px solid var(--bordure); border-radius:12px; background:transparent; color:var(--texte); }

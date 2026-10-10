@@ -31,4 +31,11 @@ export function validerSauvegarde(payload, schemaVersionAttendu) {
 }
 
 // FR20 / E8.3 — état du rappel selon une date courante injectable pour les tests.
-export function etatRappelExport(dateDernierExport, dateCourante, delaiJours = 30) { return 'ok'; }
+export function etatRappelExport(dateDernierExport, dateCourante, delaiJours = 30) {
+  if (!dateDernierExport) return 'jamais';
+  if (!dateIsoValide(dateDernierExport) || !dateIsoValide(dateCourante) || !Number.isInteger(delaiJours) || delaiJours < 0) return 'retard';
+  const [a1,m1,j1] = dateDernierExport.split('-').map(Number);
+  const [a2,m2,j2] = dateCourante.split('-').map(Number);
+  const ecart = Math.floor((Date.UTC(a2,m2-1,j2)-Date.UTC(a1,m1-1,j1))/86400000);
+  return ecart > delaiJours ? 'retard' : 'ok';
+}
