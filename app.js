@@ -158,6 +158,7 @@ function confirmerRemplacementSauvegarde() {
     dialogue.addEventListener('click', e => { if (e.target === dialogue) dialogue.close(); });
     dialogue.addEventListener('close', () => { dialogue.remove(); resolve(false); });
     document.body.append(dialogue);
+    if (!dialogue.isConnected) document.body.append(dialogue);
     dialogue.showModal();
   });
 }
@@ -461,6 +462,7 @@ function vueMagasin() {
         const m=dialogue.querySelector('#scan-message'); m.textContent='Lecture impossible. Réessayez ou saisissez le code.'; m.hidden=false;
       }
     }
+    if (!dialogue.isConnected) document.body.append(dialogue);
     dialogue.showModal();
     try {
       if (!navigator.mediaDevices?.getUserMedia) throw new Error('Caméra indisponible');
@@ -557,6 +559,7 @@ function vueMagasin() {
       }})));
     };
     champ.addEventListener('input', afficherSuggestions);
+    if (!dialogue.isConnected) document.body.append(dialogue);
     dialogue.showModal();
   }
 
