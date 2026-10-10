@@ -229,6 +229,7 @@ async function vueReglages() {
     oninput: e => { libelleSeuil.textContent = 'Seuil : ' + e.target.value + ' %'; },
     onchange: async e => {
       const valeur = Number(e.target.value);
+      libelleSeuil.textContent = 'Seuil : ' + valeur + ' %';
       try { await ecrireReglage('seuilIndifference', valeur); seuilMessage.textContent = 'Seuil enregistré : ' + valeur + ' %.'; seuilMessage.hidden = false; }
       catch { seuilMessage.textContent = 'Impossible d’enregistrer le seuil.'; seuilMessage.hidden = false; }
     }
