@@ -214,8 +214,10 @@ if (playwright) {
       if(!clavier.mode||clavier.tabs&&clavier.tabs.height>0||!clavier.titre||clavier.titre.height>44||!clavier.dock||clavier.dock.height>130||!clavier.prix||clavier.prix.top<clavier.titre.bottom||clavier.prix.bottom>clavier.dock.top)throw new Error('mode saisie / champ Prix : '+JSON.stringify(clavier));
       await page.locator('#champ-type').focus();await page.waitForTimeout(80);clavier=await mesurerModeSaisie();info('MESURES MODE SAISIE focus Type 390x500 '+JSON.stringify(clavier));
       if(!clavier.type||clavier.type.top<clavier.titre.bottom||clavier.type.bottom>clavier.dock.top)throw new Error('champ Type hors zone en mode saisie : '+JSON.stringify(clavier));
+      if(await page.getAttribute('#champ-type','enterkeyhint')!=='next'||await page.getAttribute('#champ-prix','enterkeyhint')!=='next'||await page.getAttribute('#champ-format','enterkeyhint')!=='done')throw new Error('enterkeyhint incorrect');
       await page.locator('#champ-format').focus();await page.waitForTimeout(80);clavier=await mesurerModeSaisie();info('MESURES MODE SAISIE focus Format 390x500 '+JSON.stringify(clavier));
       if(!clavier.format||clavier.format.top<clavier.titre.bottom||clavier.format.bottom>clavier.dock.top)throw new Error('champ Format hors zone en mode saisie : '+JSON.stringify(clavier));
+      await page.locator('#champ-format').press('Enter');await page.waitForFunction(()=>document.activeElement===document.body,null,{timeout:2000});
       await page.evaluate(()=>window.__forcerModeSaisie?.(false));await page.setViewportSize({width:390,height:844});await page.waitForTimeout(80);
       clavier=await mesurerModeSaisie();info('MESURES MODE NORMAL 390x844 '+JSON.stringify(clavier));
       if(clavier.mode||!clavier.tabs||clavier.tabs.height===0||!clavier.dock||clavier.dock.bottom>clavier.tabs.top)throw new Error('régression mode normal 390x844 : '+JSON.stringify(clavier));

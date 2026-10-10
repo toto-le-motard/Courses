@@ -10,6 +10,19 @@ export const SEUIL_DEFAUT_PCT = 5;
  * Calcule les positions du dock et du bandeau d'annulation dans le viewport.
  * hauteurFenetre : hauteur du layout viewport ; hauteurVisible / offsetTop : visualViewport.
  */
+export function modeSaisieActif(hauteurFenetre, hauteurVisible) {
+  return Number.isFinite(hauteurFenetre) && hauteurFenetre > 0
+    && Number.isFinite(hauteurVisible) && hauteurVisible > 0
+    && hauteurFenetre - hauteurVisible > 150;
+}
+export function positionDefilement(rectChamp, hautZone, basZone, marge = 12) {
+  if (!rectChamp || !Number.isFinite(rectChamp.top) || !Number.isFinite(rectChamp.bottom)
+    || !Number.isFinite(hautZone) || !Number.isFinite(basZone) || basZone <= hautZone) return 0;
+  const m = Number.isFinite(marge) && marge >= 0 ? marge : 12;
+  if (rectChamp.top < hautZone + m) return rectChamp.top - (hautZone + m);
+  if (rectChamp.bottom > basZone - m) return rectChamp.bottom - (basZone - m);
+  return 0;
+}
 export function calculerPositionDock({ hauteurFenetre, offsetTop = 0, hauteurVisible, hauteurDock, hauteurOnglets, zoneSecurite = 12 }) {
   const hFenetre = Number.isFinite(hauteurFenetre) && hauteurFenetre > 0 ? hauteurFenetre : 0;
   const hVisible = Number.isFinite(hauteurVisible) && hauteurVisible > 0 ? hauteurVisible : hFenetre;
