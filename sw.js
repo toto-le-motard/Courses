@@ -1,6 +1,6 @@
 // sw.js — service worker de l'Appli Courses.
 // À CHAQUE PUBLICATION : augmenter CACHE_VERSION (DoD1).
-const CACHE_VERSION = 'v84';
+const CACHE_VERSION = 'v85';
 const CACHE_NAME = 'appli-courses-' + CACHE_VERSION;
 
 const FICHIERS = [

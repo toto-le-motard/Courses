@@ -398,7 +398,7 @@ if (playwright) {
       await page.click('button.suggestion-rattacher');
       await page.fill('#scan-format','500'); await page.selectOption('#scan-unite','g');
       offMockActif = true;
-       await page.route('**/api/v2/product/**',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({status:1,product:{brands:'Marque test',product_name:'Produit OFF'}})}));
+       await page.route(/world\\.openfoodfacts\\.org\\/api\\/v2\\/product\\//,route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({status:1,product:{brands:'Marque test',product_name:'Produit OFF'}})}));
       if(!await page.locator('dialog.dialog-rattacher').getByRole('button',{name:'Compléter',exact:true}).count()) throw new Error('bouton Open Food Facts absent en ligne');
       await page.click('dialog.dialog-rattacher button:has-text("Compléter")');
       await page.waitForFunction(()=>document.querySelector('#scan-marque')?.value==='Marque test',null,{timeout:5000});
@@ -415,7 +415,7 @@ if (playwright) {
       await page.click('dialog.dialog-scan button:has-text("Rechercher")');
       await page.waitForFunction(()=>document.querySelector('#champ-type')?.value==='ZZ mensuel test',null,{timeout:5000});
       ok('E6.3 caméra refusée : saisie manuelle retrouve le code connu');
-      await page.unroute('**/api/v2/product/**'); offMockActif = false;
+      await page.unroute(/world\\.openfoodfacts\\.org\\/api\\/v2\\/product\\//); offMockActif = false;
       const versionCache = readFileSync(join(racine, 'sw.js'), 'utf8').match(/const CACHE_VERSION = '([^']+)'/)?.[1];
       await aller('#/reglages');await page.waitForFunction((v)=>(document.getElementById('vue')?.textContent || '').includes(v),versionCache,{timeout:5000});await verifierEcran('Réglages');ok('B6 Réglages : version '+versionCache+' visible');
       await page.evaluate(()=>new Promise((resolve,reject)=>{
