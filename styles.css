@@ -248,3 +248,20 @@ svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width:
 .reglage-seuil input[type="range"] { display:block; width:100%; min-height:48px; accent-color:var(--lime); }
 .reglage-seuil label { display:block; font-weight:700; margin-bottom:8px; }
 .reglage-seuil p { color:var(--texte2); }
+
+/* FR12 / FR13 / E4.2 — fiche et comparaison sur une échelle commune. */
+.ligne-type-analyse { display:block; }
+.ligne-type-analyse .ligne-texte { display:flex; align-items:center; flex-wrap:wrap; gap:8px; }
+.verdict-liste { display:inline-flex; align-items:center; min-height:32px; margin:8px 0; padding:4px 10px; border-radius:999px; background:rgba(255,255,255,.08); font-size:13px; font-weight:700; }
+.barres-comparaison { display:grid; gap:10px; width:100%; }
+.barre-comparaison { display:grid; grid-template-columns:100px minmax(40px,1fr) auto; align-items:center; gap:8px; font-size:13px; }
+.barre-fond { height:12px; overflow:hidden; border-radius:999px; background:rgba(255,255,255,.10); }
+.barre-remplissage { height:100%; border-radius:999px; min-width:0; }
+.barre-leclerc { background:var(--leclerc); }
+.barre-intermarche { background:var(--intermarche); }
+.barre-comparaison strong { white-space:nowrap; }
+.fiche-type h2 { margin:12px 0; font-family:var(--police-titre); }
+.fiche-type h3 { margin:0 0 8px; font-size:18px; }
+.fiche-type .carte-prix p { margin:6px 0; }
+.note-biais-promo { padding:12px; border-left:3px solid var(--ambre); }
+@media (max-width:360px) { .barre-comparaison { grid-template-columns:88px minmax(24px,1fr) auto; gap:5px; font-size:12px; } }

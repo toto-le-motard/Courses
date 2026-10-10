@@ -1,6 +1,6 @@
 // app.js — interface et navigation (stories 1.2 à 3-2).
 import { initDb, dbPrete, listerTypes, lireDernierReleve, lireObservations, dernierReleve, trouverDoublon, enregistrerReleves, analyserDoublons, annulerEnregistrement, listerReleves, modifierReleve, supprimerReleve, demanderStockagePersistant, lireReglage, ecrireReglage, compter, STORES, VERSION_SCHEMA, exporterCollections, remplacerCollections } from './db.js';
-import { MAGASIN, UNITES, LIBELLE_UNITE, VERDICT, analyserPrixSaisie, verifierFormat, prixNormalise, formaterPrixEuros, formaterPrixNormalise, calculerVerdict, prixHabituel, estPrixIncoherent, unitesCompatibles, formatAffichage, calculerPositionDock, modeSaisieActif, positionDefilement } from './domain.js';
+import { MAGASIN, UNITES, LIBELLE_UNITE, VERDICT, analyserPrixSaisie, verifierFormat, prixNormalise, formaterPrixEuros, formaterPrixNormalise, calculerVerdict, prixHabituel, estPrixIncoherent, unitesCompatibles, formatAffichage, calculerPositionDock, modeSaisieActif, positionDefilement, frequencePromos } from './domain.js';
 import { accueilVide, vueTypes, vueTypeForm } from './types-ui.js';
 import { creerSauvegarde, validerSauvegarde, etatRappelExport } from './backup.js';
 
@@ -555,10 +555,10 @@ function vueMagasin() {
 
 
 // ---- Historique des relevés (FR8 / FR9) -----------------------------------------------------
-function vueHistorique(typeId) {
+function vueHistorique(typeId, integre = false) {
   const racine=el('div',{class:'historique'});
   const liste=el('div',{class:'liste-historique'});
-  racine.append(el('a',{href:'#/types',class:'btn btn-secondaire btn-bloc'},'← Retour aux types'),liste);
+  if (integre) racine.append(liste); else racine.append(el('a',{href:'#/types',class:'btn btn-secondaire btn-bloc'},'← Retour aux types'),liste);
   async function charger(){
     const type=await dbPrete.then(()=>lireTypeSafe(typeId));
     if(!type) { liste.replaceChildren(carte('Historique','Type introuvable.')); return; }
@@ -630,6 +630,34 @@ function vueHistorique(typeId) {
   charger().catch((e) => { console.error('Chargement impossible', e); liste.replaceChildren(carte('Historique', 'Chargement impossible')); });
   return racine;
 }
+async function vueFicheType(typeId) {
+  await dbPrete;
+  const type = await lireTypeSafe(typeId);
+  if (!type) return carte('Fiche du type', 'Type introuvable.');
+  const racine = el('div', { class: 'fiche-type' });
+  racine.append(el('a', { href: '#/types', class: 'btn btn-secondaire btn-bloc', text: '← Retour aux types' }));
+  const observations = await lireObservations(typeId), dateDuJour = aujourdHui();
+  const leclerc = prixHabituel(observations, MAGASIN.LECLERC, type.unite, dateDuJour);
+  const inter = prixHabituel(observations, MAGASIN.INTERMARCHE, type.unite, dateDuJour);
+  const freqLeclerc = frequencePromos(observations, MAGASIN.LECLERC), freqInter = frequencePromos(observations, MAGASIN.INTERMARCHE);
+  const dernierPromo = magasin => observations.filter(o => o.magasin === magasin && Boolean(o.promo)).sort((a,b) => a.date !== b.date ? (a.date < b.date ? 1 : -1) : (b.id||0)-(a.id||0))[0] || null;
+  const promoTexte = magasin => { const o=dernierPromo(magasin); if(!o)return 'Aucun relevé promo.'; const p=prixNormalise(o.prixCentimes,o.format,type.unite); return 'Dernier prix promo : '+(p.ok?formaterPrixNormalise(p.centimesParUnite,type.unite):'indisponible')+' · '+dateAffichee(o.date); };
+  const freqTexte = f => f.ok ? f.nbPromos+' relevé'+(f.nbPromos>1?'s':'')+' sur '+f.nbReleves+' en promo ('+String(f.pourcentage).replace('.',',')+' %)' : 'Fréquence indisponible (aucun relevé).';
+  const leclercCarte=el('section',{class:'carte carte-prix'},el('h3',{text:'Leclerc'}),
+    el('p',{text:leclerc.ok?'Prix habituel : '+formaterPrixNormalise(leclerc.valeur,type.unite)+' · médiane de '+leclerc.nbReleves+' relevés hors promo sur 8 semaines':'Prix habituel : données insuffisantes ('+leclerc.nbReleves+' relevés hors promo sur 8 semaines).'}),
+    el('p',{text:promoTexte(MAGASIN.LECLERC)}),el('p',{text:'Fréquence : '+freqTexte(freqLeclerc)}));
+  const interCarte=el('section',{class:'carte carte-prix'},el('h3',{text:'Intermarché'}),
+    el('p',{text:inter.ok?'Prix habituel : '+formaterPrixNormalise(inter.valeur,type.unite)+' · relevé du '+dateAffichee(inter.date):'Prix habituel : données insuffisantes.'}),
+    el('p',{text:promoTexte(MAGASIN.INTERMARCHE)}),el('p',{text:'Fréquence : '+freqTexte(freqInter)}));
+  const vals=[leclerc.ok?leclerc.valeur:null,inter.ok?inter.valeur:null].filter(Number.isFinite),max=vals.length?Math.max(...vals):0;
+  const barre=(nom,r,magasin)=>{const valeur=r.ok?r.valeur:null,largeur=valeur!=null&&max>0?Math.max(0,Math.min(100,valeur/max*100)):0;return el('div',{class:'barre-comparaison'},el('span',{text:nom}),el('div',{class:'barre-fond',role:'img','aria-label':nom+' : '+(valeur==null?'données insuffisantes':formaterPrixNormalise(valeur,type.unite))},el('div',{class:'barre-remplissage '+(magasin===MAGASIN.LECLERC?'barre-leclerc':'barre-intermarche'),style:'width:'+largeur+'%'})),el('strong',{text:valeur==null?'—':formaterPrixNormalise(valeur,type.unite)}));};
+  const barres=el('section',{class:'carte'},el('h3',{text:'Comparaison des prix habituels'}),el('div',{class:'barres-comparaison'},barre('Leclerc',leclerc,MAGASIN.LECLERC),barre('Intermarché',inter,MAGASIN.INTERMARCHE)));
+  racine.append(el('h2',{text:type.nom}),leclercCarte,interCarte,barres,
+    el('p',{class:'aide note-biais-promo',text:'Attention : si vos relevés sont surtout effectués en promotion, la fréquence affichée peut être biaisée.'}),
+    el('h3',{text:'Historique des relevés'}),vueHistorique(typeId,true));
+  return racine;
+}
+
 async function lireTypeSafe(id){ const r=await listerTypes(); return r.find(t=>t.id===Number(id))||null; }
 
 const ROUTES = {
@@ -640,7 +668,8 @@ const ROUTES = {
   'type-edit': { titre: 'Modifier le type', onglet: 'types', vue: (p) => vueTypeForm(Number(p)) },
   bilan: { titre: 'Bilan', onglet: 'bilan', vue: () => carte('Économies réalisées', 'Cet écran arrive avec l’épic E7.') },
   reglages: { titre: 'Réglages', onglet: null, vue: vueReglages },
-  historique: { titre: 'Historique', onglet: 'types', vue: (p) => vueHistorique(Number(p)) }
+  historique: { titre: 'Historique', onglet: 'types', vue: (p) => vueHistorique(Number(p)) },
+  fiche: { titre: 'Fiche du type', onglet: 'types', vue: (p) => vueFicheType(Number(p)) }
 };
 
 async function afficher() {

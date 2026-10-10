@@ -296,6 +296,9 @@ if (playwright) {
       await page.setViewportSize({width:390,height:844});
       ok('E4.2 fiche type : prix habituels, promos, fréquence, biais, barres et historique intégrés');
       await aller('#/types');
+      await page.waitForSelector('#liste-types .verdict-liste',{timeout:5000});
+      if ((await page.locator('#liste-types .barre-comparaison').count()) < 2) throw new Error('barres comparatives absentes de la liste Types');
+      ok('E4.2 liste Types : verdict-liste et barres comparatives visibles');
       const versionCache = readFileSync(join(racine, 'sw.js'), 'utf8').match(/const CACHE_VERSION = '([^']+)'/)?.[1];
       await aller('#/reglages');await page.waitForFunction((v)=>(document.getElementById('vue')?.textContent || '').includes(v),versionCache,{timeout:5000});await verifierEcran('Réglages');ok('B6 Réglages : version '+versionCache+' visible');
       await page.evaluate(()=>new Promise((resolve,reject)=>{

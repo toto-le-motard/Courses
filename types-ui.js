@@ -1,6 +1,7 @@
 // types-ui.js — écrans du catalogue de types de produits (épic E2 : FR1, FR2).
 import { dbPrete, listerTypes, lireType, ajouterType, modifierType, archiverType, supprimerType, compterReleves } from './db.js';
-import { normaliserNom, nomTypeValide, UNITES, LIBELLE_UNITE } from './domain.js';
+import { normaliserNom, nomTypeValide, UNITES, LIBELLE_UNITE, MAGASIN, VERDICT, prixHabituel, calculerVerdict, formaterPrixNormalise } from './domain.js';
+import { lireObservations, lireReglage } from './db.js';
 
 export function el(tag, attrs = {}, ...enfants) {
   const n = document.createElement(tag);
@@ -62,7 +63,37 @@ export function vueTypes() {
       el('button', { type: 'button', class: 'btn-icone', 'aria-label': 'Actions pour ' + t.nom, onclick: () => menu(t) }, '\u22EF'));
   }
 
-  function dessiner() {
+  async function ligneActive(t) {
+    const observations = await lireObservations(t.id);
+    const aujourdhui = new Date().toISOString().slice(0, 10);
+    const leclerc = prixHabituel(observations, MAGASIN.LECLERC, t.unite, aujourdhui);
+    const inter = prixHabituel(observations, MAGASIN.INTERMARCHE, t.unite, aujourdhui);
+    const seuil = Number(await lireReglage('seuilIndifference', 5));
+    let verdict = VERDICT.INSUFFISANT;
+    if (leclerc.ok && inter.ok) {
+      const formatBase = t.unite === 'unit' ? 1 : 1000;
+      verdict = calculerVerdict({ prixCentimes: Math.round(leclerc.valeur), formatBase, typeUnit: t.unite, magasin: MAGASIN.LECLERC, observations, aujourdhui, seuilPct: seuil }).resultat;
+    }
+    const labelVerdict = verdict === VERDICT.ACHETER_ICI ? 'Leclerc moins cher' : verdict === VERDICT.ATTENDRE ? 'Intermarché moins cher' : verdict === VERDICT.INDIFFERENT ? 'Indifférent' : 'Données insuffisantes';
+    const max = Math.max(0, ...[leclerc, inter].filter(r => r.ok).map(r => r.valeur));
+    const barre = (nom, resultat, magasin) => {
+      const valeur = resultat.ok ? resultat.valeur : null;
+      const largeur = valeur != null && max > 0 ? Math.max(0, Math.min(100, valeur / max * 100)) : 0;
+      return el('div', { class: 'barre-comparaison' }, el('span', { text: nom }),
+        el('div', { class: 'barre-fond', role: 'img', 'aria-label': nom + ' : ' + (valeur == null ? 'données insuffisantes' : formaterPrixNormalise(valeur, t.unite)) },
+          el('div', { class: 'barre-remplissage ' + (magasin === MAGASIN.LECLERC ? 'barre-leclerc' : 'barre-intermarche'), style: 'width:' + largeur + '%' })),
+        el('strong', { text: valeur == null ? '—' : formaterPrixNormalise(valeur, t.unite) }));
+    };
+    return el('div', { class: 'ligne ligne-type-analyse' },
+      el('div', { class: 'ligne-texte' }, el('strong', { text: t.nom }), el('span', { class: 'puce', text: LIBELLE_UNITE[t.unite] }),
+        el('a', { href: '#/fiche/' + t.id, class: 'btn btn-secondaire', text: 'Fiche' }),
+        el('a', { href: '#/historique/' + t.id, class: 'btn btn-secondaire', text: 'Historique' })),
+      el('span', { class: 'verdict-liste', 'data-verdict': verdict, text: labelVerdict }),
+      el('div', { class: 'barres-comparaison' }, barre('Leclerc', leclerc, MAGASIN.LECLERC), barre('Intermarché', inter, MAGASIN.INTERMARCHE)),
+      el('button', { type: 'button', class: 'btn-icone', 'aria-label': 'Actions pour ' + t.nom, onclick: () => menu(t) }, '\u22EF'));
+  }
+
+  async function dessiner() {
     const q = normaliserNom(recherche.value);
     const actifs = types.filter((t) => !t.archive && t.nomNormalise.includes(q)).sort(parNom);
     const archives_ = types.filter((t) => t.archive && t.nomNormalise.includes(q)).sort(parNom);
@@ -74,7 +105,7 @@ export function vueTypes() {
     } else if (!actifs.length) {
       liste.append(el('p', { class: 'aide', text: q ? 'Aucun type ne correspond à cette recherche.' : 'Tous vos types sont archivés.' }));
     } else {
-      liste.append(...actifs.map(ligne));
+      liste.append(...await Promise.all(actifs.map(ligneActive)));
     }
     const ouvert = archives.open;
     archives.replaceChildren(el('summary', { text: 'Archivés (' + archives_.length + ')' }), ...archives_.map(ligne));
@@ -85,7 +116,7 @@ export function vueTypes() {
   async function charger() {
     await dbPrete;
     types = await listerTypes();
-    if (racine.isConnected) dessiner();
+    if (racine.isConnected) await dessiner();
   }
 
   async function basculerArchive(t, archive) { await archiverType(t.id, archive); await charger(); }
@@ -114,7 +145,7 @@ export function vueTypes() {
     });
   }
 
-  recherche.addEventListener('input', dessiner);
+  recherche.addEventListener('input', () => { void dessiner().catch(() => liste.replaceChildren(el('p', { class: 'aide erreur', text: 'Analyse des prix indisponible.' }))); });
   charger().catch(() => { liste.replaceChildren(el('p', { class: 'aide erreur', text: 'Base de données indisponible.' })); });
   return racine;
 }
