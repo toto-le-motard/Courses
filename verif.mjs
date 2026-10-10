@@ -412,6 +412,34 @@ if (playwright) {
       await page.click('dialog.dialog-scan button:has-text("Rechercher")');
       await page.waitForFunction(()=>document.querySelector('#champ-type')?.value==='ZZ mensuel test',null,{timeout:5000});
       ok('E6.3 caméra refusée : saisie manuelle retrouve le code connu');
+
+      // ---- Épic E7 : achat en un geste et quantité par défaut ----
+      etapeParcours = 'E7.1 achat en un geste';
+      await aller('#/magasin');
+      await page.fill('#champ-type','ZZ mensuel test');
+      await page.click('.suggestion-type[data-id="9992"]');
+      await page.fill('#champ-prix','1,25');
+      await page.fill('#champ-format','500');
+      await page.selectOption('#champ-unite','g');
+      await page.locator('input[type="date"]').fill('2031-01-01');
+      await page.waitForSelector('#achat-actions',{timeout:5000});
+      if(await page.locator('#quantite-achat').inputValue()!=='1') throw new Error('quantité initiale différente de 1');
+      await page.click('#btn-achat-plus');
+      if(await page.locator('#quantite-achat').inputValue()!=='2') throw new Error('incrément de quantité incorrect');
+      await page.click('#btn-achat-confirme');
+      await page.waitForFunction(()=>window.__achatE71Termine===true,null,{timeout:8000});
+      const achatE71 = await page.evaluate(()=>new Promise((resolve,reject)=>{
+        const rq=indexedDB.open('appli-courses');
+        rq.onsuccess=()=>{const db=rq.result,tx=db.transaction(['Purchase','Observation'],'readonly');
+          const achats=tx.objectStore('Purchase').getAll(),releves=tx.objectStore('Observation').getAll();
+          tx.oncomplete=()=>resolve({achats:achats.result,releves:releves.result});
+          tx.onerror=()=>reject(tx.error);
+        };
+        rq.onerror=()=>reject(rq.error);
+      }));
+      const achatEnregistre=achatE71.achats.find(x=>x.type===9992&&x.date==='2031-01-01'&&x.quantite===2&&x.achete===1);
+      if(!achatEnregistre||!achatE71.releves.some(x=>x.id===achatEnregistre.observation&&x.type===9992&&x.date==='2031-01-01')) throw new Error('achat non enregistré avec son relevé lié');
+      ok('E7.1 achat enregistré en un geste, quantité 2 et relevé lié');
       const versionCache = readFileSync(join(racine, 'sw.js'), 'utf8').match(/const CACHE_VERSION = '([^']+)'/)?.[1];
       await aller('#/reglages');await page.waitForFunction((v)=>(document.getElementById('vue')?.textContent || '').includes(v),versionCache,{timeout:5000});await verifierEcran('Réglages');ok('B6 Réglages : version '+versionCache+' visible');
       await page.evaluate(()=>new Promise((resolve,reject)=>{
