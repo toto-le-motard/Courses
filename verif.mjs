@@ -416,17 +416,17 @@ if (playwright) {
       // ---- Épic E7 : achat en un geste et quantité par défaut ----
       etapeParcours = 'E7.1 achat en un geste';
       await aller('#/magasin');
-      await page.fill('#champ-type','');
-      await page.fill('#champ-type','ZZ mensuel test');
-      await page.click('.suggestion-type[data-id="9992"]');
-      await page.fill('#champ-prix','5,00');
+      if(await page.locator('#champ-type').inputValue()!=='ZZ mensuel test') throw new Error('le type de test n’est plus sélectionné après le scan');
+      await page.fill('#champ-prix','6,00');
       await page.fill('#champ-format','500');
       await page.selectOption('#champ-unite','g');
       await page.locator('input[type="date"]').evaluate(e=>{e.value='2031-01-01';e.dispatchEvent(new Event('change',{bubbles:true}));});
       await page.waitForSelector('#achat-actions',{timeout:5000});
       if(await page.locator('#quantite-achat').inputValue()!=='1') throw new Error('quantité initiale différente de 1');
+      etapeParcours = 'E7.1 stepper quantité';
       await page.click('#btn-achat-plus');
       if(await page.locator('#quantite-achat').inputValue()!=='2') throw new Error('incrément de quantité incorrect');
+      etapeParcours = 'E7.1 clic J’achète';
       await page.click('#btn-achat-confirme');
       await page.waitForFunction(()=>/Achat enregistré/.test(document.querySelector('.message-succes')?.textContent||''),null,{timeout:8000});
       const achatE71 = await page.evaluate(()=>new Promise((resolve,reject)=>{
