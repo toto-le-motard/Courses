@@ -312,10 +312,10 @@ if (playwright) {
       await page.reload(); await page.waitForSelector('.bandeau-rappel-export',{timeout:5000});
       ok('E8.3 rappel fermé réapparaît au lancement suivant');
       await aller('#/reglages');
-      if (!(await page.locator('#seuil-indifference').count())) throw new Error('curseur de seuil absent');
+      await page.waitForSelector('#seuil-indifference',{timeout:5000});
       await page.locator('#seuil-indifference').evaluate(el=>{el.value='8';el.dispatchEvent(new Event('change',{bubbles:true}))});
       await page.waitForFunction(()=>/8\s*%/.test(document.querySelector('#libelle-seuil-indifference')?.textContent||''),null,{timeout:5000});
-      await aller('#/magasin'); await aller('#/reglages');
+      await aller('#/magasin'); await aller('#/reglages'); await page.waitForSelector('#seuil-indifference',{timeout:5000});
       if (await page.locator('#seuil-indifference').inputValue()!=='8') throw new Error('seuil non mémorisé');
       if (await page.locator('button:has-text("Installer l’appli")').count()) throw new Error('bouton installation visible sans événement');
       await page.evaluate(()=>{const e=new Event('beforeinstallprompt',{cancelable:true});e.prompt=async()=>{};e.userChoice=Promise.resolve({outcome:'dismissed'});window.dispatchEvent(e)});
