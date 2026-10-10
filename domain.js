@@ -237,5 +237,14 @@ export function calculerVerdict({ prixCentimes, formatBase, typeUnit, magasin, o
   return { ...base, resultat, ecart, seuil, prixJourNormalise: jour.centimesParUnite, habituelAutre: habituel, differenceUniteCentimes: arrondirCentimes(diffUnite), differenceFormatCentimes: arrondirCentimes(diffFormat) };
 }
 
-// FR12 / E4.1 — fonction typée ajoutée avant implémentation pour le test rouge.
-export function frequencePromos(observations, magasin) { return { ok: false, raison: 'non-implemente', nbPromos: 0, nbReleves: 0, pourcentage: null }; }
+// FR12 / E4.1 — fréquence des relevés promo par type et par magasin.
+export function frequencePromos(observations, magasin) {
+  if (!Array.isArray(observations)) return { ok: false, raison: 'donnees-invalides', nbPromos: 0, nbReleves: 0, pourcentage: null };
+  if (magasin !== MAGASIN.LECLERC && magasin !== MAGASIN.INTERMARCHE) {
+    return { ok: false, raison: 'magasin-inconnu', nbPromos: 0, nbReleves: 0, pourcentage: null };
+  }
+  const retenus = observations.filter(o => o && o.magasin === magasin);
+  if (!retenus.length) return { ok: false, raison: 'aucun-releve', nbPromos: 0, nbReleves: 0, pourcentage: null };
+  const nbPromos = retenus.filter(o => o.promo === true || o.promo === 1).length;
+  return { ok: true, nbPromos, nbReleves: retenus.length, pourcentage: Math.round(nbPromos * 1000 / retenus.length) / 10 };
+}
