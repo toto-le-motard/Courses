@@ -204,7 +204,25 @@ if (playwright) {
       if(!apres500.dock||apres500.type.top<0||apres500.prix.top<0||apres500.prix.bottom>apres500.dock.top||apres500.format.bottom>apres500.dock.top||apres500.dock.top<0||apres500.dock.bottom>apres500.tabs.top||apres500.dock.bottom>500)throw new Error('champ prix ou dock masqué à 390x500 : '+JSON.stringify(apres500));
       await page.setViewportSize({width:390,height:844});await page.evaluate(()=>window.scrollTo(0,0));await page.waitForTimeout(50);
       ok('3-8 dock fixe : verdict et Enregistrer visibles sans chevauchement à 390x844 et 390x500');const observationsAvantSauvegarde=await page.evaluate(()=>new Promise(res=>{const q=indexedDB.open('appli-courses');q.onsuccess=()=>{const db=q.result;const r=db.transaction('Observation').objectStore('Observation').count();r.onsuccess=()=>{db.close();res(r.result);};};}));
-      await page.click('#btn-enregistrer');await page.waitForSelector('#bandeau-annulation',{timeout:3000});await page.waitForFunction(()=>document.activeElement?.id==='champ-type',null,{timeout:3000});
+      await page.click('#btn-enregistrer');await page.waitForSelector('#bandeau-annulation',{timeout:3000});await page.waitForFunction(()=>document.activeElement===document.body,null,{timeout:3000});
+
+      // UX 3.1 / story 3.8 : simulation du clavier, car Playwright ne l'ouvre pas réellement.
+      await page.evaluate(()=>window.__forcerModeSaisie?.(true));
+      const mesurerModeSaisie=async()=>page.evaluate(()=>{const r=s=>{const e=document.querySelector(s);if(!e)return null;const b=e.getBoundingClientRect();return {top:Math.round(b.top),bottom:Math.round(b.bottom),height:Math.round(b.height)};};return {titre:r('.topbar'),prix:r('#champ-prix'),type:r('#champ-type'),format:r('#champ-format'),dock:r('#dock-magasin'),tabs:r('.tabs'),mode:document.body.classList.contains('mode-saisie'),verdict:!!document.querySelector('#carte-verdict:not([hidden])')};});
+      await page.locator('#champ-prix').focus();await page.waitForTimeout(80);
+      let clavier=await mesurerModeSaisie();info('MESURES MODE SAISIE focus Prix 390x500 '+JSON.stringify(clavier));
+      if(!clavier.mode||clavier.tabs&&clavier.tabs.height>0||!clavier.titre||clavier.titre.height>44||!clavier.dock||clavier.dock.height>130||!clavier.prix||clavier.prix.top<clavier.titre.bottom||clavier.prix.bottom>clavier.dock.top)throw new Error('mode saisie / champ Prix : '+JSON.stringify(clavier));
+      await page.locator('#champ-type').focus();await page.waitForTimeout(80);clavier=await mesurerModeSaisie();info('MESURES MODE SAISIE focus Type 390x500 '+JSON.stringify(clavier));
+      if(!clavier.type||clavier.type.top<clavier.titre.bottom||clavier.type.bottom>clavier.dock.top)throw new Error('champ Type hors zone en mode saisie : '+JSON.stringify(clavier));
+      if(await page.getAttribute('#champ-type','enterkeyhint')!=='next'||await page.getAttribute('#champ-prix','enterkeyhint')!=='next'||await page.getAttribute('#champ-format','enterkeyhint')!=='done')throw new Error('enterkeyhint incorrect');
+      await page.locator('#champ-format').focus();await page.waitForTimeout(80);clavier=await mesurerModeSaisie();info('MESURES MODE SAISIE focus Format 390x500 '+JSON.stringify(clavier));
+      if(!clavier.format||clavier.format.top<clavier.titre.bottom||clavier.format.bottom>clavier.dock.top)throw new Error('champ Format hors zone en mode saisie : '+JSON.stringify(clavier));
+      await page.locator('#champ-format').press('Enter');await page.waitForFunction(()=>document.activeElement===document.body,null,{timeout:2000});
+      await page.evaluate(()=>window.__forcerModeSaisie?.(false));await page.setViewportSize({width:390,height:844});await page.waitForTimeout(80);
+      clavier=await mesurerModeSaisie();info('MESURES MODE NORMAL 390x844 '+JSON.stringify(clavier));
+      if(clavier.mode||!clavier.tabs||clavier.tabs.height===0||!clavier.dock||clavier.dock.bottom>clavier.tabs.top)throw new Error('régression mode normal 390x844 : '+JSON.stringify(clavier));
+      ok('UX 3.1 / story 3.8 mode saisie : Type, Prix et Format visibles, dock compact, onglets masqués');
+
       await choisirType('Café moulu');if(await page.inputValue('#champ-format')!=='500'||await page.inputValue('#champ-unite')!=='g')throw new Error('pré-remplissage 500 g incorrect');ok('B5 Magasin kg');
       await page.setViewportSize({width:390,height:500});await page.waitForTimeout(80);
       const annulation500=await page.evaluate(()=>{const r=s=>{const e=document.querySelector(s);if(!e)return null;const b=e.getBoundingClientRect();return {top:Math.round(b.top),bottom:Math.round(b.bottom)};};return {annulation:r('#bandeau-annulation'),dock:r('#dock-magasin'),tabs:r('.tabs')};});
@@ -250,7 +268,7 @@ if (playwright) {
       await page.waitForSelector('dialog:has-text("définitive")');
       await page.click('dialog button:has-text("Supprimer")');      await page.waitForFunction(() => !/Lessive liquide/.test((document.getElementById('vue')?.textContent || '')), null, { timeout: 5000 });
       ok('E2 suppression de Lessive liquide : le type supprimé disparaît sans affecter les autres');
-      await aller('#/reglages');await page.waitForFunction(()=>/v36/.test((document.getElementById('vue')?.textContent || '')),null,{timeout:5000});await verifierEcran('Réglages');ok('B6 Réglages : version v36 visible');
+      await aller('#/reglages');await page.waitForFunction(()=>/v40/.test((document.getElementById('vue')?.textContent || '')),null,{timeout:5000});await verifierEcran('Réglages');ok('B6 Réglages : version v36 visible');
       // service worker actif et page contrôlée, puis test hors ligne
       await page.evaluate(() => navigator.serviceWorker.ready);
       if (!(await page.evaluate(() => !!navigator.serviceWorker.controller))) { await page.reload(); await page.waitForSelector('#vue .carte'); }
