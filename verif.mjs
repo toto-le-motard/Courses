@@ -282,12 +282,34 @@ if (playwright) {
       ok('E2 suppression de Lessive liquide : le type supprimé disparaît sans affecter les autres');
       const versionCache = readFileSync(join(racine, 'sw.js'), 'utf8').match(/const CACHE_VERSION = '([^']+)'/)?.[1];
       await aller('#/reglages');await page.waitForFunction((v)=>(document.getElementById('vue')?.textContent || '').includes(v),versionCache,{timeout:5000});await verifierEcran('Réglages');ok('B6 Réglages : version '+versionCache+' visible');
+      await page.evaluate(()=>new Promise((resolve,reject)=>{
+        const rq=indexedDB.open('appli-courses');
+        rq.onsuccess=()=>{
+          const db=rq.result, tx=db.transaction(['ProductType','Article','Observation','Purchase','Settings'],'readwrite');
+          tx.objectStore('ProductType').put({id:9001,nom:'Sauvegarde test',nomNormalise:'sauvegarde test',unite:'kg',marque:'',nomArticle:'',archive:0});
+          tx.objectStore('Article').put({codeBarres:'9990001112223',type:9001,marque:'Test',nom:'Produit sauvegarde',format:500});
+          tx.objectStore('Observation').put({id:9001,type:9001,magasin:'leclerc',date:'2026-10-01',prixCentimes:250,format:500,promo:1});
+          tx.objectStore('Observation').put({id:9002,type:9001,magasin:'intermarche',date:'2026-10-02',prixCentimes:300,format:500,promo:0});
+          tx.objectStore('Purchase').put({id:9001,type:9001,observation:9001,magasin:'leclerc',date:'2026-10-01',achete:1,quantite:2,prixPayeCentimes:250,format:500,prixComparaisonCentimes:300,prixHabituelMemeMagasinCentimes:350});
+          tx.objectStore('Settings').put({cle:'e8Fixture',valeur:'conserver'});
+          tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error);
+        };
+        rq.onerror=()=>reject(rq.error);
+      }));
+      const snapshotAvantExport = await page.evaluate(()=>new Promise((resolve,reject)=>{
+        const rq=indexedDB.open('appli-courses');rq.onsuccess=()=>{const db=rq.result;const tx=db.transaction(['ProductType','Article','Observation','Purchase','Settings'],'readonly');const noms=['ProductType','Article','Observation','Purchase','Settings'];Promise.all(noms.map(n=>new Promise((res,rej)=>{const q=tx.objectStore(n).getAll();q.onsuccess=()=>res(q.result);q.onerror=()=>rej(q.error)}))).then(v=>resolve({types:v[0],articles:v[1],releves:v[2],achats:v[3],reglages:v[4]}),reject)};rq.onerror=()=>reject(rq.error);
+      }));
       const [telechargement] = await Promise.all([page.waitForEvent('download'),page.click('button:has-text("Exporter une sauvegarde")')]);
       const cheminSauvegarde = await telechargement.path();
       if (!cheminSauvegarde) throw new Error('fichier de sauvegarde non disponible');
       const sauvegardeJson = JSON.parse(readFileSync(cheminSauvegarde,'utf8'));
       if (sauvegardeJson.schemaVersion !== 1 || !['types','articles','releves','achats','reglages'].every(k=>Array.isArray(sauvegardeJson[k]))) throw new Error('structure de sauvegarde incorrecte');
       ok('E8.1 export JSON téléchargé et collections présentes');
+      for (const cle of ['types','articles','releves','achats','reglages']) {
+        if (JSON.stringify(sauvegardeJson[cle])!==JSON.stringify(snapshotAvantExport[cle])) throw new Error('aller-retour export différent pour '+cle);
+      }
+      if (!sauvegardeJson.releves.some(o=>o.promo===1) || !sauvegardeJson.releves.some(o=>o.promo===0) || !sauvegardeJson.achats.some(a=>a.id===9001) || !sauvegardeJson.articles.some(a=>a.codeBarres==='9990001112223') || !sauvegardeJson.reglages.some(r=>r.cle==='e8Fixture')) throw new Error('export incomplet : promo/hors promo, achat, code-barres ou réglage absent');
+      ok('E8.1 aller-retour complet : types, relevés promo/hors promo, achats, codes-barres et réglages');
       const avantImport = await page.evaluate(() => new Promise((resolve,reject)=>{const rq=indexedDB.open('appli-courses');rq.onsuccess=()=>{const db=rq.result;const tx=db.transaction(['ProductType','Observation','Purchase','Article','Settings'],'readonly');const r=Promise.all(['ProductType','Observation','Purchase','Article','Settings'].map(n=>new Promise((res,rej)=>{const q=tx.objectStore(n).count();q.onsuccess=()=>res(q.result);q.onerror=()=>rej(q.error)})));r.then(resolve,reject);};rq.onerror=()=>reject(rq.error)}));
       if (!await page.locator('button:has-text("Importer une sauvegarde")').count()) throw new Error('bouton import absent');
       await page.locator('#fichier-sauvegarde').setInputFiles({name:'invalide.json',mimeType:'application/json',buffer:Buffer.from('{"schemaVersion":99}')});
@@ -300,6 +322,11 @@ if (playwright) {
       await page.click('dialog button:has-text("Remplacer toutes les données")');
       await page.waitForFunction(()=>/restaurée|importée/i.test(document.querySelector('.message-sauvegarde')?.textContent||''),null,{timeout:5000});
       ok('E8.2 import valide confirmé et terminé');
+      const snapshotApresImport = await page.evaluate(()=>new Promise((resolve,reject)=>{
+        const rq=indexedDB.open('appli-courses');rq.onsuccess=()=>{const db=rq.result;const tx=db.transaction(['ProductType','Article','Observation','Purchase','Settings'],'readonly');const noms=['ProductType','Article','Observation','Purchase','Settings'];Promise.all(noms.map(n=>new Promise((res,rej)=>{const q=tx.objectStore(n).getAll();q.onsuccess=()=>res(q.result);q.onerror=()=>rej(q.error)}))).then(v=>resolve({types:v[0],articles:v[1],releves:v[2],achats:v[3],reglages:v[4]}),reject)};rq.onerror=()=>reject(rq.error);
+      }));
+      for (const cle of ['types','articles','releves','achats','reglages']) if(JSON.stringify(snapshotApresImport[cle])!==JSON.stringify(snapshotAvantExport[cle])) throw new Error('import différent des données exportées pour '+cle);
+      ok('E8.2 import restaure intégralement les cinq collections');
       const dateRetard = new Date(Date.now()-31*86400000).toISOString().slice(0,10);
       await page.evaluate(date=>new Promise((resolve,reject)=>{const rq=indexedDB.open('appli-courses');rq.onsuccess=()=>{const db=rq.result;const tx=db.transaction('Settings','readwrite');tx.objectStore('Settings').put({cle:'dernierExport',valeur:date});tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error)};rq.onerror=()=>reject(rq.error)}),dateRetard);
       await aller('#/magasin');

@@ -350,11 +350,23 @@ export async function modifierReleve(id, champs) {
 export const supprimerReleve = (id) => supprimer('Observation', id);
 
 // FR20 / E8.1 — lecture cohérente des collections pour l'export JSON.
-export async function exporterCollections() {
-  const [types, articles, releves, achats, reglages] = await Promise.all([
-    toutLire('ProductType'), toutLire('Article'), toutLire('Observation'), toutLire('Purchase'), toutLire('Settings')
-  ]);
-  return { types, articles, releves, achats, reglages };
+export function exporterCollections() {
+  return new Promise((resolve, reject) => {
+    const resultat = {};
+    const correspondances = [
+      ['ProductType', 'types'], ['Article', 'articles'], ['Observation', 'releves'],
+      ['Purchase', 'achats'], ['Settings', 'reglages']
+    ];
+    const transaction = _db.transaction(correspondances.map(([store]) => store), 'readonly');
+    for (const [store, cle] of correspondances) {
+      const requeteLecture = transaction.objectStore(store).getAll();
+      requeteLecture.onsuccess = () => { resultat[cle] = requeteLecture.result; };
+      requeteLecture.onerror = () => { try { transaction.abort(); } catch {} };
+    }
+    transaction.oncomplete = () => resolve(resultat);
+    transaction.onerror = () => reject(transaction.error || new Error('Lecture de la sauvegarde impossible.'));
+    transaction.onabort = () => reject(transaction.error || new Error('Lecture de la sauvegarde annulée.'));
+  });
 }
 
 
