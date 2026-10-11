@@ -502,6 +502,8 @@ function vueMagasin() {
     function actualiserBoutonCompleter() {
       const visible = Boolean(navigator.onLine && champCode.value.trim());
       boutonCompleter.hidden = !visible;
+      // Les règles d’affichage des boutons peuvent supplanter le style natif [hidden] : imposer aussi display.
+      boutonCompleter.style.display = visible ? '' : 'none';
       boutonCompleter.disabled = !visible;
     }
     const champCode = el('input', { id: 'scan-code-manuel', class: 'champ', inputmode: 'numeric', autocomplete: 'off', placeholder: 'EAN-13 ou autre code', oninput: actualiserBoutonCompleter });
