@@ -439,6 +439,7 @@ if (playwright) {
       await dialoguePrixAchat.getByRole('button',{name:'Confirmer'}).click();
       if(await page.locator('dialog.dialog-prix-achat').count()) throw new Error('dialogue prix payé non fermé après confirmation');
       etapeParcours = 'E7.1 clic J’achète';
+      if(await page.locator('#champ-prix').inputValue()!=='6,00') throw new Error('prix en rayon avant achat inattendu: '+await page.locator('#champ-prix').inputValue());
       await page.click('#btn-achat-confirme');
       await page.waitForFunction(()=>/Achat enregistré/.test(document.querySelector('.message-succes')?.textContent||'')||Array.from(document.querySelectorAll('dialog')).some(d=>d.open&&/Prix très différent/.test(d.textContent||'')),null,{timeout:8000});
       const confirmationPrix=page.locator('dialog:visible').filter({hasText:'Prix très différent'});
