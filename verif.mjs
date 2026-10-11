@@ -681,7 +681,10 @@ if (playwright) {
       if (!/Exportez régulièrement une sauvegarde/.test(avertissementStockage)) throw new Error('avertissement de refus du stockage persistant incomplet');
       ok('E8.3 refus du stockage persistant : avertissement visible dans Réglages');
       // Relecture adverse : chaque écran principal est ouvert aux deux hauteurs mobiles.
-       // Rejouer les écrans et dialogues qui suivent sans réseau, après chargement initial des ressources locales.
+       // Le cache doit contrôler la page avant de couper le réseau pour les parcours de navigation.
+       await page.evaluate(() => navigator.serviceWorker.ready);
+       if (!(await page.evaluate(() => !!navigator.serviceWorker.controller))) { await page.reload(); await page.waitForSelector('#vue .carte', { timeout: 10000 }); }
+       if (!(await page.evaluate(() => !!navigator.serviceWorker.controller))) throw new Error('service worker absent avant le parcours hors ligne');
        await ctx.setOffline(true);
        const routesViewport=[
          ['#/magasin','Magasin'],['#/types','Types'],['#/liste','Liste'],['#/bilan','Bilan'],
