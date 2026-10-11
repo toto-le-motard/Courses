@@ -314,8 +314,8 @@ svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width:
   display:grid;
   width:100%;
   min-width:0;
-  grid-template-columns:minmax(0, 1fr) minmax(0, 1fr);
-  grid-template-areas:"quantite acheter" "prix prix" "non non";
+  grid-template-columns:minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-areas:"quantite acheter non" "prix prix prix";
   align-items:stretch;
   gap:6px;
 }
