@@ -499,21 +499,78 @@ function vueMagasin() {
 
 
   async function ouvrirScanner() {
+    function actualiserBoutonCompleter() {
+      const visible = Boolean(navigator.onLine && champCode.value.trim());
+      boutonCompleter.hidden = !visible;
+      boutonCompleter.disabled = !visible;
+    }
+    const champCode = el('input', { id: 'scan-code-manuel', class: 'champ', inputmode: 'numeric', autocomplete: 'off', placeholder: 'EAN-13 ou autre code', oninput: actualiserBoutonCompleter });
+    const boutonCompleter = el('button', { type: 'button', class: 'btn btn-secondaire', text: 'Compléter', hidden: true, disabled: true, onclick: async () => {
+      const code = String(champCode.value || '').trim();
+      const message = dialogue.querySelector('#scan-message');
+      if (!navigator.onLine) { actualiserBoutonCompleter(); message.textContent = 'Connexion indisponible. Vous pouvez saisir ou rattacher le code manuellement.'; message.hidden = false; return; }
+      if (!code) { actualiserBoutonCompleter(); return; }
+      boutonCompleter.disabled = true;
+      message.hidden = true;
+      try {
+        // Seul le code-barres est transmis. Aucun compte, historique ou réglage n'est envoyé.
+        const reponse = await fetch('https://world.openfoodfacts.org/api/v2/product/' + encodeURIComponent(code) + '.json');
+        if (!reponse.ok) throw new Error('Service indisponible');
+        const donnees = await reponse.json();
+        if (donnees?.status !== 1 || !donnees.product) {
+          message.textContent = 'Aucune fiche trouvée. Vous pouvez rattacher le code manuellement.';
+          message.hidden = false;
+          return;
+        }
+        const produit = donnees.product;
+        const articleActuel = await lire('Article', code);
+        const nom = String(produit.product_name || '').trim() || articleActuel?.nom || '';
+        const marque = String(produit.brands || '').split(',')[0].trim() || articleActuel?.marque || '';
+        const quantiteTexte = String(produit.product_quantity ?? '').trim();
+        const correspondanceQuantite = quantiteTexte.match(/(\d+(?:[.,]\d+)?)/);
+        let unite = String(produit.product_quantity_unit || '').trim().toLowerCase();
+        if (!unite) unite = (quantiteTexte.match(/(?:^|\s)(kg|g|ml|l|units?|unité|unités|pcs|pieces?)\b/i) || [])[1]?.toLowerCase() || '';
+        const quantite = correspondanceQuantite ? Number(correspondanceQuantite[1].replace(',', '.')) : NaN;
+        if (['unité', 'unités', 'units', 'unit', 'piece', 'pieces', 'pcs'].includes(unite)) unite = 'unit';
+        const facteur = unite === 'kg' || unite === 'l' ? 1000 : ['g', 'ml', 'unit'].includes(unite) ? 1 : NaN;
+        const formatOff = Number.isFinite(quantite) && quantite > 0 && Number.isFinite(facteur) ? Math.round(quantite * facteur) : null;
+        const articlePrefill = {
+          ...(articleActuel || {}),
+          nom,
+          marque,
+          format: articleActuel?.format || formatOff || undefined
+        };
+        dialogue.close();
+        await ouvrirRattachement(code, articlePrefill);
+      } catch {
+        message.textContent = 'Open Food Facts est indisponible. Vous pouvez rattacher le code manuellement.';
+        message.hidden = false;
+      } finally {
+        actualiserBoutonCompleter();
+      }
+    }});
     const dialogue = el('dialog', { class: 'feuille dialog-scan' },
       el('h2', { text: 'Scanner un code-barres' }),
       el('p', { text: 'Placez le code dans le cadre ou saisissez-le manuellement.' }),
       el('video', { id: 'scan-video', autoplay: true, playsinline: true, 'aria-label': 'Aperçu caméra' }),
       el('label', { class: 'etiquette', for: 'scan-code-manuel', text: 'Code-barres' }),
-      el('input', { id: 'scan-code-manuel', class: 'champ', inputmode: 'numeric', autocomplete: 'off', placeholder: 'EAN-13 ou autre code' }),
+      champCode,
       el('p', { id: 'scan-message', class: 'erreur', role: 'status', hidden: true }),
       el('div', { class: 'feuille-actions' },
-        el('button', { type: 'button', class: 'btn btn-primaire', text: 'Rechercher', onclick: async () => traiterCode(dialogue.querySelector('#scan-code-manuel').value) }),
+        el('button', { type: 'button', class: 'btn btn-primaire', text: 'Rechercher', onclick: async () => traiterCode(champCode.value) }),
+        boutonCompleter,
         el('button', { type: 'button', class: 'btn btn-secondaire', text: 'Fermer', onclick: () => dialogue.close() })
       )
     );
     let stream = null;
     let actif = true;
-    const fermer = () => { actif = false; stream?.getTracks?.().forEach(t => t.stop()); dialogue.remove(); };
+    const fermer = () => {
+      actif = false;
+      stream?.getTracks?.().forEach(t => t.stop());
+      window.removeEventListener('online', actualiserBoutonCompleter);
+      window.removeEventListener('offline', actualiserBoutonCompleter);
+      dialogue.remove();
+    };
     dialogue.addEventListener('close', fermer, { once: true });
     async function traiterCode(valeur) {
       const code = String(valeur || '').trim();
@@ -539,6 +596,10 @@ function vueMagasin() {
         const m=dialogue.querySelector('#scan-message'); m.textContent='Lecture impossible. Réessayez ou saisissez le code.'; m.hidden=false;
       }
     }
+    champCode.addEventListener('input', actualiserBoutonCompleter);
+    window.addEventListener('online', actualiserBoutonCompleter);
+    window.addEventListener('offline', actualiserBoutonCompleter);
+    actualiserBoutonCompleter();
     if (!dialogue.isConnected) document.body.append(dialogue);
     dialogue.showModal();
     try {
@@ -566,7 +627,6 @@ function vueMagasin() {
       }
     }
   }
-
   async function ouvrirRattachement(code, articleExistant) {
     const dialogue = el('dialog', { class: 'feuille dialog-rattachement dialog-rattacher' },
       el('h2', { text: 'Rattacher ce code' }),
