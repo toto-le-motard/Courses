@@ -545,6 +545,12 @@ if (playwright) {
       await page.evaluate(()=>new Promise((resolve,reject)=>{const rq=indexedDB.open('appli-courses');rq.onsuccess=()=>{const db=rq.result,tx=db.transaction('Purchase','readwrite'),s=tx.objectStore('Purchase');for(const id of [9901,9902,9903,9904])s.delete(id);tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error)};rq.onerror=()=>reject(rq.error)}));
       await aller('#/bilan');
       await page.waitForFunction(()=>document.querySelector('.bilan-economies')?.textContent.includes('Aucun achat'),null,{timeout:5000});
+      await page.setViewportSize({width:390,height:500});
+      await verifierEcran('Bilan E7 390x500');
+      const mesuresBilanE7=await page.evaluate(()=>{const box=s=>{const e=document.querySelector(s);if(!e)return null;const r=e.getBoundingClientRect();return {x:Math.round(r.x),y:Math.round(r.y),width:Math.round(r.width),height:Math.round(r.height),bottom:Math.round(r.bottom),right:Math.round(r.right)}};return {titre:box('#titre-ecran'),contenu:box('.bilan-economies'),onglets:box('.tabs'),largeurDocument:document.documentElement.scrollWidth};});
+      if(!mesuresBilanE7.titre||!mesuresBilanE7.contenu||!mesuresBilanE7.onglets||mesuresBilanE7.contenu.height<=0||mesuresBilanE7.onglets.bottom>500||mesuresBilanE7.largeurDocument>390||mesuresBilanE7.titre.bottom>mesuresBilanE7.contenu.y+2)throw new Error('E7 Bilan 390x500 : géométrie incorrecte '+JSON.stringify(mesuresBilanE7));
+      ok('E7 Bilan 390x500 : titre/contenu/onglets mesurés '+JSON.stringify(mesuresBilanE7));
+      await page.setViewportSize({width:390,height:844});
       ok('E7.5 Bilan : total négatif, cible 100 €, gains promo, exclusions, navigation et état vide');
       // Relecture adverse E7 : supprimer un relevé lié ne doit ni effacer ni laisser pointer l’achat vers rien.
       etapeParcours = 'E7 suppression relevé lié à achat';
