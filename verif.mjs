@@ -441,15 +441,21 @@ if (playwright) {
       if(!codeRattache||codeRattache.type!==9992||codeRattache.format!==500) throw new Error('code inconnu non rattaché au type et format choisis');
       ok('E6.2 code inconnu rattaché avec type et format');
       await page.evaluate(()=>{Object.defineProperty(navigator.mediaDevices,'getUserMedia',{configurable:true,value:()=>Promise.reject(Object.assign(new Error('refus caméra'),{name:'NotAllowedError'}))})});
+      await page.setViewportSize({width:390,height:500});
+      await page.evaluate(()=>window.__forcerModeSaisie(true));
       await page.click('#btn-scanner');
       await page.waitForSelector('dialog.dialog-scan[open]',{timeout:5000});
       await page.waitForSelector('#scan-code-manuel',{timeout:5000});
       await page.fill('#scan-code-manuel','1234567890123');
+      const geomScanner = await page.evaluate(()=>{const i=document.querySelector('#scan-code-manuel'),l=document.querySelector('label[for="scan-code-manuel"]'),d=i?.closest('dialog'),r=i?.getBoundingClientRect(),rl=l?.getBoundingClientRect(),rd=d?.getBoundingClientRect();return {mode:document.body.classList.contains('mode-saisie'),tabs:document.querySelector('.tabs')?.getBoundingClientRect().height||0,inputTop:r?.top,inputBottom:r?.bottom,labelTop:rl?.top,labelBottom:rl?.bottom,dialogTop:rd?.top,dialogBottom:rd?.bottom};});
+      if(!geomScanner.mode||geomScanner.tabs!==0||geomScanner.inputTop<geomScanner.dialogTop||geomScanner.inputBottom>geomScanner.dialogBottom||geomScanner.labelTop<geomScanner.dialogTop||geomScanner.labelBottom>geomScanner.dialogBottom) throw new Error('E6.3 : champ manuel non visible en mode saisie '+JSON.stringify(geomScanner));
       const indiceClavierScanner = await page.locator('#scan-code-manuel').evaluate(el => el.enterKeyHint);
       if(indiceClavierScanner!=='search') throw new Error('E6.3 : enterkeyhint search absent du champ de code-barres');
       await page.locator('#scan-code-manuel').press('Enter');
       await page.waitForFunction(()=>document.querySelector('#champ-type')?.value==='ZZ mensuel test',null,{timeout:5000});
-      ok('E6.3 caméra refusée : saisie manuelle retrouve le code connu');
+      await page.setViewportSize({width:390,height:844});
+      await page.evaluate(()=>window.__forcerModeSaisie(false));
+      ok('E6.3 caméra refusée : saisie manuelle retrouve le code connu, clavier et champ visibles');
 
       // ---- E6.4 : complément Open Food Facts strictement déclenché par l'utilisateur ----
       etapeParcours = 'E6.4 complément Open Food Facts';
