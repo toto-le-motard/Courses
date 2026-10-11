@@ -426,6 +426,18 @@ if (playwright) {
       etapeParcours = 'E7.1 stepper quantité';
       await page.click('#btn-achat-plus');
       if(await page.locator('#quantite-achat').inputValue()!=='2') throw new Error('incrément de quantité incorrect');
+      etapeParcours = 'E7.2 prix payé différent';
+      await page.click('button:has-text("Prix ou format payé différent ?")');
+      const dialoguePrixAchat=page.locator('dialog.dialog-prix-achat');
+      await dialoguePrixAchat.waitFor({state:'visible',timeout:3000});
+      if (!(await dialoguePrixAchat.getByLabel('Prix payé').isVisible()) || !(await dialoguePrixAchat.getByLabel('Format acheté').isVisible())) throw new Error('champs prix payé ou format acheté absents');
+      const dimensionsPrixAchat=await dialoguePrixAchat.evaluate(d=>({height:d.getBoundingClientRect().height,text:d.innerText}));
+      if(dimensionsPrixAchat.height<=0||!/Confirmer/.test(dimensionsPrixAchat.text)) throw new Error('dialogue prix payé vide ou sans action de confirmation');
+      await dialoguePrixAchat.getByLabel('Prix payé').fill('5,00');
+      await dialoguePrixAchat.getByLabel('Format acheté').fill('400');
+      await dialoguePrixAchat.locator('#unite-achat').selectOption('g');
+      await dialoguePrixAchat.getByRole('button',{name:'Confirmer'}).click();
+      if(await page.locator('dialog.dialog-prix-achat').count()) throw new Error('dialogue prix payé non fermé après confirmation');
       etapeParcours = 'E7.1 clic J’achète';
       await page.click('#btn-achat-confirme');
       await page.waitForFunction(()=>/Achat enregistré/.test(document.querySelector('.message-succes')?.textContent||'')||Array.from(document.querySelectorAll('dialog')).some(d=>d.open&&/Prix très différent/.test(d.textContent||'')),null,{timeout:8000});
@@ -447,6 +459,8 @@ if (playwright) {
       }));
       const achatEnregistre=achatE71.achats.find(x=>x.type===9992&&x.date==='2031-01-01'&&x.quantite===2&&x.achete===1);
       if(!achatEnregistre||!achatE71.releves.some(x=>x.id===achatEnregistre.observation&&x.type===9992&&x.date==='2031-01-01')) throw new Error('achat non enregistré avec son relevé lié');
+      if(achatEnregistre.prixPayeCentimes!==500||achatEnregistre.format!==400) throw new Error('prix payé ou format acheté différent non conservé');
+      if(!achatE71.releves.some(x=>x.id===achatEnregistre.observation&&x.prixCentimes===600&&x.format===500)) throw new Error('le relevé en rayon a été écrasé par le prix payé');
       ok('E7.1 achat enregistré en un geste, quantité 2 et relevé lié');
       const versionCache = readFileSync(join(racine, 'sw.js'), 'utf8').match(/const CACHE_VERSION = '([^']+)'/)?.[1];
       await aller('#/reglages');await page.waitForFunction((v)=>(document.getElementById('vue')?.textContent || '').includes(v),versionCache,{timeout:5000});await verifierEcran('Réglages');ok('B6 Réglages : version '+versionCache+' visible');
