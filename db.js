@@ -348,7 +348,23 @@ export async function modifierReleve(id, champs) {
   return prochain;
 }
 
-export const supprimerReleve = (id) => supprimer('Observation', id);
+// E7 / FR26 — l'achat conserve ses prix figés même si son relevé est supprimé.
+export function supprimerReleve(id) {
+  return new Promise((resolve, reject) => {
+    const t = _db.transaction(['Observation', 'Purchase'], 'readwrite');
+    const observations = t.objectStore('Observation');
+    const achats = t.objectStore('Purchase');
+    const lies = achats.index('observation').getAll(id);
+    lies.onsuccess = () => {
+      for (const achat of lies.result) achats.put({ ...achat, observation: null });
+      observations.delete(id);
+    };
+    lies.onerror = () => { try { t.abort(); } catch {} };
+    t.oncomplete = () => resolve();
+    t.onerror = () => reject(t.error || new Error('Suppression du relevé impossible'));
+    t.onabort = () => reject(t.error || new Error('Suppression du relevé annulée'));
+  });
+}
 
 // FR23 / E7.1 — achat associé au relevé enregistré, sans dépendance réseau.
 export async function enregistrerAchat({ type, observation, magasin, date, achete, quantite = 1, prixPayeCentimes, format, prixComparaisonCentimes = null, prixHabituelMemeMagasinCentimes = null }) {
