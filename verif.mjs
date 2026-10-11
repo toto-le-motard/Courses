@@ -458,24 +458,29 @@ if (playwright) {
       await page.evaluate(() => { Object.defineProperty(navigator, 'onLine', { configurable: true, get: () => false }); window.dispatchEvent(new Event('offline')); });
       await page.click('#btn-scanner');
       await page.waitForSelector('dialog.dialog-scan[open]',{timeout:5000});
+      info('E6.4 : dialogue scanner ouvert hors ligne');
       await page.fill('#scan-code-manuel','1234567890124');
       if(await page.locator('dialog.dialog-scan button:has-text("Compléter")').isVisible()) throw new Error('E6.4 : bouton Compléter visible hors ligne');
       await page.click('dialog.dialog-scan button:has-text("Fermer")');
+      info('E6.4 : bouton Compléter masqué hors ligne');
       await ctx.setOffline(false);
       await page.evaluate(() => { Object.defineProperty(navigator, 'onLine', { configurable: true, get: () => true }); window.dispatchEvent(new Event('online')); });
       const codeOpenFoodFacts = '1234567890124';
       let urlOpenFoodFacts = null;
-      await page.route('https://world.openfoodfacts.org/api/v2/product/**', async route => {
+      await page.route('https://world.openfoodfacts.org/api/v2/product/' + codeOpenFoodFacts + '.json', async route => {
         urlOpenFoodFacts = route.request().url();
         await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({status:1,product:{product_name:'Produit test OFF',brands:'Marque test OFF',product_quantity:'500',product_quantity_unit:'g'}})});
       });
       await page.click('#btn-scanner');
       await page.waitForSelector('dialog.dialog-scan[open]',{timeout:5000});
+      info('E6.4 : dialogue scanner ouvert en ligne');
       await page.fill('#scan-code-manuel',codeOpenFoodFacts);
       await page.waitForSelector('dialog.dialog-scan button:has-text("Compléter"):visible',{timeout:3000});
       autoriserRequeteOpenFoodFacts = true;
       await page.click('dialog.dialog-scan button:has-text("Compléter")');
+      info('E6.4 : action utilisateur Compléter déclenchée');
       await page.waitForSelector('dialog.dialog-rattachement[open]',{timeout:5000});
+      info('E6.4 : fiche de rattachement ouverte');
       autoriserRequeteOpenFoodFacts = false;
       if(requetesOpenFoodFacts.length!==1 || !urlOpenFoodFacts) throw new Error('E6.4 : la requête Open Food Facts n’a pas été déclenchée une seule fois par action');
       const urlOff = new URL(urlOpenFoodFacts);
