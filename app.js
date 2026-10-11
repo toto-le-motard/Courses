@@ -548,8 +548,15 @@ function vueMagasin() {
       await video.play().catch(() => {});
       if ('BarcodeDetector' in window) {
         const detector = new window.BarcodeDetector({ formats: ['ean_13','ean_8','upc_a','upc_e','code_128'] });
-        const codes = await detector.detect(video);
-        if (actif && codes?.[0]?.rawValue) await traiterCode(codes[0].rawValue);
+        while (actif && dialogue.open) {
+          const codes = await detector.detect(video);
+          if (!actif || !dialogue.open) break;
+          if (codes?.[0]?.rawValue) {
+            await traiterCode(codes[0].rawValue);
+            break;
+          }
+          await new Promise(resolve => setTimeout(resolve, 150));
+        }
       } else {
         const m=dialogue.querySelector('#scan-message'); m.textContent='Détection automatique indisponible sur ce navigateur. Saisissez le code manuellement.'; m.hidden=false;
       }
