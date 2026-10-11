@@ -471,6 +471,7 @@ if (playwright) {
           const url = typeof input === 'string' ? input : input.url;
           if (url.startsWith('https://world.openfoodfacts.org/api/v2/product/')) {
             window.__requetesOpenFoodFacts.push(url);
+            if (window.__modeOpenFoodFacts === 'absent') return new Response(JSON.stringify({status:0,product:null}), {status:200,headers:{'Content-Type':'application/json'}});
             return new Response(JSON.stringify({status:1,product:{product_name:'Produit test OFF',brands:'Marque test OFF',product_quantity:'500',product_quantity_unit:'g'}}), {status:200,headers:{'Content-Type':'application/json'}});
           }
           return fetchOriginal(input, init);
@@ -493,6 +494,15 @@ if (playwright) {
       if(champsOff.nom!=='Produit test OFF'||champsOff.marque!=='Marque test OFF'||champsOff.format!=='500'||champsOff.unite!=='g') throw new Error('E6.4 : les données Open Food Facts ne sont pas proposées dans le rattachement '+JSON.stringify(champsOff));
       await page.click('dialog.dialog-rattachement button:has-text("Annuler")');
       ok('E6.4 complément Open Food Facts : masqué hors ligne, action explicite, code seul et données facultatives proposées');
+      await page.evaluate(() => { window.__modeOpenFoodFacts = 'absent'; });
+      await page.click('#btn-scanner');
+      await page.waitForSelector('dialog.dialog-scan[open]',{timeout:5000});
+      await page.fill('#scan-code-manuel','1234567890125');
+      await page.click('dialog.dialog-scan button:has-text("Compléter")');
+      await page.waitForFunction(()=>/Aucune fiche trouvée/.test(document.querySelector('#scan-message')?.textContent||''),null,{timeout:5000});
+      if(!await page.locator('dialog.dialog-scan button:has-text("Rechercher")').isVisible()) throw new Error('E6.4 : l’absence de fiche Open Food Facts bloque le rattachement manuel');
+      await page.click('dialog.dialog-scan button:has-text("Fermer")');
+      ok('E6.4 absence de fiche Open Food Facts : message français et rattachement manuel toujours disponible');
 
       // ---- Épic E7 : achat en un geste et quantité par défaut ----
       etapeParcours = 'E7.1 achat en un geste';
