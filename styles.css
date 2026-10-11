@@ -323,8 +323,8 @@ svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width:
 .quantite-achat-controles .quantite-achat { width:clamp(34px, 13vw, 52px); min-width:0; min-height:48px; padding:4px 2px; text-align:center; flex:1 1 auto; }
 .btn-quantite { width:clamp(34px, 13vw, 48px); min-width:0; min-height:48px; padding:0; font-size:22px; flex:1 1 0; }
 .achat-actions > #btn-achat-confirme { grid-area:acheter; }
-.achat-actions > #btn-achat-non { grid-area:non; }
-.achat-actions > :not(.quantite-achat-controles):not(#btn-achat-confirme):not(#btn-achat-non) { grid-area:prix; }
+.achat-actions > #btn-enregistrer { grid-area:non; }
+.achat-actions > :not(.quantite-achat-controles):not(#btn-achat-confirme):not(#btn-enregistrer) { grid-area:prix; }
 .achat-actions > #btn-achat-confirme,
 .achat-actions > #btn-achat-non,
 .achat-actions > #btn-enregistrer {
@@ -340,7 +340,7 @@ svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width:
 }
 .achat-actions > #btn-achat-confirme { font-weight:800; }
 .achat-actions > #btn-achat-non { border-color:var(--bordure); }
-.achat-actions > :not(.quantite-achat-controles):not(#btn-achat-confirme):not(#btn-achat-non) { min-height:44px; font-size:13px; }
+.achat-actions > :not(.quantite-achat-controles):not(#btn-achat-confirme):not(#btn-enregistrer) { min-height:44px; font-size:13px; }
 
 /* Garder le dock assez bas pour que la page magasin ne défile pas en hauteur standard. */
 @media (min-height: 601px) {
@@ -353,7 +353,7 @@ svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width:
   .achat-actions { gap:2px; }
   .achat-actions > #btn-achat-confirme,
   .achat-actions > #btn-achat-non { min-height:40px; padding:3px 4px; font-size:12px; }
-  .achat-actions > :not(.quantite-achat-controles):not(#btn-achat-confirme):not(#btn-achat-non) { min-height:36px; padding:3px 5px; font-size:12px; }
+  .achat-actions > :not(.quantite-achat-controles):not(#btn-achat-confirme):not(#btn-enregistrer) { min-height:36px; padding:3px 5px; font-size:12px; }
   .quantite-achat-controles .quantite-achat,
   .btn-quantite { min-height:40px; }
 }
