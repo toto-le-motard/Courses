@@ -678,6 +678,7 @@ function vueMagasin() {
     // Affecter aussi les propriétés value après création : les champs préremplis doivent être visibles dans Chromium et sur mobile.
     dialogue.querySelector('#scan-marque').value = String(articleExistant?.marque || '');
     dialogue.querySelector('#scan-nom').value = String(articleExistant?.nom || '');
+    dialogue.addEventListener('close', () => dialogue.remove(), { once: true });
     const champ = dialogue.querySelector('#scan-type-search');
     const zone = dialogue.querySelector('#scan-suggestions');
     const afficherSuggestions = () => {
