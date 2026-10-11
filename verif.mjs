@@ -470,6 +470,18 @@ if (playwright) {
       if(achatEnregistre.prixPayeCentimes!==500||achatEnregistre.format!==400) throw new Error('prix payé ou format acheté différent non conservé');
       const releveLie=achatE71.releves.find(x=>x.id===achatEnregistre.observation); if(!releveLie||releveLie.prixCentimes!==600||releveLie.format!==500) throw new Error('le relevé en rayon a été écrasé par le prix payé : '+JSON.stringify({achat:achatEnregistre,releve:releveLie,relevesType:achatE71.releves.filter(x=>x.type===9992&&x.date==='2031-01-01')}));
       ok('E7.1 achat enregistré en un geste, quantité 2 et relevé lié');
+      // E7.3 : historique des achats par type, avec actions de modification et suppression.
+      await aller('#/fiche/9992');
+      await page.waitForFunction(()=>document.querySelector('#vue')?.textContent.includes('Fiche du type'),null,{timeout:5000});
+      if (!(await page.getByRole('link',{name:'Historique des achats'}).count())) throw new Error('E7.3 : accès à l’historique des achats absent de la fiche type');
+      await page.getByRole('link',{name:'Historique des achats'}).click();
+      await page.waitForFunction(()=>document.querySelector('#vue')?.textContent.includes('Historique des achats'),null,{timeout:5000});
+      const historiqueAchatsE73=page.locator('.historique-achats');
+      if (!(await historiqueAchatsE73.isVisible()) || !(await historiqueAchatsE73.getByText('05/01/2031').count())) throw new Error('E7.3 : historique achat absent ou date non formatée en français');
+      if (!(await historiqueAchatsE73.getByText('Leclerc').count()) || !(await historiqueAchatsE73.getByText('2').count()) || !(await historiqueAchatsE73.getByText('5,00 €').count())) throw new Error('E7.3 : magasin, quantité ou prix payé absent');
+      if (!(await historiqueAchatsE73.getByRole('button',{name:'Modifier cet achat'}).count()) || !(await historiqueAchatsE73.getByRole('button',{name:'Supprimer cet achat'}).count())) throw new Error('E7.3 : actions de modification/suppression absentes');
+      ok('E7.3 historique des achats par type : date, magasin, quantité, prix payé et actions');
+      await aller('#/reglages');
       const versionCache = readFileSync(join(racine, 'sw.js'), 'utf8').match(/const CACHE_VERSION = '([^']+)'/)?.[1];
       await aller('#/reglages');await page.waitForFunction((v)=>(document.getElementById('vue')?.textContent || '').includes(v),versionCache,{timeout:5000});await verifierEcran('Réglages');ok('B6 Réglages : version '+versionCache+' visible');
       await page.evaluate(()=>new Promise((resolve,reject)=>{
