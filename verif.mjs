@@ -471,8 +471,9 @@ if (playwright) {
       const releveLie=achatE71.releves.find(x=>x.id===achatEnregistre.observation); if(!releveLie||releveLie.prixCentimes!==600||releveLie.format!==500) throw new Error('le relevé en rayon a été écrasé par le prix payé : '+JSON.stringify({achat:achatEnregistre,releve:releveLie,relevesType:achatE71.releves.filter(x=>x.type===9992&&x.date==='2031-01-01')}));
       ok('E7.1 achat enregistré en un geste, quantité 2 et relevé lié');
       // E7.3 : historique des achats par type, avec actions de modification et suppression.
+      etapeParcours = 'E7.3 historique achats';
       await aller('#/fiche/9992');
-      await page.waitForFunction(()=>document.querySelector('#vue')?.textContent.includes('Fiche du type'),null,{timeout:5000});
+      await page.waitForFunction(()=>document.querySelector('#titre-ecran')?.textContent==='Fiche du type',null,{timeout:5000});
       if (!(await page.getByRole('link',{name:'Historique des achats'}).count())) throw new Error('E7.3 : accès à l’historique des achats absent de la fiche type');
       await page.getByRole('link',{name:'Historique des achats'}).click();
       await page.waitForFunction(()=>document.querySelector('#vue')?.textContent.includes('Historique des achats'),null,{timeout:5000});
