@@ -434,7 +434,7 @@ if (playwright) {
       const dimensionsPrixAchat=await dialoguePrixAchat.evaluate(d=>({height:d.getBoundingClientRect().height,text:d.innerText}));
       if(dimensionsPrixAchat.height<=0||!/Confirmer/.test(dimensionsPrixAchat.text)) throw new Error('dialogue prix payé vide ou sans action de confirmation');
       await dialoguePrixAchat.getByLabel('Prix payé').fill('5,00');
-      await dialoguePrixAchat.getByLabel('Format acheté').fill('400');
+      await dialoguePrixAchat.locator('#format-paye-achat').fill('400');
       await dialoguePrixAchat.locator('#unite-achat').selectOption('g');
       await dialoguePrixAchat.getByRole('button',{name:'Confirmer'}).click();
       if(await page.locator('dialog.dialog-prix-achat').count()) throw new Error('dialogue prix payé non fermé après confirmation');
