@@ -435,6 +435,8 @@ export async function modifierAchat(id, champs = {}) {
   if (Object.prototype.hasOwnProperty.call(champs,'prixPayeCentimes')) prochain.prixPayeCentimes = champs.prixPayeCentimes;
   if (Object.prototype.hasOwnProperty.call(champs,'format')) prochain.format = champs.format;
   if (Object.prototype.hasOwnProperty.call(champs,'quantite')) prochain.quantite = champs.quantite;
+  if (Object.prototype.hasOwnProperty.call(champs,'date')) prochain.date = champs.date;
+  if (!dateValide(prochain.date)) throw new Error('Date d’achat invalide.');
   if (!Number.isInteger(prochain.prixPayeCentimes) || prochain.prixPayeCentimes <= 0) throw new Error('Prix payé invalide.');
   if (!Number.isInteger(prochain.format) || prochain.format <= 0) throw new Error('Format acheté invalide.');
   if (!Number.isInteger(prochain.quantite) || prochain.quantite < 1 || prochain.quantite > 999) throw new Error('Quantité invalide.');

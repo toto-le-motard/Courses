@@ -1134,24 +1134,25 @@ async function vueHistoriqueAchats(typeId) {
 }
 
 function ouvrirEditionAchat(achat,type) {
-  const d=el('dialog',{class:'feuille dialog-achat-edition'});
-  const prix=el('input',{id:'edition-achat-prix',class:'champ',inputmode:'decimal',value:(achat.prixPayeCentimes/100).toFixed(2).replace('.',','),'aria-label':'Prix payé',enterkeyhint:'next'});
-  const format=el('input',{id:'edition-achat-format',class:'champ',type:'number',min:'1',step:'1',value:String(achat.format),'aria-label':'Format acheté',enterkeyhint:'next'});
-  const quantite=el('input',{id:'edition-achat-quantite',class:'champ',type:'number',min:'1',max:'999',step:'1',value:String(achat.quantite),'aria-label':'Quantité',enterkeyhint:'done'});
+  const d=el('dialog',{class:'feuille dialog-edition-achat'});
+  const prix=el('input',{id:'achat-prix-edition',class:'champ',inputmode:'decimal',value:(achat.prixPayeCentimes/100).toFixed(2).replace('.',','),'aria-label':'Prix payé',enterkeyhint:'next'});
+  const format=el('input',{id:'achat-format-edition',class:'champ',type:'number',min:'1',step:'1',value:String(achat.format),'aria-label':'Format acheté',enterkeyhint:'next'});
+  const quantite=el('input',{id:'achat-quantite-edition',class:'champ',type:'number',min:'1',max:'999',step:'1',value:String(achat.quantite),'aria-label':'Quantité',enterkeyhint:'next'});
+  const date=el('input',{id:'achat-date-edition',class:'champ',type:'date',value:achat.date,'aria-label':'Date de l’achat',enterkeyhint:'done'});
   const erreurChamp=el('p',{class:'erreur',role:'alert',hidden:true});
   const fermer=()=>{if(d.open)d.close();d.remove();};
   const enregistrer=el('button',{type:'button',class:'btn btn-primaire',text:'Enregistrer',onclick:async()=>{
-    const p=analyserPrixSaisie(prix.value), f=Number(format.value), q=Number(quantite.value);
-    if(!p||!Number.isInteger(f)||f<=0||!Number.isInteger(q)||q<1||q>999){erreurChamp.textContent='Saisissez un prix, un format et une quantité valides.';erreurChamp.hidden=false;return;}
-    try{await modifierAchat(achat.id,{prixPayeCentimes:p,format:f,quantite:q});fermer();await afficher();}
+    const p=analyserPrixSaisie(prix.value), f=Number(format.value), q=Number(quantite.value), jour=date.value;
+    if(!p||!Number.isInteger(f)||f<=0||!Number.isInteger(q)||q<1||q>999||!/^\\d{4}-\\d{2}-\\d{2}$/.test(jour)){erreurChamp.textContent='Saisissez une date, un prix, un format et une quantité valides.';erreurChamp.hidden=false;return;}
+    try{await modifierAchat(achat.id,{prixPayeCentimes:p,format:f,quantite:q,date:jour});fermer();await afficher();}
     catch(e){erreurChamp.textContent=e.message||'Modification impossible.';erreurChamp.hidden=false;}
   }});
-  d.append(el('h2',{text:'Modifier cet achat'}),el('label',{for:'edition-achat-prix',class:'etiquette',text:'Prix payé (€)'}),prix,el('label',{for:'edition-achat-format',class:'etiquette',text:'Format acheté ('+(type.unite==='kg'?'g':type.unite==='l'?'ml':'unités')+')'}),format,el('label',{for:'edition-achat-quantite',class:'etiquette',text:'Quantité'}),quantite,erreurChamp,el('div',{class:'feuille-actions'},el('button',{type:'button',class:'btn btn-secondaire',text:'Annuler',onclick:fermer}),enregistrer));
+  d.append(el('h2',{text:'Modifier cet achat'}),el('label',{for:'achat-date-edition',class:'etiquette',text:'Date'}),date,el('label',{for:'achat-prix-edition',class:'etiquette',text:'Prix payé (€)'}),prix,el('label',{for:'achat-format-edition',class:'etiquette',text:'Format acheté ('+(type.unite==='kg'?'g':type.unite==='l'?'ml':'unités')+')'}),format,el('label',{for:'achat-quantite-edition',class:'etiquette',text:'Quantité'}),quantite,erreurChamp,el('div',{class:'feuille-actions'},el('button',{type:'button',class:'btn btn-secondaire',text:'Annuler',onclick:fermer}),enregistrer));
   d.addEventListener('close',()=>d.remove(),{once:true});document.body.append(d);d.showModal();
 }
 
 function confirmerSuppressionAchat(achat,typeId) {
-  const d=el('dialog',{class:'feuille dialog-achat-suppression'},
+  const d=el('dialog',{class:'feuille dialog-suppression-achat'},
     el('h2',{text:'Supprimer cet achat ?'}),
     el('p',{text:'Cette action est définitive. Le relevé de prix associé est conservé.'}),
     el('div',{class:'feuille-actions'},
