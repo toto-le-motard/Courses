@@ -93,8 +93,43 @@ let playwright;
 try { playwright = await import('playwright'); } catch { ko('Playwright indisponible (npm install playwright)'); }
 
 if (playwright) {
-  const navigateur = await playwright.chromium.launch();
+  const navigateur = await playwright.chromium.launch({ args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream'] });
   try {
+    // Compatibilité avec une base historique v1 : les données existantes doivent survivre à l'ouverture.
+    {
+      const ancienCtx = await navigateur.newContext({ viewport: { width: 390, height: 844 } });
+      const anciennePage = await ancienCtx.newPage();
+      await anciennePage.goto(base);
+      await anciennePage.evaluate(() => new Promise((resolve, reject) => {
+        const req = indexedDB.open('appli-courses', 1);
+        req.onupgradeneeded = () => {
+          const db = req.result;
+          const types = db.createObjectStore('ProductType', { keyPath: 'id', autoIncrement: true });
+          types.createIndex('nomNormalise', 'nomNormalise', { unique: true });
+          const articles = db.createObjectStore('Article', { keyPath: 'codeBarres' }); articles.createIndex('type', 'type');
+          const obs = db.createObjectStore('Observation', { keyPath: 'id', autoIncrement: true });
+          obs.createIndex('type', 'type'); obs.createIndex('cleJour', ['type', 'magasin', 'date', 'promo']);
+          const achats = db.createObjectStore('Purchase', { keyPath: 'id', autoIncrement: true });
+          achats.createIndex('type', 'type'); achats.createIndex('observation', 'observation');
+          db.createObjectStore('Settings', { keyPath: 'cle' });
+          types.add({ id: 42, nom: 'Type historique', nomNormalise: 'type historique', unite: 'kg', archive: 0 });
+        };
+        req.onsuccess = () => { req.result.close(); resolve(); };
+        req.onerror = () => reject(req.error);
+      }));
+      await anciennePage.reload();
+      await anciennePage.waitForFunction(() => document.querySelector('#titre-ecran')?.textContent === 'Magasin', null, { timeout: 10000 });
+      const typeHistorique = await anciennePage.evaluate(() => new Promise((resolve, reject) => {
+        const req = indexedDB.open('appli-courses', 1);
+        req.onsuccess = () => { const db = req.result, q = db.transaction('ProductType').objectStore('ProductType').get(42);
+          q.onsuccess = () => { resolve(q.result || null); db.close(); }; q.onerror = () => reject(q.error); };
+        req.onerror = () => reject(req.error);
+      }));
+      if (!typeHistorique || typeHistorique.nom !== 'Type historique' || typeHistorique.unite !== 'kg') throw new Error('base historique v1 : type existant perdu ou modifié');
+      ok('compatibilité base IndexedDB historique v1 : données préservées à l’ouverture');
+      await ancienCtx.close();
+    }
+
     // 4. Tests du domaine (tests.html expose window.__resultats = { reussis, echecs, details })
     if (existsSync(join(racine, 'tests.html'))) {
       const ctx = await navigateur.newContext();
