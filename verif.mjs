@@ -415,10 +415,10 @@ if (playwright) {
 
       // ---- Épic E7 : achat en un geste et quantité par défaut ----
       etapeParcours = 'E7.1 achat en un geste';
+      await page.evaluate(()=>new Promise((resolve,reject)=>{const rq=indexedDB.open('appli-courses');rq.onsuccess=()=>{const db=rq.result,tx=db.transaction(['Observation','Purchase'],'readwrite'),os=tx.objectStore('Observation'),ps=tx.objectStore('Purchase');const o=os.getAll();o.onsuccess=()=>o.result.filter(x=>x.type===9992&&x.date==='2031-01-01').forEach(x=>os.delete(x.id));const p=ps.getAll();p.onsuccess=()=>p.result.filter(x=>x.type===9992&&x.date==='2031-01-01').forEach(x=>ps.delete(x.id));tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error);};rq.onerror=()=>reject(rq.error);}));
       await aller('#/magasin');
       await page.waitForFunction(()=>document.querySelector('#titre-ecran')?.textContent==='Magasin'&&document.querySelector('#champ-prix')?.isConnected,null,{timeout:5000});
       await page.waitForTimeout(150);
-      await page.evaluate(()=>new Promise((resolve,reject)=>{const rq=indexedDB.open('appli-courses');rq.onsuccess=()=>{const db=rq.result,tx=db.transaction(['Observation','Purchase'],'readwrite'),os=tx.objectStore('Observation'),ps=tx.objectStore('Purchase');const o=os.getAll();o.onsuccess=()=>o.result.filter(x=>x.type===9992&&x.date==='2031-01-01').forEach(x=>os.delete(x.id));const p=ps.getAll();p.onsuccess=()=>p.result.filter(x=>x.type===9992&&x.date==='2031-01-01').forEach(x=>ps.delete(x.id));tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error);};rq.onerror=()=>reject(rq.error);}));
       if(await page.locator('#champ-type').inputValue()!=='ZZ mensuel test') throw new Error('le type de test n’est plus sélectionné après le scan');
       await page.fill('#champ-prix','6,00');
       if(await page.locator('#champ-prix').inputValue()!=='6,00') throw new Error('champ prix après saisie : '+await page.locator('#champ-prix').inputValue());
