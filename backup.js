@@ -41,11 +41,11 @@ export function validerSauvegarde(payload, schemaVersionAttendu) {
     releves: (v) => entierPositif(v.id) && entierPositif(v.type) && magasinValide(v.magasin)
       && dateValide(v.date) && Number.isSafeInteger(v.prixCentimes) && v.prixCentimes > 0
       && entierPositif(v.format ?? v.formatBase)
-      && (v.promo === 0 || v.promo === 1 || typeof v.promo === "boolean"),
+      && (v.promo === 0 || v.promo === 1),
     achats: (v) => entierPositif(v.id) && entierPositif(v.type)
       && (v.observation === null || entierPositif(v.observation))
       && magasinValide(v.magasin) && dateValide(v.date)
-      && (v.achete === 0 || v.achete === 1 || typeof v.achete === "boolean")
+      && (v.achete === 0 || v.achete === 1)
       && Number.isSafeInteger(v.quantite) && v.quantite >= 1 && v.quantite <= 999
       && Number.isSafeInteger(v.prixPayeCentimes) && v.prixPayeCentimes > 0
       && entierPositif(v.format) && prixValide(v.prixComparaisonCentimes)
@@ -58,6 +58,14 @@ export function validerSauvegarde(payload, schemaVersionAttendu) {
       !item || typeof item !== "object" || Array.isArray(item) || !valideurs[cle](item))) {
       return { ok: false, erreur: "La sauvegarde est invalide : collection « " + cle + " » absente ou contenant un enregistrement incorrect." };
     }
+  }
+  const typeIds = new Set(payload.types.map((item) => item.id));
+  if (["articles", "releves", "achats"].some((cle) => payload[cle].some((item) => !typeIds.has(item.type)))) {
+    return { ok: false, erreur: "La sauvegarde contient un article, un relevé ou un achat sans type existant." };
+  }
+  const releveIds = new Set(payload.releves.map((item) => item.id));
+  if (payload.achats.some((item) => item.observation !== null && !releveIds.has(item.observation))) {
+    return { ok: false, erreur: "La sauvegarde contient un achat lié à un relevé absent." };
   }
   const uniques = [
     ["types", "id"], ["types", "nomNormalise"], ["articles", "codeBarres"],
