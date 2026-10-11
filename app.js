@@ -1,6 +1,6 @@
 // app.js — interface et navigation (stories 1.2 à 3-2).
 import { initDb, dbPrete, listerTypes, lireDernierReleve, lireObservations, dernierReleve, trouverDoublon, enregistrerReleves, analyserDoublons, annulerEnregistrement, listerReleves, modifierReleve, supprimerReleve, enregistrerAchat, listerAchats, modifierAchat, supprimerAchat, demanderStockagePersistant, lireReglage, ecrireReglage, compter, STORES, VERSION_SCHEMA, exporterCollections, remplacerCollections, lire, mettre, toutLire, supprimer } from './db.js';
-import { MAGASIN, UNITES, LIBELLE_UNITE, VERDICT, analyserPrixSaisie, verifierFormat, prixNormalise, formaterPrixEuros, formaterPrixNormalise, calculerVerdict, prixHabituel, estPrixIncoherent, unitesCompatibles, formatAffichage, calculerPositionDock, modeSaisieActif, positionDefilement, frequencePromos } from './domain.js';
+import { MAGASIN, UNITES, LIBELLE_UNITE, VERDICT, analyserPrixSaisie, verifierFormat, prixNormalise, formaterPrixEuros, formaterPrixNormalise, calculerVerdict, prixHabituel, calculerEconomieRealisee, estPrixIncoherent, unitesCompatibles, formatAffichage, calculerPositionDock, modeSaisieActif, positionDefilement, frequencePromos } from './domain.js';
 import { accueilVide, vueTypes, vueTypeForm } from './types-ui.js';
 import { creerSauvegarde, validerSauvegarde, etatRappelExport } from './backup.js';
 
@@ -1103,6 +1103,56 @@ async function vueFicheType(typeId) {
   return racine;
 }
 
+async function vueBilan() {
+  await dbPrete;
+  const [achats,types] = await Promise.all([toutLire('Purchase'),toutLire('ProductType')]);
+  const parType = new Map();
+  let totalCentimes = 0, gainsPromoCentimes = 0, achatsExclus = 0, achatsComptes = 0;
+  for (const achat of achats) {
+    if (achat.achete !== 1 && achat.achete !== true) continue;
+    const type = types.find(t => t.id === achat.type);
+    if (!type) continue;
+    const calcul = calculerEconomieRealisee(achat,type.unite);
+    if (!calcul.ok) { console.error('Achat ignoré : données invalides',achat.id); continue; }
+    if (calcul.exclu) { achatsExclus++; continue; }
+    if (!calcul.compte) continue;
+    totalCentimes += calcul.economieCentimes;
+    if (calcul.gainPromoCentimes !== null) gainsPromoCentimes += calcul.gainPromoCentimes;
+    achatsComptes++;
+    const entree = parType.get(type.id) || {type,cumul:0,nombre:0};
+    entree.cumul += calcul.economieCentimes;
+    entree.nombre++;
+    parType.set(type.id,entree);
+  }
+  const progression = Math.max(0,Math.min(100,Math.round(totalCentimes/10000*100)));
+  const racine = el('div',{class:'bilan-economies'});
+  racine.append(el('section',{class:'carte carte-bilan-total'},
+    el('h2',{text:'Économies réalisées'}),
+    el('p',{class:'bilan-total',text:formaterPrixEuros(totalCentimes)}),
+    el('div',{class:'anneau-progression',role:'img','aria-label':'Progression vers la cible de 100 € : '+progression+' %','style':'--progression:'+progression+'%'},
+      el('div',{class:'anneau-interieur'},el('strong',{text:progression+' %'}),el('span',{text:'de la cible'}))),
+    el('p',{class:'aide',text:'Objectif : 100 € sur 12 mois.'}),
+    el('p',{class:'bilan-gains-promo',text:'Dont gains liés aux promos : '+formaterPrixEuros(gainsPromoCentimes)}),
+    el('p',{class:'bilan-achats-exclus',text:achatsExclus+' achat'+(achatsExclus===1?'':'s')+' exclu'+(achatsExclus===1?'':'s')+' (données insuffisantes à l’époque).'})
+  ));
+  if (!achatsComptes) {
+    racine.append(el('p',{class:'aide',text:achatsExclus ? 'Aucun achat avec comparaison disponible pour le moment.' : 'Aucun achat enregistré. En magasin, utilisez « J’achète » pour commencer.'}),
+      el('a',{href:'#/magasin',class:'btn btn-primaire btn-bloc',text:'Aller en magasin'}));
+    return racine;
+  }
+  const liste = el('section',{class:'liste-bilan-types'},el('h2',{text:'Par type de produit'}));
+  const entrees=[...parType.values()].sort((a,b)=>a.type.nom.localeCompare(b.type.nom,'fr'));
+  for(const entree of entrees) {
+    liste.append(el('a',{href:'#/achats/'+entree.type.id,class:'ligne-bilan-type'},
+      el('strong',{text:entree.type.nom}),
+      el('span',{text:'Cumul : '+formaterPrixEuros(entree.cumul)}),
+      el('span',{text:entree.nombre+' achat'+(entree.nombre===1?'':'s')})
+    ));
+  }
+  racine.append(liste);
+  return racine;
+}
+
 async function vueHistoriqueAchats(typeId) {
   await dbPrete;
   const type = await lireTypeSafe(typeId);
@@ -1171,7 +1221,7 @@ const ROUTES = {
   types: { titre: 'Types', onglet: 'types', vue: vueTypes },
   'type-nouveau': { titre: 'Nouveau type', onglet: 'types', vue: () => vueTypeForm(null) },
   'type-edit': { titre: 'Modifier le type', onglet: 'types', vue: (p) => vueTypeForm(Number(p)) },
-  bilan: { titre: 'Bilan', onglet: 'bilan', vue: () => carte('Économies réalisées', 'Cet écran arrive avec l’épic E7.') },
+  bilan: { titre: 'Bilan', onglet: 'bilan', vue: vueBilan },
   achats: { titre: 'Historique des achats', onglet: 'types', vue: (p) => vueHistoriqueAchats(Number(p)) },
   reglages: { titre: 'Réglages', onglet: null, vue: vueReglages },
   historique: { titre: 'Historique', onglet: 'types', vue: (p) => vueHistorique(Number(p)) },

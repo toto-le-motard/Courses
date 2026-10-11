@@ -313,6 +313,17 @@ svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width:
 .achat-actions > #btn-achat-confirme { min-width:0; min-height:48px; flex:1 1 0; padding:4px 4px; font-size:12px; white-space:nowrap; }
 
 
+.bilan-economies { display:flex; flex-direction:column; gap:16px; }
+.carte-bilan-total { text-align:center; }
+.bilan-total { font-size:clamp(30px,8vw,42px); font-weight:800; margin:8px 0 14px; font-variant-numeric:tabular-nums; }
+.anneau-progression { width:124px; height:124px; border-radius:50%; margin:0 auto 12px; display:grid; place-items:center; background:conic-gradient(var(--accent,#C6FF3D) var(--progression),rgba(255,255,255,.12) 0); }
+.anneau-interieur { width:94px; height:94px; border-radius:50%; background:var(--surface,#151923); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; }
+.anneau-interieur strong { font-size:22px; } .anneau-interieur span { font-size:12px; color:var(--muted,#A4ACBD); }
+.bilan-gains-promo,.bilan-achats-exclus { margin:8px 0; }
+.liste-bilan-types { display:flex; flex-direction:column; gap:8px; }
+.ligne-bilan-type { display:flex; flex-direction:column; gap:4px; padding:12px; min-height:48px; border-radius:12px; background:var(--surface,#151923); color:inherit; text-decoration:none; }
+.ligne-bilan-type strong { font-size:16px; }
+
 /* Petits écrans : conserver Type, Prix et Format visibles au-dessus du dock. */
 @media (max-height: 600px) {
   .dock-magasin { gap:4px; padding:6px; border-radius:16px; }
