@@ -622,7 +622,7 @@ function vueMagasin() {
   }
 
   function chargerDernierEtFormat() {
-    if (!typeChoisi) return;
+    if (!typeChoisi || formulaireModifie) return;
     dernier = types.find((x) => x.type.id === typeChoisi.id)?.dernier || null;
     const compatibles = unitesCompatibles(typeChoisi.unite);
     uniteFormat.replaceChildren(...compatibles.map((u) => el('option', { value: u, text: LIBELLE_UNITE[u] })));
