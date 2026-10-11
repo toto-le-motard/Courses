@@ -418,9 +418,13 @@ if (playwright) {
       await aller('#/magasin');
       if(await page.locator('#champ-type').inputValue()!=='ZZ mensuel test') throw new Error('le type de test n’est plus sélectionné après le scan');
       await page.fill('#champ-prix','6,00');
+      if(await page.locator('#champ-prix').inputValue()!=='6,00') throw new Error('champ prix après saisie : '+await page.locator('#champ-prix').inputValue());
       await page.fill('#champ-format','500');
       await page.selectOption('#champ-unite','g');
+      if(await page.locator('#champ-prix').inputValue()!=='6,00') throw new Error('champ prix après format/unité : '+await page.locator('#champ-prix').inputValue());
       await page.locator('input[type="date"]').evaluate(e=>{e.value='2031-01-01';e.dispatchEvent(new Event('change',{bubbles:true}));});
+      await page.waitForTimeout(100);
+      if(await page.locator('#champ-prix').inputValue()!=='6,00') throw new Error('champ prix après changement de date : '+await page.locator('#champ-prix').inputValue());
       await page.waitForSelector('#achat-actions',{timeout:5000});
       if(await page.locator('#quantite-achat').inputValue()!=='1') throw new Error('quantité initiale différente de 1');
       etapeParcours = 'E7.1 stepper quantité';
