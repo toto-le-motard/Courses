@@ -518,6 +518,13 @@ if (playwright) {
       await page.click('button:has-text("Installer l’appli")');
       await page.waitForFunction(()=>!Array.from(document.querySelectorAll('button')).some(b=>b.textContent.trim()==='Installer l’appli'),null,{timeout:5000});
       ok('E8.4 seuil mémorisé avec exemple et installation conditionnée à l’événement');
+      // E8.3 : simuler un refus du stockage persistant avant le prochain démarrage.
+      await page.addInitScript(() => { if (navigator.storage) Object.defineProperty(navigator.storage, 'persist', { configurable: true, value: async () => false }); });
+      await page.reload();
+      await page.waitForSelector('.avertissement-stockage', { timeout: 5000 });
+      const avertissementStockage = await page.locator('.avertissement-stockage').innerText();
+      if (!/Exportez régulièrement une sauvegarde/.test(avertissementStockage)) throw new Error('avertissement de refus du stockage persistant incomplet');
+      ok('E8.3 refus du stockage persistant : avertissement visible dans Réglages');
       // service worker actif et page contrôlée, puis test hors ligne
       await page.evaluate(() => navigator.serviceWorker.ready);
       if (!(await page.evaluate(() => !!navigator.serviceWorker.controller))) { await page.reload(); await page.waitForSelector('#vue .carte'); }
