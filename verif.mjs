@@ -149,9 +149,7 @@ if (playwright) {
     const page = await ctx.newPage();
     const erreurs = [];
     const requetesExternes = [];
-    const requetesOpenFoodFacts = [];
-    let autoriserRequeteOpenFoodFacts = false;
-    page.on('request', req => { const u=new URL(req.url()); if(u.origin===new URL(base).origin || ['data:','blob:'].includes(u.protocol)) return; if(autoriserRequeteOpenFoodFacts && u.origin==='https://world.openfoodfacts.org' && /^\/api\/v2\/product\/\d+\.json$/.test(u.pathname)) requetesOpenFoodFacts.push(u.href); else requetesExternes.push(req.url()); });
+    page.on('request', req => { const u=new URL(req.url()); if(u.origin!==new URL(base).origin && !['data:','blob:'].includes(u.protocol)) requetesExternes.push(req.url()); });
     const verifierEcran = async (nom) => { const texte=await page.locator('body').innerText(); if(texte.includes('[object Promise]')) throw new Error(nom+' : [object Promise] présent'); if(texte.includes('Erreur d’affichage')) throw new Error(nom+' : Erreur d’affichage présente'); if(/\bundefined\b/.test(texte)) throw new Error(nom+' : texte undefined visible'); if(erreurs.length) throw new Error(nom+' : erreur console/pageerror : '+erreurs[0]); };
     const verifierOptionsNonVides = async (nom) => { const v=await page.locator('select option').evaluateAll(es=>es.map(e=>({value:e.value,text:e.textContent.trim()})).filter(e=>!e.text)); if(v.length) throw new Error(nom+' : option sans texte '+JSON.stringify(v)); };
     page.on('pageerror', (e) => erreurs.push('exception : ' + e.message));
@@ -466,24 +464,30 @@ if (playwright) {
       await ctx.setOffline(false);
       await page.evaluate(() => { Object.defineProperty(navigator, 'onLine', { configurable: true, get: () => true }); window.dispatchEvent(new Event('online')); });
       const codeOpenFoodFacts = '1234567890124';
-      let urlOpenFoodFacts = null;
-      await page.route('https://world.openfoodfacts.org/api/v2/product/' + codeOpenFoodFacts + '.json', async route => {
-        urlOpenFoodFacts = route.request().url();
-        await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({status:1,product:{product_name:'Produit test OFF',brands:'Marque test OFF',product_quantity:'500',product_quantity_unit:'g'}})});
+      await page.evaluate(() => {
+        window.__requetesOpenFoodFacts = [];
+        const fetchOriginal = window.fetch.bind(window);
+        window.fetch = async (input, init) => {
+          const url = typeof input === 'string' ? input : input.url;
+          if (url.startsWith('https://world.openfoodfacts.org/api/v2/product/')) {
+            window.__requetesOpenFoodFacts.push(url);
+            return new Response(JSON.stringify({status:1,product:{product_name:'Produit test OFF',brands:'Marque test OFF',product_quantity:'500',product_quantity_unit:'g'}}), {status:200,headers:{'Content-Type':'application/json'}});
+          }
+          return fetchOriginal(input, init);
+        };
       });
       await page.click('#btn-scanner');
       await page.waitForSelector('dialog.dialog-scan[open]',{timeout:5000});
       info('E6.4 : dialogue scanner ouvert en ligne');
       await page.fill('#scan-code-manuel',codeOpenFoodFacts);
       await page.waitForSelector('dialog.dialog-scan button:has-text("Compléter"):visible',{timeout:3000});
-      autoriserRequeteOpenFoodFacts = true;
       await page.click('dialog.dialog-scan button:has-text("Compléter")');
       info('E6.4 : action utilisateur Compléter déclenchée');
       await page.waitForSelector('dialog.dialog-rattachement[open]',{timeout:5000});
       info('E6.4 : fiche de rattachement ouverte');
-      autoriserRequeteOpenFoodFacts = false;
-      if(requetesOpenFoodFacts.length!==1 || !urlOpenFoodFacts) throw new Error('E6.4 : la requête Open Food Facts n’a pas été déclenchée une seule fois par action');
-      const urlOff = new URL(urlOpenFoodFacts);
+      const urlsOpenFoodFacts = await page.evaluate(() => window.__requetesOpenFoodFacts || []);
+      if(urlsOpenFoodFacts.length!==1) throw new Error('E6.4 : la requête Open Food Facts n’a pas été déclenchée une seule fois par action');
+      const urlOff = new URL(urlsOpenFoodFacts[0]);
       if(urlOff.pathname!=='/api/v2/product/'+codeOpenFoodFacts+'.json') throw new Error('E6.4 : seule le code-barres doit être envoyé, chemin inattendu '+urlOff.pathname);
       const champsOff = await page.evaluate(()=>({nom:document.querySelector('#scan-nom')?.value,marque:document.querySelector('#scan-marque')?.value,format:document.querySelector('#scan-format')?.value,unite:document.querySelector('#scan-unite')?.value}));
       if(champsOff.nom!=='Produit test OFF'||champsOff.marque!=='Marque test OFF'||champsOff.format!=='500'||champsOff.unite!=='g') throw new Error('E6.4 : les données Open Food Facts ne sont pas proposées dans le rattachement '+JSON.stringify(champsOff));
