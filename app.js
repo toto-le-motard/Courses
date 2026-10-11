@@ -327,10 +327,14 @@ function vueMagasin() {
   let prixPayeAchat = null;
   let formatPayeAchat = null;
   let enregistrementEnCours = false;
+  let formulaireModifie = false;
   let dockActions = null;
 
   function erreur(msg) { message.textContent = msg || ''; message.hidden = !msg; }
   function prixValide() { return analyserPrixSaisie(prix.value); }
+  prix.addEventListener('input', () => { formulaireModifie = true; });
+  valeurFormat.addEventListener('input', () => { formulaireModifie = true; });
+  uniteFormat.addEventListener('change', () => { formulaireModifie = true; });
 
   const boutonScanner = el('button', { type: 'button', class: 'btn btn-secondaire btn-scanner', id: 'btn-scanner', text: 'Scanner un code-barres', onclick: () => ouvrirScanner() });
   const recherche = el('input', { type: 'search', class: 'champ', id: 'champ-type', enterkeyhint: 'next', placeholder: 'Type de produit', autocomplete: 'off', 'aria-label': 'Type de produit' });
@@ -358,6 +362,7 @@ function vueMagasin() {
     const b = e.target.closest('.suggestion-type');
     if (!b) return;
     typeChoisi = types.find((x) => String(x.type.id) === b.dataset.id)?.type || null;
+    formulaireModifie = false;
     recherche.value = typeChoisi ? typeChoisi.nom : '';
     suggestions.replaceChildren();
     chargerDernierEtFormat();
@@ -442,6 +447,7 @@ function vueMagasin() {
       recherche.value = ''; typeChoisi = null; dernier = null; prix.value = ''; valeurFormat.value = ''; date = aujourdHui(); dateInput.value = date; dateTexte.textContent = dateAffichee(date); promo.checked = false;
       suggestions.replaceChildren(); prixHorsPromoBloc.hidden = true; prixHorsPromo.value = ''; horsPromoAvertissement.hidden = true;
       quantiteAchat = 1;
+      formulaireModifie = false;
       prixPayeAchat = null; formatPayeAchat = null;
       await chargerFormulaire();
       if (jeton.ajoutes.length > 0) afficherAnnulation(jeton, magasinCourant);
@@ -514,7 +520,7 @@ function vueMagasin() {
         if (article) {
           const entree = types.find(x => String(x.type.id) === String(article.type));
           if (!entree) { await ouvrirRattachement(code, article); return; }
-          typeChoisi = entree.type; recherche.value = entree.type.nom;
+          typeChoisi = entree.type; formulaireModifie = false; recherche.value = entree.type.nom;
           suggestions.replaceChildren(); chargerDernierEtFormat();
           if (Number.isFinite(Number(article.format)) && Number(article.format) > 0) {
             const affichage = formatAffichage(Number(article.format), typeChoisi.unite);
@@ -584,7 +590,7 @@ function vueMagasin() {
           try {
             await mettre('Article', { codeBarres: code, type: type.id, format: Math.round(formatBase), marque: dialogue.querySelector('#scan-marque').value.trim(), nom: dialogue.querySelector('#scan-nom').value.trim() });
             dialogue.close();
-            typeChoisi = type; recherche.value = type.nom; suggestions.replaceChildren();
+            typeChoisi = type; formulaireModifie = false; recherche.value = type.nom; suggestions.replaceChildren();
             chargerDernierEtFormat();
             const affichage = formatAffichage(formatBase, type.unite);
             valeurFormat.value = String(affichage.valeur).replace(',', '.'); uniteFormat.value = affichage.unite || uniteFormat.value;
@@ -780,7 +786,7 @@ function vueMagasin() {
       entete.className = 'selecteur-magasin ' + classeMagasin(magasinCourant);
       boutonsMagasin.forEach((b) => { b.setAttribute('aria-pressed', String(b.textContent === libelleMagasin(magasinCourant))); });
       suggestions.replaceChildren();
-      if (typeChoisi) chargerDernierEtFormat();
+      if (typeChoisi && !formulaireModifie) chargerDernierEtFormat();
       verifier();
     }
   }
