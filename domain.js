@@ -237,6 +237,32 @@ export function calculerVerdict({ prixCentimes, formatBase, typeUnit, magasin, o
   return { ...base, resultat, ecart, seuil, prixJourNormalise: jour.centimesParUnite, habituelAutre: habituel, differenceUniteCentimes: arrondirCentimes(diffUnite), differenceFormatCentimes: arrondirCentimes(diffFormat) };
 }
 
+// FR26 / E7.4 — économie estimée à partir des prix figés dans l’achat, sans relire l’historique courant.
+export function calculerEconomieRealisee(achat, typeUnit) {
+  const base = { ok: false, compte: false, exclu: false, raison: 'donnees-invalides', economieCentimes: null, gainPromoCentimes: null };
+  if (!achat || typeof achat !== 'object' || !(typeUnit in DIVISEUR)) return base;
+  if (!(achat.achete === 1 || achat.achete === true)) {
+    return { ok: true, compte: false, exclu: false, raison: 'non-achat', economieCentimes: 0, gainPromoCentimes: 0 };
+  }
+  if (!Number.isInteger(achat.quantite) || achat.quantite < 1 || achat.quantite > 999 ||
+      !Number.isInteger(achat.prixPayeCentimes) || achat.prixPayeCentimes <= 0 ||
+      !Number.isInteger(achat.format) || achat.format <= 0) return base;
+  for (const prix of [achat.prixComparaisonCentimes, achat.prixHabituelMemeMagasinCentimes]) {
+    if (prix !== null && prix !== undefined && (!Number.isInteger(prix) || prix <= 0)) return base;
+  }
+  if (achat.prixComparaisonCentimes === null || achat.prixComparaisonCentimes === undefined) {
+    return { ok: true, compte: false, exclu: true, raison: 'comparaison-indisponible', economieCentimes: 0, gainPromoCentimes: null };
+  }
+  const paye = prixNormalise(achat.prixPayeCentimes, achat.format, typeUnit);
+  if (!paye.ok) return base;
+  const facteurFormat = achat.format / DIVISEUR[typeUnit] * achat.quantite;
+  const economieCentimes = arrondirCentimes((achat.prixComparaisonCentimes - paye.centimesParUnite) * facteurFormat);
+  const gainPromoCentimes = achat.prixHabituelMemeMagasinCentimes == null
+    ? null
+    : arrondirCentimes((achat.prixHabituelMemeMagasinCentimes - paye.centimesParUnite) * facteurFormat);
+  return { ok: true, compte: true, exclu: false, raison: null, economieCentimes, gainPromoCentimes };
+}
+
 // FR12 / E4.1 — fréquence des relevés promo par type et par magasin.
 export function frequencePromos(observations, magasin) {
   if (!Array.isArray(observations)) return { ok: false, raison: 'donnees-invalides', nbPromos: 0, nbReleves: 0, pourcentage: null };
