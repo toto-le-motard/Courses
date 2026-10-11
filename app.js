@@ -687,7 +687,7 @@ function vueMagasin() {
         el('button', { id:'btn-achat-plus', type:'button', class:'btn btn-secondaire btn-quantite', text:'+', 'aria-label':'Augmenter la quantité', onclick:()=>{quantiteAchat=Math.min(999,quantiteAchat+1);quantite.value=String(quantiteAchat);} })
       ),
       el('button', { id:'btn-achat-confirme', type:'button', class:'btn btn-primaire', text:'J’achète', disabled:enregistrementEnCours, onclick:()=>enregistrerReleve(1) }),
-      el('button', { type:'button', class:'btn btn-secondaire', text:'Prix ou format payé différent ?', onclick:()=>ouvrirPrixPaye(format.formatBase) }),
+      el('button', { type:'button', class:'btn btn-secondaire', text:'Prix ou format payé différent ?', onclick:()=>ouvrirPrixPaye(verifierFormat(typeChoisi.unite, Number(valeurFormat.value), uniteFormat.value).formatBase) }),
       bouton
     );
     dockActions?.replaceChildren(actionsAchat);
