@@ -430,7 +430,7 @@ if (playwright) {
       await page.click('button:has-text("Prix ou format payé différent ?")');
       const dialoguePrixAchat=page.locator('dialog.dialog-prix-achat');
       await dialoguePrixAchat.waitFor({state:'visible',timeout:3000});
-      if (!(await dialoguePrixAchat.getByLabel('Prix payé').isVisible()) || !(await dialoguePrixAchat.getByLabel('Format acheté').isVisible())) throw new Error('champs prix payé ou format acheté absents');
+      if (!(await dialoguePrixAchat.getByLabel('Prix payé').isVisible()) || !(await dialoguePrixAchat.locator('#format-paye-achat').isVisible())) throw new Error('champs prix payé ou format acheté absents');
       const dimensionsPrixAchat=await dialoguePrixAchat.evaluate(d=>({height:d.getBoundingClientRect().height,text:d.innerText}));
       if(dimensionsPrixAchat.height<=0||!/Confirmer/.test(dimensionsPrixAchat.text)) throw new Error('dialogue prix payé vide ou sans action de confirmation');
       await dialoguePrixAchat.getByLabel('Prix payé').fill('5,00');
