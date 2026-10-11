@@ -22,9 +22,53 @@ export function validerSauvegarde(payload, schemaVersionAttendu) {
   if (!dateIsoValide(payload.dateExport)) {
     return { ok: false, erreur: "La date de sauvegarde est absente ou invalide." };
   }
-  for (const cle of ["types", "articles", "releves", "achats", "reglages"]) {
-    if (!Array.isArray(payload[cle]) || payload[cle].some((item) => !item || typeof item !== "object" || Array.isArray(item))) {
-      return { ok: false, erreur: "La sauvegarde est invalide : collection « " + cle + " » absente ou incorrecte." };
+  const entierPositif = (v) => Number.isSafeInteger(v) && v > 0;
+  const prixValide = (v) => v === null || (Number.isSafeInteger(v) && v > 0);
+  const dateValide = (v) => dateIsoValide(v);
+  const magasinValide = (v) => v === "leclerc" || v === "intermarche";
+  const valideurs = {
+    types: (v) => entierPositif(v.id) && typeof v.nom === "string" && !!v.nom.trim()
+      && ["kg", "l", "unit"].includes(v.unite)
+      && (v.nomNormalise === undefined || (typeof v.nomNormalise === "string" && !!v.nomNormalise.trim()))
+      && (v.archive === undefined || v.archive === 0 || v.archive === 1)
+      && (v.marque === undefined || typeof v.marque === "string")
+      && (v.nomArticle === undefined || typeof v.nomArticle === "string"),
+    articles: (v) => typeof v.codeBarres === "string" && !!v.codeBarres.trim()
+      && entierPositif(v.type) && entierPositif(v.format)
+      && (v.marque === undefined || typeof v.marque === "string")
+      && (v.nom === undefined || typeof v.nom === "string")
+      && (v.nomArticle === undefined || typeof v.nomArticle === "string"),
+    releves: (v) => entierPositif(v.id) && entierPositif(v.type) && magasinValide(v.magasin)
+      && dateValide(v.date) && Number.isSafeInteger(v.prixCentimes) && v.prixCentimes > 0
+      && entierPositif(v.format ?? v.formatBase)
+      && (v.promo === 0 || v.promo === 1 || typeof v.promo === "boolean"),
+    achats: (v) => entierPositif(v.id) && entierPositif(v.type)
+      && (v.observation === null || entierPositif(v.observation))
+      && magasinValide(v.magasin) && dateValide(v.date)
+      && (v.achete === 0 || v.achete === 1 || typeof v.achete === "boolean")
+      && Number.isSafeInteger(v.quantite) && v.quantite >= 1 && v.quantite <= 999
+      && Number.isSafeInteger(v.prixPayeCentimes) && v.prixPayeCentimes > 0
+      && entierPositif(v.format) && prixValide(v.prixComparaisonCentimes)
+      && prixValide(v.prixHabituelMemeMagasinCentimes),
+    reglages: (v) => typeof v.cle === "string" && !!v.cle.trim()
+      && Object.prototype.hasOwnProperty.call(v, "valeur")
+  };
+  for (const cle of Object.keys(valideurs)) {
+    if (!Array.isArray(payload[cle]) || payload[cle].some((item) =>
+      !item || typeof item !== "object" || Array.isArray(item) || !valideurs[cle](item))) {
+      return { ok: false, erreur: "La sauvegarde est invalide : collection « " + cle + " » absente ou contenant un enregistrement incorrect." };
+    }
+  }
+  const uniques = [
+    ["types", "id"], ["types", "nomNormalise"], ["articles", "codeBarres"],
+    ["releves", "id"], ["achats", "id"], ["reglages", "cle"]
+  ];
+  for (const [collection, cle] of uniques) {
+    const vus = new Set();
+    for (const item of payload[collection]) {
+      const valeur = cle === "nomNormalise" ? (item.nomNormalise || item.nom.trim().toLocaleLowerCase("fr")) : item[cle];
+      if (vus.has(valeur)) return { ok: false, erreur: "La sauvegarde contient un doublon dans « " + collection + " »." };
+      vus.add(valeur);
     }
   }
   return { ok: true, valeur: payload };
