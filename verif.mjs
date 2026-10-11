@@ -498,6 +498,36 @@ if (playwright) {
       await page.waitForFunction(()=>!document.querySelector('.ligne-achat'),null,{timeout:5000});
       if(!/Aucun achat/.test(await page.locator('.historique-achats').innerText())) throw new Error('E7.3 : état vide après suppression absent');
       ok('E7.3 suppression achat : retrait persistant et état vide visible');
+
+      // ---- E7.5 : bilan total, gains promo, exclusions, navigation et état vide ----
+      etapeParcours = 'E7.5 écran Bilan';
+      await page.evaluate(()=>new Promise((resolve,reject)=>{
+        const rq=indexedDB.open('appli-courses');rq.onsuccess=()=>{const db=rq.result,tx=db.transaction('Purchase','readwrite'),s=tx.objectStore('Purchase');
+          for(const id of [9901,9902,9903,9904])s.delete(id);
+          s.put({id:9901,type:9992,observation:9921,magasin:'leclerc',date:'2031-02-01',achete:1,quantite:2,prixPayeCentimes:200,format:500,prixComparaisonCentimes:500,prixHabituelMemeMagasinCentimes:600});
+          s.put({id:9902,type:9992,observation:9922,magasin:'intermarche',date:'2031-02-02',achete:1,quantite:1,prixPayeCentimes:1500,format:1000,prixComparaisonCentimes:1000,prixHabituelMemeMagasinCentimes:null});
+          s.put({id:9903,type:9992,observation:9923,magasin:'leclerc',date:'2031-02-03',achete:1,quantite:1,prixPayeCentimes:300,format:500,prixComparaisonCentimes:null,prixHabituelMemeMagasinCentimes:500});
+          s.put({id:9904,type:9992,observation:9924,magasin:'leclerc',date:'2031-02-04',achete:0,quantite:5,prixPayeCentimes:100,format:1000,prixComparaisonCentimes:500,prixHabituelMemeMagasinCentimes:600});
+          tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error);
+        };rq.onerror=()=>reject(rq.error);
+      }));
+      await aller('#/bilan');
+      await page.waitForFunction(()=>document.querySelector('#vue')?.textContent.includes('Économies réalisées'),null,{timeout:5000});
+      const bilanE75=page.locator('.bilan-economies');
+      if(!(await bilanE75.isVisible()))throw new Error('écran Bilan absent');
+      const texteBilanE75=await bilanE75.innerText();
+      if(!/[-−]4,00/.test(texteBilanE75)||!/2,00/.test(texteBilanE75))throw new Error('Bilan : total négatif ou gains promo incorrects : '+texteBilanE75);
+      if(!/100\s*€ sur 12 mois/.test(texteBilanE75)||!(await bilanE75.locator('.anneau-progression').count()))throw new Error('Bilan : cible annuelle ou anneau de progression absent');
+      if(!/1 achat exclu/.test(texteBilanE75))throw new Error('Bilan : nombre d’achats exclus incorrect : '+texteBilanE75);
+      const lienTypeBilan=bilanE75.getByRole('link',{name:'ZZ mensuel test'});
+      if(!(await lienTypeBilan.count()))throw new Error('Bilan : ligne par type absente');
+      await lienTypeBilan.click();
+      await page.waitForFunction(()=>document.querySelector('#titre-ecran')?.textContent==='Historique des achats',null,{timeout:5000});
+      if(!(await page.locator('.historique-achats').getByText('01/02/2031').count()))throw new Error('Bilan : touche sur le type n’ouvre pas son historique');
+      await page.evaluate(()=>new Promise((resolve,reject)=>{const rq=indexedDB.open('appli-courses');rq.onsuccess=()=>{const db=rq.result,tx=db.transaction('Purchase','readwrite'),s=tx.objectStore('Purchase');for(const id of [9901,9902,9903,9904])s.delete(id);tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error)};rq.onerror=()=>reject(rq.error)}));
+      await aller('#/bilan');
+      await page.waitForFunction(()=>document.querySelector('.bilan-economies')?.textContent.includes('Aucun achat'),null,{timeout:5000});
+      ok('E7.5 Bilan : total négatif, cible 100 €, gains promo, exclusions, navigation et état vide');
       await aller('#/reglages');
       const versionCache = readFileSync(join(racine, 'sw.js'), 'utf8').match(/const CACHE_VERSION = '([^']+)'/)?.[1];
       await aller('#/reglages');await page.waitForFunction((v)=>(document.getElementById('vue')?.textContent || '').includes(v),versionCache,{timeout:5000});await verifierEcran('Réglages');ok('B6 Réglages : version '+versionCache+' visible');
