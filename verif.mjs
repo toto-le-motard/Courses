@@ -428,9 +428,14 @@ if (playwright) {
       if(await page.locator('#quantite-achat').inputValue()!=='2') throw new Error('incrément de quantité incorrect');
       etapeParcours = 'E7.1 clic J’achète';
       await page.click('#btn-achat-confirme');
-      await page.waitForFunction(()=>{const m=document.querySelector('.message-succes');return /Achat enregistré/.test(m?.textContent||'')||(m&&!m.hidden&&Boolean(m.textContent.trim()));},null,{timeout:8000});
-      const retourAchat = await page.locator('.message-succes').textContent();
-      if (!/Achat enregistré/.test(retourAchat||'')) throw new Error('enregistrement achat refusé par l’application : '+(retourAchat||'(message vide)'));
+      await page.waitForFunction(()=>/Achat enregistré/.test(document.querySelector('.message-succes')?.textContent||'')||Array.from(document.querySelectorAll('dialog')).some(d=>d.open&&/Prix très différent/.test(d.textContent||'')),null,{timeout:8000});
+      const confirmationPrix=page.locator('dialog:visible').filter({hasText:'Prix très différent'});
+      if(await confirmationPrix.count()){
+        const texteConfirmation=await confirmationPrix.innerText();
+        if(!/Confirmer \?/.test(texteConfirmation)||!(await confirmationPrix.getByRole('button',{name:'Confirmer'}).isVisible())) throw new Error('dialogue de prix incohérent incomplet ou invisible');
+        await confirmationPrix.getByRole('button',{name:'Confirmer'}).click();
+      }
+      await page.waitForFunction(()=>/Achat enregistré/.test(document.querySelector('.message-succes')?.textContent||''),null,{timeout:8000});
       const achatE71 = await page.evaluate(()=>new Promise((resolve,reject)=>{
         const rq=indexedDB.open('appli-courses');
         rq.onsuccess=()=>{const db=rq.result,tx=db.transaction(['Purchase','Observation'],'readonly');
