@@ -480,6 +480,7 @@ if (playwright) {
           if (url.startsWith('https://world.openfoodfacts.org/api/v2/product/')) {
             window.__requetesOpenFoodFacts.push(url);
             if (window.__modeOpenFoodFacts === 'absent') return new Response(JSON.stringify({status:0,product:null}), {status:200,headers:{'Content-Type':'application/json'}});
+            if (window.__modeOpenFoodFacts === 'pending') return await new Promise(resolve => { window.__resoudreOpenFoodFacts = () => resolve(new Response(JSON.stringify({status:1,product:{product_name:'Produit test OFF',brands:'Marque test OFF',product_quantity:'500',product_quantity_unit:'g'}}), {status:200,headers:{'Content-Type':'application/json'}})); });
             return new Response(JSON.stringify({status:1,product:{product_name:'Produit test OFF',brands:'Marque test OFF',product_quantity:'500',product_quantity_unit:'g'}}), {status:200,headers:{'Content-Type':'application/json'}});
           }
           return fetchOriginal(input, init);
@@ -511,6 +512,17 @@ if (playwright) {
       if(!await page.locator('dialog.dialog-scan button:has-text("Rechercher")').isVisible()) throw new Error('E6.4 : l’absence de fiche Open Food Facts bloque le rattachement manuel');
       await page.click('dialog.dialog-scan button:has-text("Fermer")');
       ok('E6.4 absence de fiche Open Food Facts : message français et rattachement manuel toujours disponible');
+      await page.evaluate(() => { window.__modeOpenFoodFacts = 'pending'; });
+      await page.click('#btn-scanner');
+      await page.waitForSelector('dialog.dialog-scan[open]',{timeout:5000});
+      await page.fill('#scan-code-manuel','1234567890126');
+      await page.click('dialog.dialog-scan button:has-text("Compléter")');
+      await page.waitForFunction(()=>typeof window.__resoudreOpenFoodFacts==='function',null,{timeout:3000});
+      await page.click('dialog.dialog-scan button:has-text("Fermer")');
+      await page.evaluate(()=>window.__resoudreOpenFoodFacts());
+      await page.waitForTimeout(100);
+      if(await page.locator('dialog.dialog-rattachement[open]').count()) throw new Error('E6.4 : une réponse tardive rouvre la fiche après fermeture volontaire');
+      ok('E6.4 fermeture pendant la requête : aucune feuille ne se rouvre après une réponse tardive');
 
       // ---- Épic E7 : achat en un geste et quantité par défaut ----
       etapeParcours = 'E7.1 achat en un geste';
