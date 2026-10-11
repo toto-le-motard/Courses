@@ -499,6 +499,21 @@ function vueMagasin() {
 
 
   async function ouvrirScanner() {
+    function garderChampScannerVisible() {
+      requestAnimationFrame(() => {
+        const dialogActif = champCode.closest('dialog');
+        if (!dialogActif || !champCode.isConnected) return;
+        const champRect = champCode.getBoundingClientRect();
+        const label = dialogActif.querySelector('label[for="scan-code-manuel"]');
+        const labelRect = label?.getBoundingClientRect();
+        const dialogRect = dialogActif.getBoundingClientRect();
+        const haut = Math.min(champRect.top, labelRect?.top ?? champRect.top);
+        const bas = Math.max(champRect.bottom, labelRect?.bottom ?? champRect.bottom);
+        const hautVisible = dialogRect.top + 12, basVisible = dialogRect.bottom - 12;
+        if (haut < hautVisible) dialogActif.scrollTop -= hautVisible - haut;
+        else if (bas > basVisible) dialogActif.scrollTop += bas - basVisible;
+      });
+    }
     function actualiserBoutonCompleter() {
       const visible = Boolean(navigator.onLine && champCode.value.trim());
       boutonCompleter.hidden = !visible;
@@ -506,7 +521,7 @@ function vueMagasin() {
       boutonCompleter.style.display = visible ? '' : 'none';
       boutonCompleter.disabled = !visible;
     }
-    const champCode = el('input', { id: 'scan-code-manuel', class: 'champ', inputmode: 'numeric', autocomplete: 'off', placeholder: 'EAN-13 ou autre code', oninput: actualiserBoutonCompleter });
+    const champCode = el('input', { id: 'scan-code-manuel', class: 'champ', inputmode: 'numeric', enterkeyhint: 'search', autocomplete: 'off', placeholder: 'EAN-13 ou autre code', oninput: actualiserBoutonCompleter, onfocus: garderChampScannerVisible, onkeydown: event => { if (event.key === 'Enter') { event.preventDefault(); void traiterCode(champCode.value); } } });
     const boutonCompleter = el('button', { type: 'button', class: 'btn btn-secondaire', text: 'Compléter', hidden: true, disabled: true, onclick: async () => {
       const code = String(champCode.value || '').trim();
       const message = dialogue.querySelector('#scan-message');
@@ -571,6 +586,8 @@ function vueMagasin() {
       stream?.getTracks?.().forEach(t => t.stop());
       window.removeEventListener('online', actualiserBoutonCompleter);
       window.removeEventListener('offline', actualiserBoutonCompleter);
+      window.visualViewport?.removeEventListener('resize', garderChampScannerVisible);
+      window.visualViewport?.removeEventListener('scroll', garderChampScannerVisible);
       dialogue.remove();
     };
     dialogue.addEventListener('close', fermer, { once: true });
@@ -601,6 +618,8 @@ function vueMagasin() {
     champCode.addEventListener('input', actualiserBoutonCompleter);
     window.addEventListener('online', actualiserBoutonCompleter);
     window.addEventListener('offline', actualiserBoutonCompleter);
+    window.visualViewport?.addEventListener('resize', garderChampScannerVisible);
+    window.visualViewport?.addEventListener('scroll', garderChampScannerVisible);
     actualiserBoutonCompleter();
     if (!dialogue.isConnected) document.body.append(dialogue);
     dialogue.showModal();
