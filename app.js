@@ -378,7 +378,7 @@ function vueMagasin() {
   dateInput.addEventListener('change', () => { date = dateInput.value || aujourdHui(); dateTexte.textContent = dateAffichee(date); void actualiserVerdict(); });
   promo.addEventListener('change', () => { prixHorsPromoBloc.hidden = !promo.checked; if (!promo.checked) prixHorsPromo.value = ''; verifier(); });
   prixHorsPromo.addEventListener('input', verifier);
-  async function enregistrerReleve(statutAchat = null) {
+  async function enregistrerReleve(statutAchat = null, achatPersonnalise = null) {
     if (enregistrementEnCours) return;
     const prixCentimes = prixValide();
     if (!typeChoisi || !prixCentimes) return;
@@ -456,6 +456,35 @@ function vueMagasin() {
       if(actions) actions.querySelectorAll('button').forEach(b=>b.disabled=false);
     }
   }
+  async function ouvrirPrixAchatDifferent() {
+    if (!typeChoisi || !prixValide()) return;
+    const dialogue = el('dialog', { class:'feuille dialog-prix-achat' },
+      el('h2', { text:'Prix réellement payé' }),
+      el('p', { text:'Le relevé en rayon reste inchangé. Indiquez le prix et le format effectivement achetés.' }),
+      el('label', { class:'etiquette', for:'prix-achat-paye', text:'Prix payé' }),
+      el('input', { id:'prix-achat-paye', class:'champ', inputmode:'decimal', value:prix.value, autocomplete:'off', required:true }),
+      el('label', { class:'etiquette', for:'format-achat-paye', text:'Format acheté' }),
+      el('input', { id:'format-achat-paye', class:'champ', inputmode:'decimal', value:valeurFormat.value, required:true }),
+      el('label', { class:'etiquette', for:'unite-achat', text:'Unité du format acheté' }),
+      el('select', { id:'unite-achat', class:'champ', 'aria-label':'Unité du format acheté' },
+        ...UNITES.filter(u=>unitesCompatibles(typeChoisi.unite).includes(u)).map(u=>el('option',{value:u,text:LIBELLE_UNITE[u]}))),
+      el('p', { class:'erreur', id:'erreur-prix-achat', role:'alert', hidden:true }),
+      el('div', { class:'feuille-actions' },
+        el('button', { type:'button', class:'btn btn-secondaire', text:'Annuler', onclick:()=>dialogue.close() }),
+        el('button', { type:'button', class:'btn btn-primaire', text:'Confirmer', onclick:async()=>{
+          const p=analyserPrixSaisie(dialogue.querySelector('#prix-achat-paye').value);
+          const f=verifierFormat(typeChoisi.unite,Number(dialogue.querySelector('#format-achat-paye').value),dialogue.querySelector('#unite-achat').value);
+          const e=dialogue.querySelector('#erreur-prix-achat');
+          if(!p||!f.ok){e.textContent='Saisissez un prix et un format valides.';e.hidden=false;return;}
+          dialogue.close(); dialogue.remove();
+          await enregistrerReleve(1,{prixPayeCentimes:p,format:f.formatBase});
+        }})
+      )
+    );
+    dialogue.addEventListener('close',()=>dialogue.remove());
+    document.body.append(dialogue); dialogue.showModal();
+  }
+
   bouton.addEventListener('click', () => { void enregistrerReleve(0); });
 
 
