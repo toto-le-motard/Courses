@@ -418,3 +418,31 @@ export function remplacerCollections(payload) {
     transaction.onabort = () => reject(transaction.error || new Error('Import annulé : les données actuelles ont été conservées.'));
   });
 }
+
+
+// FR24 / FR25 — historique, modification et suppression d'un achat.
+export async function listerAchats(typeId) {
+  if (!Number.isInteger(Number(typeId)) || Number(typeId) <= 0) return [];
+  return (await toutLire('Purchase')).filter(a => a.type === Number(typeId))
+    .sort((a,b) => a.date !== b.date ? (a.date < b.date ? 1 : -1) : (b.id || 0) - (a.id || 0));
+}
+
+export async function modifierAchat(id, champs = {}) {
+  if (!Number.isInteger(Number(id)) || Number(id) <= 0) throw new Error('Achat invalide.');
+  const actuel = await lire('Purchase', Number(id));
+  if (!actuel) throw new Error('Achat introuvable.');
+  const prochain = { ...actuel };
+  if (Object.prototype.hasOwnProperty.call(champs,'prixPayeCentimes')) prochain.prixPayeCentimes = champs.prixPayeCentimes;
+  if (Object.prototype.hasOwnProperty.call(champs,'format')) prochain.format = champs.format;
+  if (Object.prototype.hasOwnProperty.call(champs,'quantite')) prochain.quantite = champs.quantite;
+  if (!Number.isInteger(prochain.prixPayeCentimes) || prochain.prixPayeCentimes <= 0) throw new Error('Prix payé invalide.');
+  if (!Number.isInteger(prochain.format) || prochain.format <= 0) throw new Error('Format acheté invalide.');
+  if (!Number.isInteger(prochain.quantite) || prochain.quantite < 1 || prochain.quantite > 999) throw new Error('Quantité invalide.');
+  await mettre('Purchase', prochain);
+  return prochain;
+}
+
+export async function supprimerAchat(id) {
+  if (!Number.isInteger(Number(id)) || Number(id) <= 0) throw new Error('Achat invalide.');
+  return supprimer('Purchase', Number(id));
+}

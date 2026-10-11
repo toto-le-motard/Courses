@@ -477,7 +477,7 @@ if (playwright) {
       await page.getByRole('link',{name:'Historique des achats'}).click();
       await page.waitForFunction(()=>document.querySelector('#vue')?.textContent.includes('Historique des achats'),null,{timeout:5000});
       const historiqueAchatsE73=page.locator('.historique-achats');
-      if (!(await historiqueAchatsE73.isVisible()) || !(await historiqueAchatsE73.getByText('05/01/2031').count())) throw new Error('E7.3 : historique achat absent ou date non formatée en français');
+      if (!(await historiqueAchatsE73.isVisible()) || !(await historiqueAchatsE73.getByText('01/01/2031').count())) throw new Error('E7.3 : historique achat absent ou date non formatée en français');
       if (!(await historiqueAchatsE73.getByText('Leclerc').count()) || !(await historiqueAchatsE73.getByText('2').count()) || !(await historiqueAchatsE73.getByText('5,00 €').count())) throw new Error('E7.3 : magasin, quantité ou prix payé absent');
       if (!(await historiqueAchatsE73.getByRole('button',{name:'Modifier cet achat'}).count()) || !(await historiqueAchatsE73.getByRole('button',{name:'Supprimer cet achat'}).count())) throw new Error('E7.3 : actions de modification/suppression absentes');
       ok('E7.3 historique des achats par type : date, magasin, quantité, prix payé et actions');

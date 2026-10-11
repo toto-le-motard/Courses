@@ -1,5 +1,5 @@
 // app.js — interface et navigation (stories 1.2 à 3-2).
-import { initDb, dbPrete, listerTypes, lireDernierReleve, lireObservations, dernierReleve, trouverDoublon, enregistrerReleves, analyserDoublons, annulerEnregistrement, listerReleves, modifierReleve, supprimerReleve, enregistrerAchat, demanderStockagePersistant, lireReglage, ecrireReglage, compter, STORES, VERSION_SCHEMA, exporterCollections, remplacerCollections, lire, mettre, toutLire, supprimer } from './db.js';
+import { initDb, dbPrete, listerTypes, lireDernierReleve, lireObservations, dernierReleve, trouverDoublon, enregistrerReleves, analyserDoublons, annulerEnregistrement, listerReleves, modifierReleve, supprimerReleve, enregistrerAchat, listerAchats, modifierAchat, supprimerAchat, demanderStockagePersistant, lireReglage, ecrireReglage, compter, STORES, VERSION_SCHEMA, exporterCollections, remplacerCollections, lire, mettre, toutLire, supprimer } from './db.js';
 import { MAGASIN, UNITES, LIBELLE_UNITE, VERDICT, analyserPrixSaisie, verifierFormat, prixNormalise, formaterPrixEuros, formaterPrixNormalise, calculerVerdict, prixHabituel, estPrixIncoherent, unitesCompatibles, formatAffichage, calculerPositionDock, modeSaisieActif, positionDefilement, frequencePromos } from './domain.js';
 import { accueilVide, vueTypes, vueTypeForm } from './types-ui.js';
 import { creerSauvegarde, validerSauvegarde, etatRappelExport } from './backup.js';
@@ -1097,10 +1097,69 @@ async function vueFicheType(typeId) {
   };
   sectionCodes.append(listeCodes);
   await actualiserCodes();
-  racine.append(el('h2',{text:type.nom}),leclercCarte,interCarte,barres,
+  racine.append(el('a',{href:'#/achats/'+typeId,class:'btn btn-secondaire btn-bloc',text:'Historique des achats'}),el('h2',{text:type.nom}),leclercCarte,interCarte,barres,
     el('p',{class:'aide note-biais-promo',text:'Attention : si vos relevés sont surtout effectués en promotion, la fréquence affichée peut être biaisée.'}),
     sectionCodes, el('h3',{text:'Historique des relevés'}),vueHistorique(typeId,true));
   return racine;
+}
+
+async function vueHistoriqueAchats(typeId) {
+  await dbPrete;
+  const type = await lireTypeSafe(typeId);
+  if (!type) return carte('Historique des achats', 'Type introuvable.');
+  const racine = el('div', { class:'historique-achats' });
+  racine.append(el('a',{href:'#/fiche/'+typeId,class:'btn btn-secondaire btn-bloc',text:'← Retour à la fiche'}),el('h2',{text:type.nom}));
+  const achats = await listerAchats(typeId);
+  if (!achats.length) {
+    racine.append(el('p',{class:'aide',text:'Aucun achat enregistré pour ce type.'}));
+    return racine;
+  }
+  for (const achat of achats) {
+    const uniteBase = type.unite === 'kg' ? 'g' : type.unite === 'l' ? 'ml' : 'unités';
+    const ligne = el('article',{class:'ligne-achat', 'data-achat-id':String(achat.id)},
+      el('div',{class:'ligne-achat-infos'},
+        el('strong',{text:dateAffichee(achat.date)}),
+        el('span',{text:libelleMagasin(achat.magasin)}),
+        el('span',{text:(achat.achete ? 'Acheté' : 'Non acheté')+' · Quantité : '+achat.quantite}),
+        el('span',{text:formaterPrixEuros(achat.prixPayeCentimes)+' · Format : '+achat.format+' '+uniteBase})
+      ),
+      el('div',{class:'ligne-achat-actions'},
+        el('button',{type:'button',class:'btn btn-secondaire',text:'Modifier', 'aria-label':'Modifier cet achat',onclick:()=>ouvrirEditionAchat(achat,type)}),
+        el('button',{type:'button',class:'btn btn-secondaire',text:'Supprimer','aria-label':'Supprimer cet achat',onclick:()=>confirmerSuppressionAchat(achat,typeId)})
+      )
+    );
+    racine.append(ligne);
+  }
+  return racine;
+}
+
+function ouvrirEditionAchat(achat,type) {
+  const d=el('dialog',{class:'feuille dialog-achat-edition'});
+  const prix=el('input',{id:'edition-achat-prix',class:'champ',inputmode:'decimal',value:(achat.prixPayeCentimes/100).toFixed(2).replace('.',','),'aria-label':'Prix payé',enterkeyhint:'next'});
+  const format=el('input',{id:'edition-achat-format',class:'champ',type:'number',min:'1',step:'1',value:String(achat.format),'aria-label':'Format acheté',enterkeyhint:'next'});
+  const quantite=el('input',{id:'edition-achat-quantite',class:'champ',type:'number',min:'1',max:'999',step:'1',value:String(achat.quantite),'aria-label':'Quantité',enterkeyhint:'done'});
+  const erreurChamp=el('p',{class:'erreur',role:'alert',hidden:true});
+  const fermer=()=>{if(d.open)d.close();d.remove();};
+  const enregistrer=el('button',{type:'button',class:'btn btn-primaire',text:'Enregistrer',onclick:async()=>{
+    const p=analyserPrixSaisie(prix.value), f=Number(format.value), q=Number(quantite.value);
+    if(!p||!Number.isInteger(f)||f<=0||!Number.isInteger(q)||q<1||q>999){erreurChamp.textContent='Saisissez un prix, un format et une quantité valides.';erreurChamp.hidden=false;return;}
+    try{await modifierAchat(achat.id,{prixPayeCentimes:p,format:f,quantite:q});fermer();await afficher();}
+    catch(e){erreurChamp.textContent=e.message||'Modification impossible.';erreurChamp.hidden=false;}
+  }});
+  d.append(el('h2',{text:'Modifier cet achat'}),el('label',{for:'edition-achat-prix',class:'etiquette',text:'Prix payé (€)'}),prix,el('label',{for:'edition-achat-format',class:'etiquette',text:'Format acheté ('+(type.unite==='kg'?'g':type.unite==='l'?'ml':'unités')+')'}),format,el('label',{for:'edition-achat-quantite',class:'etiquette',text:'Quantité'}),quantite,erreurChamp,el('div',{class:'feuille-actions'},el('button',{type:'button',class:'btn btn-secondaire',text:'Annuler',onclick:fermer}),enregistrer));
+  d.addEventListener('close',()=>d.remove(),{once:true});document.body.append(d);d.showModal();
+}
+
+function confirmerSuppressionAchat(achat,typeId) {
+  const d=el('dialog',{class:'feuille dialog-achat-suppression'},
+    el('h2',{text:'Supprimer cet achat ?'}),
+    el('p',{text:'Cette action est définitive. Le relevé de prix associé est conservé.'}),
+    el('div',{class:'feuille-actions'},
+      el('button',{type:'button',class:'btn btn-secondaire',text:'Annuler',onclick:()=>d.close()}),
+      el('button',{type:'button',class:'btn btn-primaire',text:'Supprimer',onclick:async()=>{try{await supprimerAchat(achat.id);d.close();await afficher();}catch(e){console.error('Suppression achat impossible',e);}}})
+    )
+  );
+  d.addEventListener('close',()=>d.remove(),{once:true});document.body.append(d);d.showModal();
 }
 
 async function lireTypeSafe(id){ const r=await listerTypes(); return r.find(t=>t.id===Number(id))||null; }
@@ -1112,6 +1171,7 @@ const ROUTES = {
   'type-nouveau': { titre: 'Nouveau type', onglet: 'types', vue: () => vueTypeForm(null) },
   'type-edit': { titre: 'Modifier le type', onglet: 'types', vue: (p) => vueTypeForm(Number(p)) },
   bilan: { titre: 'Bilan', onglet: 'bilan', vue: () => carte('Économies réalisées', 'Cet écran arrive avec l’épic E7.') },
+  achats: { titre: 'Historique des achats', onglet: 'types', vue: (p) => vueHistoriqueAchats(Number(p)) },
   reglages: { titre: 'Réglages', onglet: null, vue: vueReglages },
   historique: { titre: 'Historique', onglet: 'types', vue: (p) => vueHistorique(Number(p)) },
   fiche: { titre: 'Fiche du type', onglet: 'types', vue: (p) => vueFicheType(Number(p)) },
