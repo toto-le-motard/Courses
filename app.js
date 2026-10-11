@@ -378,6 +378,9 @@ function vueMagasin() {
   prix.addEventListener('input', verifier);
   valeurFormat.addEventListener('input', verifier);
   uniteFormat.addEventListener('change', verifier);
+  prix.addEventListener('focus', () => { formulaireModifie = true; });
+  valeurFormat.addEventListener('focus', () => { formulaireModifie = true; });
+  uniteFormat.addEventListener('focus', () => { formulaireModifie = true; });
   prix.addEventListener('input', () => { formulaireModifie = true; });
   valeurFormat.addEventListener('input', () => { formulaireModifie = true; });
   uniteFormat.addEventListener('change', () => { formulaireModifie = true; });
