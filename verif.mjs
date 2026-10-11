@@ -445,7 +445,9 @@ if (playwright) {
       await page.waitForSelector('dialog.dialog-scan[open]',{timeout:5000});
       await page.waitForSelector('#scan-code-manuel',{timeout:5000});
       await page.fill('#scan-code-manuel','1234567890123');
-      await page.click('dialog.dialog-scan button:has-text("Rechercher")');
+      const indiceClavierScanner = await page.locator('#scan-code-manuel').evaluate(el => el.enterKeyHint);
+      if(indiceClavierScanner!=='search') throw new Error('E6.3 : enterkeyhint search absent du champ de code-barres');
+      await page.locator('#scan-code-manuel').press('Enter');
       await page.waitForFunction(()=>document.querySelector('#champ-type')?.value==='ZZ mensuel test',null,{timeout:5000});
       ok('E6.3 caméra refusée : saisie manuelle retrouve le code connu');
 
