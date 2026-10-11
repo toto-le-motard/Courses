@@ -327,6 +327,7 @@ function vueMagasin() {
   let prixPayeAchat = null;
   let formatPayeAchat = null;
   let enregistrementEnCours = false;
+  let formulaireModifie = false;
   let dockActions = null;
 
   function erreur(msg) { message.textContent = msg || ''; message.hidden = !msg; }
@@ -358,6 +359,7 @@ function vueMagasin() {
     const b = e.target.closest('.suggestion-type');
     if (!b) return;
     typeChoisi = types.find((x) => String(x.type.id) === b.dataset.id)?.type || null;
+    formulaireModifie = false;
     prix.value = '';
     recherche.value = typeChoisi ? typeChoisi.nom : '';
     suggestions.replaceChildren();
@@ -376,6 +378,9 @@ function vueMagasin() {
   prix.addEventListener('input', verifier);
   valeurFormat.addEventListener('input', verifier);
   uniteFormat.addEventListener('change', verifier);
+  prix.addEventListener('input', () => { formulaireModifie = true; });
+  valeurFormat.addEventListener('input', () => { formulaireModifie = true; });
+  uniteFormat.addEventListener('change', () => { formulaireModifie = true; });
   dateInput.addEventListener('change', () => { date = dateInput.value || aujourdHui(); dateTexte.textContent = dateAffichee(date); void actualiserVerdict(); });
   promo.addEventListener('change', () => { prixHorsPromoBloc.hidden = !promo.checked; if (!promo.checked) prixHorsPromo.value = ''; verifier(); });
   prixHorsPromo.addEventListener('input', verifier);
@@ -443,6 +448,7 @@ function vueMagasin() {
       recherche.value = ''; typeChoisi = null; dernier = null; prix.value = ''; valeurFormat.value = ''; date = aujourdHui(); dateInput.value = date; dateTexte.textContent = dateAffichee(date); promo.checked = false;
       suggestions.replaceChildren(); prixHorsPromoBloc.hidden = true; prixHorsPromo.value = ''; horsPromoAvertissement.hidden = true;
       quantiteAchat = 1;
+      formulaireModifie = false;
       prixPayeAchat = null; formatPayeAchat = null;
       await chargerFormulaire();
       if (jeton.ajoutes.length > 0) afficherAnnulation(jeton, magasinCourant);
@@ -781,7 +787,7 @@ function vueMagasin() {
       entete.className = 'selecteur-magasin ' + classeMagasin(magasinCourant);
       boutonsMagasin.forEach((b) => { b.setAttribute('aria-pressed', String(b.textContent === libelleMagasin(magasinCourant))); });
       suggestions.replaceChildren();
-      if (typeChoisi) chargerDernierEtFormat();
+      if (typeChoisi && !formulaireModifie) chargerDernierEtFormat();
       verifier();
     }
   }
