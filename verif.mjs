@@ -454,12 +454,15 @@ if (playwright) {
       // ---- E6.4 : complément Open Food Facts strictement déclenché par l'utilisateur ----
       etapeParcours = 'E6.4 complément Open Food Facts';
       await ctx.setOffline(true);
+      // Le mode offline de Chromium coupe le réseau mais ne met pas toujours navigator.onLine à false ; simuler aussi le signal du navigateur.
+      await page.evaluate(() => { Object.defineProperty(navigator, 'onLine', { configurable: true, get: () => false }); window.dispatchEvent(new Event('offline')); });
       await page.click('#btn-scanner');
       await page.waitForSelector('dialog.dialog-scan[open]',{timeout:5000});
       await page.fill('#scan-code-manuel','1234567890124');
       if(await page.locator('dialog.dialog-scan button:has-text("Compléter")').count()) throw new Error('E6.4 : bouton Compléter visible hors ligne');
       await page.click('dialog.dialog-scan button:has-text("Fermer")');
       await ctx.setOffline(false);
+      await page.evaluate(() => { Object.defineProperty(navigator, 'onLine', { configurable: true, get: () => true }); window.dispatchEvent(new Event('online')); });
       const codeOpenFoodFacts = '1234567890124';
       let urlOpenFoodFacts = null;
       await page.route('https://world.openfoodfacts.org/api/v2/product/**', async route => {
