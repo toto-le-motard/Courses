@@ -418,12 +418,13 @@ if (playwright) {
       await page.evaluate(()=>new Promise((resolve,reject)=>{
         const rq=indexedDB.open('appli-courses');rq.onsuccess=()=>{const db=rq.result,tx=db.transaction('Article','readwrite');tx.objectStore('Article').put({codeBarres:'1234567890123',type:9992,format:500,marque:'Test',nom:'Produit connu'});tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error)};rq.onerror=()=>reject(rq.error);
       }));
-      await page.evaluate(()=>{window.__barcodeTestCode='1234567890123';window.BarcodeDetector=class{async detect(){return [{rawValue:window.__barcodeTestCode}]}};});
+      await page.evaluate(()=>{window.__barcodeTestCode='1234567890123';window.__barcodeDetectCalls=0;window.__barcodeTestSequence=[[],[{rawValue:window.__barcodeTestCode}]];window.BarcodeDetector=class{async detect(){window.__barcodeDetectCalls++;return window.__barcodeTestSequence?.shift()??[{rawValue:window.__barcodeTestCode}]}};});
       await page.evaluate(()=>{Object.defineProperty(navigator.mediaDevices,'getUserMedia',{configurable:true,value:async()=>new MediaStream()});HTMLMediaElement.prototype.play=async function(){return undefined};});
       await page.click('#btn-scanner');
       await page.waitForSelector('dialog.dialog-scan[open]',{timeout:5000});
       await page.waitForFunction(()=>document.querySelector('#champ-type')?.value==='ZZ mensuel test'&&document.querySelector('#champ-format')?.value!=='',null,{timeout:8000});
-      ok('E6.1 code connu : BarcodeDetector remplit type et format hors ligne');
+      if(await page.evaluate(()=>window.__barcodeDetectCalls)<2)throw new Error('E6.1 : le scanner ne réessaie pas après une image sans code');
+      ok('E6.1 code connu après une image vide : BarcodeDetector réessaie et remplit type/format hors ligne');
       await page.evaluate(()=>{window.__barcodeTestCode='9999999999999'});
       await page.click('#btn-scanner');
       await page.waitForSelector('dialog.dialog-scan[open]',{timeout:5000});
