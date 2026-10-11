@@ -604,7 +604,7 @@ if (playwright) {
       await page.setViewportSize({width:390,height:500});
        await page.locator('#fichier-sauvegarde').setInputFiles(cheminSauvegarde);
       await page.waitForSelector('dialog:has-text("Remplace toutes les données actuelles")',{timeout:5000});
-       await page.locator('dialog .feuille-actions').scrollIntoViewIfNeeded();
+       await page.locator('dialog[open] .feuille-actions').last().scrollIntoViewIfNeeded();
        await verifierDialogue('confirmation import 390x500',['Remplace toutes les données actuelles'],['Remplacer toutes les données','Annuler']);
       await page.click('dialog button:has-text("Remplacer toutes les données")');
       await page.waitForFunction(()=>/restaurée|importée/i.test(document.querySelector('.message-sauvegarde')?.textContent||''),null,{timeout:5000});
