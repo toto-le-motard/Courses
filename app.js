@@ -324,6 +324,8 @@ function vueMagasin() {
   let date = aujourdHui();
   let calculVerdictToken = 0;
   let quantiteAchat = 1;
+  let prixPayeAchat = null;
+  let formatPayeAchat = null;
   let enregistrementEnCours = false;
   let dockActions = null;
 
@@ -431,7 +433,7 @@ function vueMagasin() {
         const habituelMemeMagasin = prixHabituel(historiqueAvant.filter(o=>o.id!==observationId),magasinCourant,typeChoisi.unite,date);
         const achatId = await enregistrerAchat({
           type:typeChoisi.id, observation:observationId, magasin:magasinCourant, date,
-          achete:statutAchat, quantite, prixPayeCentimes:prixCentimes, format:format.formatBase,
+          achete:statutAchat, quantite, prixPayeCentimes:prixPayeAchat ?? prixCentimes, format:formatPayeAchat ?? format.formatBase,
           prixComparaisonCentimes:verdictAchat?.habituelAutre?.valeur ?? null,
           prixHabituelMemeMagasinCentimes:habituelMemeMagasin.ok ? habituelMemeMagasin.valeur : null
         });
@@ -440,6 +442,7 @@ function vueMagasin() {
       recherche.value = ''; typeChoisi = null; dernier = null; prix.value = ''; valeurFormat.value = ''; date = aujourdHui(); dateInput.value = date; dateTexte.textContent = dateAffichee(date); promo.checked = false;
       suggestions.replaceChildren(); prixHorsPromoBloc.hidden = true; prixHorsPromo.value = ''; horsPromoAvertissement.hidden = true;
       quantiteAchat = 1;
+      prixPayeAchat = null; formatPayeAchat = null;
       await chargerFormulaire();
       if (jeton.ajoutes.length > 0) afficherAnnulation(jeton, magasinCourant);
       message.textContent = statutAchat === null ? '' : (statutAchat ? 'Achat enregistré.' : 'Non-achat enregistré.');
@@ -655,9 +658,34 @@ function vueMagasin() {
         el('button', { id:'btn-achat-plus', type:'button', class:'btn btn-secondaire btn-quantite', text:'+', 'aria-label':'Augmenter la quantité', onclick:()=>{quantiteAchat=Math.min(999,quantiteAchat+1);quantite.value=String(quantiteAchat);} })
       ),
       el('button', { id:'btn-achat-confirme', type:'button', class:'btn btn-primaire', text:'J’achète', disabled:enregistrementEnCours, onclick:()=>enregistrerReleve(1) }),
+      el('button', { type:'button', class:'btn btn-secondaire', text:'Prix ou format payé différent ?', onclick:()=>ouvrirPrixPaye(format.formatBase) }),
       bouton
     );
     dockActions?.replaceChildren(actionsAchat);
+  }
+
+  async function ouvrirPrixPaye(formatBaseCourant) {
+    if (!typeChoisi) return;
+    const d = el('dialog', { class:'feuille dialog-prix-achat' });
+    const prixPaye = el('input', { id:'prix-paye-achat', class:'champ', type:'text', inputmode:'decimal', value:prix.value, 'aria-label':'Prix payé', enterkeyhint:'next' });
+    const formatPaye = el('input', { id:'format-paye-achat', class:'champ', type:'number', min:'0', step:'any', value:String(Number(valeurFormat.value)||formatBaseCourant), 'aria-label':'Format acheté', enterkeyhint:'done' });
+    const unitePaye = el('select', { id:'unite-achat', class:'champ', 'aria-label':'Unité du format acheté' });
+    const uniteDefaut = typeChoisi.unite === 'kg' ? 'g' : typeChoisi.unite === 'l' ? 'ml' : 'unit';
+    for (const [value,label] of [['g','g'],['kg','kg'],['ml','ml'],['l','l'],['unit','unité(s)']]) {
+      if ((typeChoisi.unite==='kg'&&['g','kg'].includes(value))||(typeChoisi.unite==='l'&&['ml','l'].includes(value))||(typeChoisi.unite==='unit'&&value==='unit')) unitePaye.append(el('option',{value,text:label}));
+    }
+    unitePaye.value = uniteDefaut;
+    const messagePrix = el('p',{class:'erreur',role:'alert',hidden:true});
+    const fermer = () => { if(d.open)d.close(); d.remove(); };
+    const confirmer = el('button',{type:'button',class:'btn btn-primaire',text:'Confirmer',onclick:()=>{
+      const p=analyserPrixSaisie(prixPaye.value);
+      const f=verifierFormat(typeChoisi.unite,Number(formatPaye.value),unitePaye.value);
+      if(!p||!f.ok){messagePrix.textContent=!p?'Saisissez un prix payé supérieur à 0.':(f.erreur==='format-incompatible'?'Format incompatible avec le type.':'Saisissez un format acheté valide.');messagePrix.hidden=false;return;}
+      prixPayeAchat=p; formatPayeAchat=f.formatBase; fermer();
+    }});
+    d.append(el('h2',{text:'Prix et format réellement achetés'}),el('label',{for:'prix-paye-achat',class:'etiquette',text:'Prix payé (€)'}),prixPaye,el('label',{for:'format-paye-achat',class:'etiquette',text:'Format acheté'}),formatPaye,unitePaye,messagePrix,el('div',{class:'feuille-actions'},confirmer));
+    d.addEventListener('close',()=>d.remove(),{once:true});
+    document.body.append(d); d.showModal();
   }
 
   function verifier() {
