@@ -515,6 +515,7 @@ if (playwright) {
       const etatAnnule=await page.evaluate(()=>new Promise((resolve,reject)=>{const rq=indexedDB.open('appli-courses');rq.onsuccess=()=>{const db=rq.result,tx=db.transaction(['Observation','Purchase'],'readonly');let obs,achat;tx.objectStore('Observation').get(9979).onsuccess=e=>obs=e.target.result||null;tx.objectStore('Purchase').get(9979).onsuccess=e=>achat=e.target.result||null;tx.oncomplete=()=>resolve({obs,achat});tx.onerror=()=>reject(tx.error);};rq.onerror=()=>reject(rq.error);}));
       if(!etatAnnule.obs||etatAnnule.obs.prixCentimes!==600||!etatAnnule.achat||etatAnnule.achat.observation!==9979)throw new Error('E7 relecture adverse : annulation ne restaure pas le relevé et son lien : '+JSON.stringify(etatAnnule));
       ok('E7 relecture adverse : remplacement délient les achats, annulation restaure relevé et lien');
+      await page.evaluate(()=>new Promise((resolve,reject)=>{const rq=indexedDB.open('appli-courses');rq.onsuccess=()=>{const db=rq.result,tx=db.transaction(['Observation','Purchase'],'readwrite');tx.objectStore('Observation').delete(9979);tx.objectStore('Purchase').delete(9979);tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error);};rq.onerror=()=>reject(rq.error);}));
       
       // ---- E7.5 : bilan total, gains promo, exclusions, navigation et état vide ----
       etapeParcours = 'E7.5 écran Bilan';
