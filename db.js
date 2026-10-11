@@ -244,25 +244,34 @@ function observationPropre(o) {
 }
 
 export function enregistrerReleves(liste, { remplacements = [] } = {}) {
-  if (!Array.isArray(liste) || !liste.length) return Promise.resolve({ ajoutes: [], remplaces: [] });
+  if (!Array.isArray(liste) || !liste.length) return Promise.resolve({ ajoutes: [], remplaces: [], achatsDelies: [] });
   return (async () => {
     const analyses = await analyserDoublons(liste);
     return new Promise((resolve, reject) => {
-      const t = _db.transaction('Observation', 'readwrite');
+      const t = _db.transaction(['Observation', 'Purchase'], 'readwrite');
       const store = t.objectStore('Observation');
-      const ajoutes = [], remplaces = [];
+      const achats = t.objectStore('Purchase');
+      const ajoutes = [], remplaces = [], achatsDelies = [];
       for (let i = 0; i < liste.length; i++) {
         const analyse = analyses[i];
         if (analyse.decision === 'conserver' && !remplacements[i]) continue;
         const existant = analyse.existant;
         if (existant) {
           remplaces.push(structuredClone(existant));
+          const lies = achats.index('observation').getAll(existant.id);
+          lies.onsuccess = () => {
+            for (const achat of lies.result) {
+              achatsDelies.push(structuredClone(achat));
+              achats.put({ ...achat, observation: null });
+            }
+          };
+          lies.onerror = () => { try { t.abort(); } catch {} };
           store.delete(existant.id);
         }
         const add = store.add(observationPropre(liste[i]));
         add.onsuccess = () => ajoutes.push(add.result);
       }
-      t.oncomplete = () => resolve({ ajoutes, remplaces });
+      t.oncomplete = () => resolve({ ajoutes, remplaces, achatsDelies });
       t.onerror = () => reject(t.error);
       t.onabort = () => reject(t.error || new Error('Enregistrement impossible'));
     });
@@ -276,6 +285,7 @@ export function annulerEnregistrement(jeton) {
     const s = t.objectStore('Observation');
     for (const id of jeton.ajoutes || []) s.delete(id);
     for (const original of jeton.remplaces || []) s.put(original);
+    for (const achat of jeton.achatsDelies || []) t.objectStore('Purchase').put(achat);
     for (const id of jeton.achats || []) t.objectStore('Purchase').delete(id);
     t.oncomplete = () => resolve();
     t.onerror = () => reject(t.error);
