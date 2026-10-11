@@ -521,6 +521,7 @@ function vueMagasin() {
       boutonCompleter.style.display = visible ? '' : 'none';
       boutonCompleter.disabled = !visible;
     }
+    let requeteOpenFoodFacts = null, delaiOpenFoodFacts = null;
     const champCode = el('input', { id: 'scan-code-manuel', class: 'champ', inputmode: 'numeric', enterkeyhint: 'search', autocomplete: 'off', placeholder: 'EAN-13 ou autre code', oninput: actualiserBoutonCompleter, onfocus: garderChampScannerVisible, onkeydown: event => { if (event.key === 'Enter') { event.preventDefault(); void traiterCode(champCode.value); } } });
     const boutonCompleter = el('button', { type: 'button', class: 'btn btn-secondaire', text: 'Compléter', hidden: true, disabled: true, onclick: async () => {
       const code = String(champCode.value || '').trim();
@@ -529,11 +530,16 @@ function vueMagasin() {
       if (!code) { actualiserBoutonCompleter(); return; }
       boutonCompleter.disabled = true;
       message.hidden = true;
+      requeteOpenFoodFacts?.abort();
+      requeteOpenFoodFacts = new AbortController();
+      delaiOpenFoodFacts = setTimeout(() => requeteOpenFoodFacts?.abort(), 8000);
       try {
         // Seul le code-barres est transmis. Aucun compte, historique ou réglage n'est envoyé.
-        const reponse = await fetch('https://world.openfoodfacts.org/api/v2/product/' + encodeURIComponent(code) + '.json');
+        const reponse = await fetch('https://world.openfoodfacts.org/api/v2/product/' + encodeURIComponent(code) + '.json', { signal: requeteOpenFoodFacts.signal });
+        if (!dialogue.open) return;
         if (!reponse.ok) throw new Error('Service indisponible');
         const donnees = await reponse.json();
+        if (!dialogue.open) return;
         if (donnees?.status !== 1 || !donnees.product) {
           message.textContent = 'Aucune fiche trouvée. Vous pouvez rattacher le code manuellement.';
           message.hidden = false;
@@ -541,6 +547,7 @@ function vueMagasin() {
         }
         const produit = donnees.product;
         const articleActuel = await lire('Article', code);
+        if (!dialogue.open) return;
         const nom = String(produit.product_name || '').trim() || articleActuel?.nom || '';
         const marque = String(produit.brands || '').split(',')[0].trim() || articleActuel?.marque || '';
         const quantiteTexte = String(produit.product_quantity ?? '').trim();
@@ -560,10 +567,14 @@ function vueMagasin() {
         dialogue.close();
         await ouvrirRattachement(code, articlePrefill);
       } catch {
+        if (!dialogue.open) return;
         message.textContent = 'Open Food Facts est indisponible. Vous pouvez rattacher le code manuellement.';
         message.hidden = false;
       } finally {
-        actualiserBoutonCompleter();
+        if (delaiOpenFoodFacts) clearTimeout(delaiOpenFoodFacts);
+        delaiOpenFoodFacts = null;
+        requeteOpenFoodFacts = null;
+        if (dialogue.isConnected) actualiserBoutonCompleter();
       }
     }});
     const dialogue = el('dialog', { class: 'feuille dialog-scan' },
@@ -583,6 +594,10 @@ function vueMagasin() {
     let actif = true;
     const fermer = () => {
       actif = false;
+      requeteOpenFoodFacts?.abort();
+      requeteOpenFoodFacts = null;
+      if (delaiOpenFoodFacts) clearTimeout(delaiOpenFoodFacts);
+      delaiOpenFoodFacts = null;
       stream?.getTracks?.().forEach(t => t.stop());
       window.removeEventListener('online', actualiserBoutonCompleter);
       window.removeEventListener('offline', actualiserBoutonCompleter);
