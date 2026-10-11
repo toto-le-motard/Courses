@@ -116,6 +116,9 @@ test('FR20 / E8.3','pas de rappel après 29 jours',()=>egal(etatRappelExport('20
 test('FR20 / E8.3','pas de rappel à exactement 30 jours',()=>egal(etatRappelExport('2026-09-10','2026-10-10',30),'ok'));
 test('FR20 / E8.3','rappel après 31 jours',()=>egal(etatRappelExport('2026-09-09','2026-10-10',30),'retard'));
 /* FR12 / E4.1 — fréquence des promotions par magasin */
+/* Relecture adverse E8.2 : la validation doit contrôler les enregistrements, pas seulement les tableaux. */
+test('FR20 / E8.2','refuse un type sans nom valide',()=>{const p={schemaVersion:1,dateExport:'2026-10-11',types:[{id:1,nom:'',nomNormalise:'',unite:'kg',archive:0}],articles:[],releves:[],achats:[],reglages:[]};egal(validerSauvegarde(p,1).ok,false);});
+test('FR20 / E8.2','refuse un relevé à date impossible et prix nul',()=>{const p={schemaVersion:1,dateExport:'2026-10-11',types:[],articles:[],releves:[{id:1,type:1,magasin:'leclerc',date:'2026-02-30',prixCentimes:0,format:1000,promo:0}],achats:[],reglages:[]};egal(validerSauvegarde(p,1).ok,false);});
 test('FR12 / E4.1','aucun relevé : fréquence indisponible et résultat typé',()=>{const r=frequencePromos([],'leclerc');egal(r.ok,false);egal(r.raison,'aucun-releve');egal(r.nbReleves,0);egal(r.pourcentage,null);});
 test('FR12 / E4.1','tous les relevés en promo : fréquence de 100 %',()=>{const r=frequencePromos([{magasin:'leclerc',promo:1},{magasin:'leclerc',promo:true},{magasin:'leclerc',promo:1}],'leclerc');egal(r.ok,true);egal(r.nbPromos,3);egal(r.nbReleves,3);egal(r.pourcentage,100);});
 test('FR12 / E4.1','aucun relevé en promo : fréquence de 0 %',()=>{const r=frequencePromos([{magasin:'intermarche',promo:0},{magasin:'intermarche',promo:false}],'intermarche');egal(r.ok,true);egal(r.nbPromos,0);egal(r.nbReleves,2);egal(r.pourcentage,0);});
