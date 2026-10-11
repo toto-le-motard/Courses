@@ -675,6 +675,9 @@ function vueMagasin() {
         el('button', { type: 'button', class: 'btn btn-secondaire', text: 'Annuler', onclick: () => dialogue.close() })
       )
     );
+    // Affecter aussi les propriétés value après création : les champs préremplis doivent être visibles dans Chromium et sur mobile.
+    dialogue.querySelector('#scan-marque').value = String(articleExistant?.marque || '');
+    dialogue.querySelector('#scan-nom').value = String(articleExistant?.nom || '');
     const champ = dialogue.querySelector('#scan-type-search');
     const zone = dialogue.querySelector('#scan-suggestions');
     const afficherSuggestions = () => {
