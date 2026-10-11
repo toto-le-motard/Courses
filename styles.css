@@ -344,15 +344,18 @@ svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width:
 
 /* Garder le dock assez bas pour que la page magasin ne défile pas en hauteur standard. */
 @media (min-height: 601px) {
-  .dock-magasin { padding:8px; gap:4px; }
-  .dock-verdict-zone .verdict-carte { padding:8px 10px; }
-  .dock-verdict-zone .verdict-economie { margin-top:2px !important; font-size:12px !important; line-height:1.1; }
-  .achat-actions { gap:4px; }
+  .dock-magasin { padding:4px 8px; gap:2px; }
+  .dock-verdict-zone .verdict-carte { padding:4px 8px; }
+  .dock-verdict-zone .verdict-ligne1 { gap:6px; }
+  .dock-verdict-zone .verdict-ligne1 strong { font-size:16px; line-height:1; }
+  .dock-verdict-zone .verdict-icone { width:28px; height:28px; font-size:17px; }
+  .dock-verdict-zone .verdict-economie { margin-top:0 !important; font-size:11px !important; line-height:1; }
+  .achat-actions { gap:2px; }
   .achat-actions > #btn-achat-confirme,
-  .achat-actions > #btn-achat-non { min-height:42px; padding:4px 5px; font-size:12px; }
-  .achat-actions > :not(.quantite-achat-controles):not(#btn-achat-confirme):not(#btn-achat-non) { min-height:38px; padding:4px 6px; font-size:12px; }
+  .achat-actions > #btn-achat-non { min-height:40px; padding:3px 4px; font-size:12px; }
+  .achat-actions > :not(.quantite-achat-controles):not(#btn-achat-confirme):not(#btn-achat-non) { min-height:36px; padding:3px 5px; font-size:12px; }
   .quantite-achat-controles .quantite-achat,
-  .btn-quantite { min-height:42px; }
+  .btn-quantite { min-height:40px; }
 }
 
 
