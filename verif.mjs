@@ -681,6 +681,8 @@ if (playwright) {
       if (!/Exportez régulièrement une sauvegarde/.test(avertissementStockage)) throw new Error('avertissement de refus du stockage persistant incomplet');
       ok('E8.3 refus du stockage persistant : avertissement visible dans Réglages');
       // Relecture adverse : chaque écran principal est ouvert aux deux hauteurs mobiles.
+       // Rejouer les écrans et dialogues qui suivent sans réseau, après chargement initial des ressources locales.
+       await ctx.setOffline(true);
        const routesViewport=[
          ['#/magasin','Magasin'],['#/types','Types'],['#/liste','Liste'],['#/bilan','Bilan'],
          ['#/reglages','Réglages'],['#/releve-mensuel','Relevé mensuel'],['#/type-nouveau','Nouveau type'],
