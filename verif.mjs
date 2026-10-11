@@ -528,6 +528,15 @@ if (playwright) {
       await aller('#/bilan');
       await page.waitForFunction(()=>document.querySelector('.bilan-economies')?.textContent.includes('Aucun achat'),null,{timeout:5000});
       ok('E7.5 Bilan : total négatif, cible 100 €, gains promo, exclusions, navigation et état vide');
+      // Relecture adverse E7 : supprimer un relevé lié ne doit ni effacer ni laisser pointer l’achat vers rien.
+      etapeParcours = 'E7 suppression relevé lié à achat';
+      await page.evaluate(()=>new Promise((resolve,reject)=>{const rq=indexedDB.open('appli-courses');rq.onsuccess=()=>{const db=rq.result,tx=db.transaction(['Observation','Purchase'],'readwrite');tx.objectStore('Observation').put({id:9931,type:9992,magasin:'leclerc',date:'2031-03-01',prixCentimes:250,format:500,promo:0});tx.objectStore('Purchase').put({id:9932,type:9992,observation:9931,magasin:'leclerc',date:'2031-03-01',achete:1,quantite:1,prixPayeCentimes:250,format:500,prixComparaisonCentimes:300,prixHabituelMemeMagasinCentimes:350});tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error)};rq.onerror=()=>reject(rq.error)}));
+      await page.evaluate(async()=>{const db=await import('/db.js');await db.supprimerReleve(9931);});
+      const apresSuppressionLiee=await page.evaluate(()=>new Promise((resolve,reject)=>{const rq=indexedDB.open('appli-courses');rq.onsuccess=()=>{const db=rq.result,tx=db.transaction(['Observation','Purchase'],'readonly'),obs=tx.objectStore('Observation').get(9931),achat=tx.objectStore('Purchase').get(9932);tx.oncomplete=()=>resolve({observation:obs.result,achat:achat.result});tx.onerror=()=>reject(tx.error)};rq.onerror=()=>reject(rq.error)}));
+      if(apresSuppressionLiee.observation)throw new Error('E7 : relevé lié non supprimé');
+      if(!apresSuppressionLiee.achat)throw new Error('E7 : la suppression du relevé a supprimé l’achat');
+      if(apresSuppressionLiee.achat.observation!==null)throw new Error('E7 : achat conservé mais lien relevé non vidé : '+JSON.stringify(apresSuppressionLiee.achat));
+      ok('E7 relecture adverse : suppression relevé conserve l’achat et vide le lien');
       await aller('#/reglages');
       const versionCache = readFileSync(join(racine, 'sw.js'), 'utf8').match(/const CACHE_VERSION = '([^']+)'/)?.[1];
       await aller('#/reglages');await page.waitForFunction((v)=>(document.getElementById('vue')?.textContent || '').includes(v),versionCache,{timeout:5000});await verifierEcran('Réglages');ok('B6 Réglages : version '+versionCache+' visible');
