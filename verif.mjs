@@ -99,7 +99,7 @@ if (playwright) {
     {
       const ancienCtx = await navigateur.newContext({ viewport: { width: 390, height: 844 } });
       const anciennePage = await ancienCtx.newPage();
-      await anciennePage.goto(base);
+      await anciennePage.goto(base + 'tests.html');
       await anciennePage.evaluate(() => new Promise((resolve, reject) => {
         const req = indexedDB.open('appli-courses', 1);
         req.onupgradeneeded = () => {
@@ -117,7 +117,7 @@ if (playwright) {
         req.onsuccess = () => { req.result.close(); resolve(); };
         req.onerror = () => reject(req.error);
       }));
-      await anciennePage.reload();
+      await anciennePage.goto(base);
       await anciennePage.waitForFunction(() => document.querySelector('#titre-ecran')?.textContent === 'Magasin', null, { timeout: 10000 });
       const typeHistorique = await anciennePage.evaluate(() => new Promise((resolve, reject) => {
         const req = indexedDB.open('appli-courses', 1);
