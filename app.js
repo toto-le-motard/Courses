@@ -1143,7 +1143,7 @@ function ouvrirEditionAchat(achat,type) {
   const fermer=()=>{if(d.open)d.close();d.remove();};
   const enregistrer=el('button',{type:'button',class:'btn btn-primaire',text:'Enregistrer',onclick:async()=>{
     const p=analyserPrixSaisie(prix.value), f=Number(format.value), q=Number(quantite.value), jour=date.value;
-    if(!p||!Number.isInteger(f)||f<=0||!Number.isInteger(q)||q<1||q>999||!/^\\d{4}-\\d{2}-\\d{2}$/.test(jour)){erreurChamp.textContent='Saisissez une date, un prix, un format et une quantité valides.';erreurChamp.hidden=false;return;}
+    if(!p||!Number.isInteger(f)||f<=0||!Number.isInteger(q)||q<1||q>999||!/^\d{4}-\d{2}-\d{2}$/.test(jour)){erreurChamp.textContent='Saisissez une date, un prix, un format et une quantité valides.';erreurChamp.hidden=false;return;}
     try{await modifierAchat(achat.id,{prixPayeCentimes:p,format:f,quantite:q,date:jour});fermer();await afficher();}
     catch(e){erreurChamp.textContent=e.message||'Modification impossible.';erreurChamp.hidden=false;}
   }});
