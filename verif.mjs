@@ -499,6 +499,23 @@ if (playwright) {
       if(!/Aucun achat/.test(await page.locator('.historique-achats').innerText())) throw new Error('E7.3 : état vide après suppression absent');
       ok('E7.3 suppression achat : retrait persistant et état vide visible');
 
+      // E7 / relecture adverse : remplacer un relevé doit délier l'achat et l'annulation doit restaurer les liens.
+      etapeParcours = 'E7 relecture adverse : remplacement et annulation';
+      await page.evaluate(()=>new Promise((resolve,reject)=>{
+        const rq=indexedDB.open('appli-courses');rq.onsuccess=()=>{const db=rq.result,tx=db.transaction(['Observation','Purchase'],'readwrite');
+          tx.objectStore('Observation').put({id:9979,type:9992,magasin:'leclerc',date:'2031-03-02',prixCentimes:600,format:500,promo:0});
+          tx.objectStore('Purchase').put({id:9979,type:9992,observation:9979,magasin:'leclerc',date:'2031-03-02',achete:1,quantite:1,prixPayeCentimes:550,format:500,prixComparaisonCentimes:700,prixHabituelMemeMagasinCentimes:650});
+          tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error);
+        };rq.onerror=()=>reject(rq.error);
+      }));
+      const jetonRemplacement=await page.evaluate(async()=>{const dbmod=await import('./db.js');return await dbmod.enregistrerReleves([{type:9992,magasin:'leclerc',date:'2031-03-02',prixCentimes:610,format:500,promo:0}],{remplacements:[true]});});
+      const achatDelie=await page.evaluate(()=>new Promise((resolve,reject)=>{const rq=indexedDB.open('appli-courses');rq.onsuccess=()=>{const db=rq.result,tx=db.transaction('Purchase','readonly'),q=tx.objectStore('Purchase').get(9979);q.onsuccess=()=>resolve(q.result);q.onerror=()=>reject(q.error);};rq.onerror=()=>reject(rq.error);}));
+      if(achatDelie.observation!==null)throw new Error('E7 relecture adverse : remplacement du relevé a laissé un lien orphelin : '+JSON.stringify(achatDelie));
+      await page.evaluate(async(jeton)=>{const dbmod=await import('./db.js');await dbmod.annulerEnregistrement(jeton);},jetonRemplacement);
+      const etatAnnule=await page.evaluate(()=>new Promise((resolve,reject)=>{const rq=indexedDB.open('appli-courses');rq.onsuccess=()=>{const db=rq.result,tx=db.transaction(['Observation','Purchase'],'readonly');let obs,achat;tx.objectStore('Observation').get(9979).onsuccess=e=>obs=e.target.result||null;tx.objectStore('Purchase').get(9979).onsuccess=e=>achat=e.target.result||null;tx.oncomplete=()=>resolve({obs,achat});tx.onerror=()=>reject(tx.error);};rq.onerror=()=>reject(rq.error);}));
+      if(!etatAnnule.obs||etatAnnule.obs.prixCentimes!==600||!etatAnnule.achat||etatAnnule.achat.observation!==9979)throw new Error('E7 relecture adverse : annulation ne restaure pas le relevé et son lien : '+JSON.stringify(etatAnnule));
+      ok('E7 relecture adverse : remplacement délient les achats, annulation restaure relevé et lien');
+      
       // ---- E7.5 : bilan total, gains promo, exclusions, navigation et état vide ----
       etapeParcours = 'E7.5 écran Bilan';
       await page.evaluate(()=>new Promise((resolve,reject)=>{
