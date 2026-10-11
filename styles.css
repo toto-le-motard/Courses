@@ -308,16 +308,39 @@ svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width:
 .btn-supprimer-code { min-height:48px; flex-shrink:0; }
 
 
-/* E7.1 — commande d'achat sur une seule ligne dans le dock */
-.dock-actions { display:flex; align-items:center; gap:4px; }
-.achat-actions { display:flex; width:100%; align-items:center; gap:4px; }
-.quantite-achat-controles { display:flex; flex:0 0 auto; align-items:center; gap:2px; }
-.quantite-achat-controles .quantite-achat { width:52px; min-width:52px; min-height:48px; padding:4px 2px; text-align:center; }
-.btn-quantite { width:48px; min-width:48px; min-height:48px; padding:0; font-size:22px; flex:0 0 48px; }
-.achat-actions > #btn-achat-confirme, .achat-actions > #btn-achat-non { min-width:0; min-height:48px; flex:1 1 0; padding:4px 5px; font-size:12px; white-space:nowrap; }
-
-.achat-actions > #btn-enregistrer { width:auto; min-width:0; min-height:48px; flex:1 1 0; padding:4px 4px; font-size:11px; white-space:nowrap; }
-.achat-actions > #btn-achat-confirme { min-width:0; min-height:48px; flex:1 1 0; padding:4px 4px; font-size:12px; white-space:nowrap; }
+/* E7.1 — dock d'achat : commandes séparées, lisibles et sans chevauchement */
+.dock-actions { display:flex; align-items:stretch; gap:4px; min-width:0; }
+.achat-actions {
+  display:grid;
+  width:100%;
+  min-width:0;
+  grid-template-columns:minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-areas:"quantite acheter" "prix prix" "non non";
+  align-items:stretch;
+  gap:6px;
+}
+.achat-actions > .quantite-achat-controles { grid-area:quantite; display:flex; min-width:0; align-items:center; justify-content:flex-start; gap:2px; }
+.quantite-achat-controles .quantite-achat { width:clamp(34px, 13vw, 52px); min-width:0; min-height:48px; padding:4px 2px; text-align:center; flex:1 1 auto; }
+.btn-quantite { width:clamp(34px, 13vw, 48px); min-width:0; min-height:48px; padding:0; font-size:22px; flex:1 1 0; }
+.achat-actions > #btn-achat-confirme { grid-area:acheter; }
+.achat-actions > #btn-achat-non { grid-area:non; }
+.achat-actions > :not(.quantite-achat-controles):not(#btn-achat-confirme):not(#btn-achat-non) { grid-area:prix; }
+.achat-actions > #btn-achat-confirme,
+.achat-actions > #btn-achat-non,
+.achat-actions > #btn-enregistrer {
+  width:100%;
+  min-width:0;
+  min-height:48px;
+  padding:6px 8px;
+  font-size:14px;
+  line-height:1.2;
+  white-space:normal;
+  overflow-wrap:anywhere;
+  text-align:center;
+}
+.achat-actions > #btn-achat-confirme { font-weight:800; }
+.achat-actions > #btn-achat-non { border-color:var(--bordure); }
+.achat-actions > :not(.quantite-achat-controles):not(#btn-achat-confirme):not(#btn-achat-non) { min-height:44px; font-size:13px; }
 
 
 .bilan-economies { display:flex; flex-direction:column; gap:16px; }
