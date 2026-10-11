@@ -292,9 +292,11 @@ svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width:
 .dialog-scan, .dialog-rattachement { box-sizing:border-box; width:min(92vw,440px); max-height:88dvh; overflow-y:auto; }
 .dialog-scan video { display:block; width:100%; max-height:32vh; object-fit:cover; border-radius:12px; background:#111; margin:10px 0; }
 @media (max-height:600px) {
-  .dialog-scan video { max-height:18vh; margin:4px 0; }
-  .dialog-scan p { margin-bottom:6px; }
-  .dialog-scan .feuille-actions { margin-top:6px; }
+  .dialog-scan { max-height:calc(100dvh - 24px); padding:12px; }
+  .dialog-scan video { max-height:12vh; margin:2px 0; }
+  .dialog-scan p { margin-bottom:4px; }
+  .dialog-scan .champ { margin-bottom:4px; }
+  .dialog-scan .feuille-actions { margin-top:4px; }
 }
 .dialog-scan .champ, .dialog-rattachement .champ { width:100%; margin-bottom:8px; }
 .dialog-rattachement .suggestions { position:static; max-height:140px; overflow-y:auto; }
