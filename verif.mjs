@@ -658,6 +658,7 @@ if (playwright) {
        }
        // Les deux dialogues de scan sont également contrôlés à 390x500.
        await page.setViewportSize({width:390,height:500});await aller('#/magasin');await page.click('#btn-scanner');
+       await page.locator('dialog.dialog-scan .feuille-actions').scrollIntoViewIfNeeded();
        await verifierDialogue('scanner 390x500',['Scanner un code-barres','Code-barres'],['Rechercher','Fermer']);
        await page.fill('#scan-code-manuel','9876543210987');await page.click('dialog button:has-text("Rechercher")');
        await page.waitForSelector('dialog.dialog-rattachement:visible',{timeout:5000});
