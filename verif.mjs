@@ -460,7 +460,7 @@ if (playwright) {
       const achatEnregistre=achatE71.achats.find(x=>x.type===9992&&x.date==='2031-01-01'&&x.quantite===2&&x.achete===1);
       if(!achatEnregistre||!achatE71.releves.some(x=>x.id===achatEnregistre.observation&&x.type===9992&&x.date==='2031-01-01')) throw new Error('achat non enregistré avec son relevé lié');
       if(achatEnregistre.prixPayeCentimes!==500||achatEnregistre.format!==400) throw new Error('prix payé ou format acheté différent non conservé');
-      if(!achatE71.releves.some(x=>x.id===achatEnregistre.observation&&x.prixCentimes===600&&x.format===500)) throw new Error('le relevé en rayon a été écrasé par le prix payé');
+      const releveLie=achatE71.releves.find(x=>x.id===achatEnregistre.observation); if(!releveLie||releveLie.prixCentimes!==600||releveLie.format!==500) throw new Error('le relevé en rayon a été écrasé par le prix payé : '+JSON.stringify({achat:achatEnregistre,releve:releveLie,relevesType:achatE71.releves.filter(x=>x.type===9992&&x.date==='2031-01-01')}));
       ok('E7.1 achat enregistré en un geste, quantité 2 et relevé lié');
       const versionCache = readFileSync(join(racine, 'sw.js'), 'utf8').match(/const CACHE_VERSION = '([^']+)'/)?.[1];
       await aller('#/reglages');await page.waitForFunction((v)=>(document.getElementById('vue')?.textContent || '').includes(v),versionCache,{timeout:5000});await verifierEcran('Réglages');ok('B6 Réglages : version '+versionCache+' visible');
