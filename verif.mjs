@@ -42,6 +42,7 @@ if (!principaux) {
 
 // ---- 1c. Historique des achats : quantité et prix doivent être distincts ----------------------
 const appTexte = readFileSync(join(racine, 'app.js'), 'utf8');
+const stylesTexte = readFileSync(join(racine, 'styles.css'), 'utf8');
 const contratHistorique = [
   ['quantité affichée dans son propre champ', /class:'achat-valeur achat-quantite',text:'Quantité : '\+achat\.quantite/],
   ['prix payé affiché avec son libellé', /class:'achat-valeur achat-prix',text:'Prix payé : '\+formaterPrixEuros\(achat\.prixPayeCentimes\)/],
