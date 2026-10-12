@@ -40,6 +40,20 @@ if (!principaux) {
   if (!manquantsDansSw.length && !absents.length) ok('liste de sw.js complète (' + principaux.length + ' fichiers, ' + optionnels.length + ' optionnels)');
 }
 
+// ---- 1c. Historique des achats : quantité et prix doivent être distincts ----------------------
+const appTexte = readFileSync(join(racine, 'app.js'), 'utf8');
+const contratHistorique = [
+  ['quantité affichée dans son propre champ', /class:'achat-valeur achat-quantite',text:'Quantité : '\+achat\.quantite/],
+  ['prix payé affiché avec son libellé', /class:'achat-valeur achat-prix',text:'Prix payé : '\+formaterPrixEuros\(achat\.prixPayeCentimes\)/],
+  ['format unitaire explicitement libellé', /class:'achat-valeur achat-format',text:'Format unitaire : '\+achat\.format/],
+  ['valeurs séparées par une grille responsive', /\.achat-resume-valeurs\s*\{\s*display:\s*grid/]
+];
+for (const [nom, motif] of contratHistorique) {
+  const source = nom.includes('grille') ? stylesTexte : appTexte;
+  if (motif.test(source)) ok('historique achats : ' + nom);
+  else ko('historique achats : règle absente — ' + nom);
+}
+
 // ---- 2. Syntaxe des scripts ----------------------------------------------------------------
 const scripts = readdirSync(racine).filter((f) => f.endsWith('.js') || f.endsWith('.mjs'));
 for (const f of scripts) {
