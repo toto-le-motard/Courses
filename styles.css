@@ -388,3 +388,41 @@ svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width:
   .quantite-achat-controles .quantite-achat,
   .btn-quantite { min-height:34px; }
 }
+
+
+/* E7 — historique des achats : valeurs distinctes et lisibles sur mobile */
+.ligne-achat-infos {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 6px;
+  min-width: 0;
+}
+.achat-statut {
+  color: var(--texte-secondaire, #aeb4c3);
+  font-size: 0.92em;
+}
+.achat-resume-valeurs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  min-width: 0;
+}
+.achat-valeur {
+  display: block;
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid var(--bordure, rgba(255,255,255,.12));
+  border-radius: 12px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+.achat-prix {
+  font-weight: 800;
+}
+.achat-format {
+  grid-column: 1 / -1;
+}
+@media (max-width: 360px) {
+  .achat-resume-valeurs { grid-template-columns: minmax(0, 1fr); }
+  .achat-format { grid-column: auto; }
+}
