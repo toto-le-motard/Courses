@@ -621,9 +621,9 @@ if (playwright) {
       const historiqueAchatsE73=page.locator('.historique-achats');
       const texteHistoriqueE73=await historiqueAchatsE73.innerText(); if (!(await historiqueAchatsE73.isVisible()) || !texteHistoriqueE73.includes('01/01/2031')) throw new Error('E7.3 : historique achat absent ou date non formatée en français : '+texteHistoriqueE73);
       if (!(await historiqueAchatsE73.getByText('Leclerc').count()) || !(await historiqueAchatsE73.getByText('2').count()) || !(await historiqueAchatsE73.getByText('5,00 €').count())) throw new Error('E7.3 : magasin, quantité ou prix payé absent');
-      if (!(await historiqueAchatsE73.getByRole('button',{name:'Modifier cet achat'}).count()) || !(await historiqueAchatsE73.getByRole('button',{name:'Supprimer cet achat'}).count())) throw new Error('E7.3 : actions de modification/suppression absentes');
+      if (!(await historiqueAchatsE73.getByRole('button',{name:'Corriger le prix, la quantité ou le format de cet achat'}).count()) || !(await historiqueAchatsE73.getByRole('button',{name:'Supprimer cet achat'}).count())) throw new Error('E7.3 : actions de modification/suppression absentes');
       ok('E7.3 historique des achats par type : date, magasin, quantité, prix payé et actions');
-      await historiqueAchatsE73.getByRole('button',{name:'Modifier cet achat'}).click();
+      await historiqueAchatsE73.getByRole('button',{name:'Corriger le prix, la quantité ou le format de cet achat'}).click();
       const editionAchatE73=page.locator('dialog.dialog-edition-achat');
       await editionAchatE73.waitFor({state:'visible',timeout:3000});
       await editionAchatE73.locator('#achat-prix-edition').fill('4,50');
