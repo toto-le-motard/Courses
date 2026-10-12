@@ -55,6 +55,19 @@ for (const [nom, motif] of contratHistorique) {
   else ko('historique achats : règle absente — ' + nom);
 }
 
+// ---- 1d. Parcours achat : correction après achat, aucun achat lors d'un refus ----------------
+const contratParcoursAchat = [
+  ['bouton de correction absent du dock magasin', !/Prix ou format payé différent\s*\?/.test(appTexte)],
+  ['création d’achat réservée au clic « J’achète »', /if \(statutAchat === 1\) \{\s*const observationId = jeton\.ajoutes\[0\]/.test(appTexte)],
+  ['historique limité aux achats réellement effectués', /listerAchats\(typeId\)\)\.filter\(achat => achat\.achete === 1 \|\| achat\.achete === true\)/.test(appTexte)],
+  ['action d’historique dédiée à la correction de l’achat', /Corriger l’achat/.test(appTexte) && /Corriger le prix, la quantité ou le format/.test(appTexte)],
+  ['le refus d’achat ne crée pas de Purchase', /if \(statutAchat === 1\) \{\s*const observationId/.test(appTexte)]
+];
+for (const [nom, conforme] of contratParcoursAchat) {
+  if (conforme) ok('parcours achat : ' + nom);
+  else ko('parcours achat : règle absente — ' + nom);
+}
+
 // ---- 2. Syntaxe des scripts ----------------------------------------------------------------
 const scripts = readdirSync(racine).filter((f) => f.endsWith('.js') || f.endsWith('.mjs'));
 for (const f of scripts) {
