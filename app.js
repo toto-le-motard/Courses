@@ -1277,8 +1277,12 @@ async function vueHistoriqueAchats(typeId) {
       el('div',{class:'ligne-achat-infos'},
         el('strong',{text:dateAffichee(achat.date)}),
         el('span',{text:libelleMagasin(achat.magasin)}),
-        el('span',{text:(achat.achete ? 'Acheté' : 'Non acheté')+' · Quantité : '+achat.quantite}),
-        el('span',{text:formaterPrixEuros(achat.prixPayeCentimes)+' · Format : '+achat.format+' '+uniteBase})
+        el('span',{class:'achat-statut',text:achat.achete ? 'Acheté' : 'Non acheté'}),
+        el('div',{class:'achat-resume-valeurs'},
+          el('span',{class:'achat-valeur achat-quantite',text:'Quantité : '+achat.quantite}),
+          el('span',{class:'achat-valeur achat-prix',text:'Prix payé : '+formaterPrixEuros(achat.prixPayeCentimes)}),
+          el('span',{class:'achat-valeur achat-format',text:'Format unitaire : '+achat.format+' '+uniteBase})
+        )
       ),
       el('div',{class:'ligne-achat-actions'},
         el('button',{type:'button',class:'btn btn-secondaire',text:'Modifier', 'aria-label':'Modifier cet achat',onclick:()=>ouvrirEditionAchat(achat,type)}),
