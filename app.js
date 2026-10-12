@@ -429,13 +429,13 @@ function vueMagasin() {
         remplacements[i] = true;
       }
       let verdictAchat = null;
-      if (statutAchat !== null) {
+      if (statutAchat === 1) {
         const historiqueAvant = await lireObservations(typeChoisi.id);
         const seuilPct = await lireReglage('seuilIndifference', 5);
         verdictAchat = calculerVerdict({ prixCentimes, formatBase:format.formatBase, typeUnit:typeChoisi.unite, magasin:magasinCourant, observations:historiqueAvant, aujourdhui:date, seuilPct, promo:promo.checked });
       }
       const jeton = await enregistrerReleves(observations, { remplacements });
-      if (statutAchat !== null) {
+      if (statutAchat === 1) {
         const observationId = jeton.ajoutes[0];
         if (!observationId) throw new Error('Le relevé n’a pas été créé : achat non enregistré.');
         const historiqueAvant = await lireObservations(typeChoisi.id);
@@ -804,7 +804,6 @@ function vueMagasin() {
         el('button', { id:'btn-achat-plus', type:'button', class:'btn btn-secondaire btn-quantite', text:'+', 'aria-label':'Augmenter la quantité', onclick:()=>{quantiteAchat=Math.min(999,quantiteAchat+1);quantite.value=String(quantiteAchat);} })
       ),
       el('button', { id:'btn-achat-confirme', type:'button', class:'btn btn-primaire', text:'J’achète', disabled:enregistrementEnCours, onclick:()=>enregistrerReleve(1) }),
-      el('button', { type:'button', class:'btn btn-secondaire', text:'Prix ou format payé différent ?', onclick:()=>ouvrirPrixPaye(verifierFormat(typeChoisi.unite, Number(valeurFormat.value), uniteFormat.value).formatBase) }),
       bouton
     );
     dockActions?.replaceChildren(actionsAchat);
@@ -1266,7 +1265,8 @@ async function vueHistoriqueAchats(typeId) {
   if (!type) return carte('Historique des achats', 'Type introuvable.');
   const racine = el('div', { class:'historique-achats' });
   racine.append(el('a',{href:'#/fiche/'+typeId,class:'btn btn-secondaire btn-bloc',text:'← Retour à la fiche'}),el('h2',{text:type.nom}));
-  const achats = await listerAchats(typeId);
+  // L’historique des achats ne présente que les achats réellement effectués.
+  const achats = (await listerAchats(typeId)).filter(achat => achat.achete === 1 || achat.achete === true);
   if (!achats.length) {
     racine.append(el('p',{class:'aide',text:'Aucun achat enregistré pour ce type.'}));
     return racine;
@@ -1285,7 +1285,7 @@ async function vueHistoriqueAchats(typeId) {
         )
       ),
       el('div',{class:'ligne-achat-actions'},
-        el('button',{type:'button',class:'btn btn-secondaire',text:'Modifier', 'aria-label':'Modifier cet achat',onclick:()=>ouvrirEditionAchat(achat,type)}),
+        el('button',{type:'button',class:'btn btn-secondaire',text:'Corriger l’achat', 'aria-label':'Corriger le prix, la quantité ou le format de cet achat',onclick:()=>ouvrirEditionAchat(achat,type)}),
         el('button',{type:'button',class:'btn btn-secondaire',text:'Supprimer','aria-label':'Supprimer cet achat',onclick:()=>confirmerSuppressionAchat(achat,typeId)})
       )
     );
