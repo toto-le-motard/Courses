@@ -68,6 +68,15 @@ for (const [nom, conforme] of contratParcoursAchat) {
   else ko('parcours achat : règle absente — ' + nom);
 }
 
+// ---- 1d. Historique des achats : exclure les relevés « non acheté » -------------------------
+const historiqueSource = appTexte.slice(appTexte.indexOf('async function vueHistoriqueAchats'));
+const filtreAchatsReels = /listerAchats\(typeId\)\)\.filter\(achat\s*=>\s*achat\.achete\s*===\s*1\s*\|\|\s*achat\.achete\s*===\s*true\)/;
+if (historiqueSource.includes('async function vueHistoriqueAchats') && filtreAchatsReels.test(historiqueSource)) {
+  ok('historique achats : seuls les achats réellement effectués sont affichés');
+} else {
+  ko('historique achats : les relevés « non acheté » ne sont pas exclus');
+}
+
 // ---- 2. Syntaxe des scripts ----------------------------------------------------------------
 const scripts = readdirSync(racine).filter((f) => f.endsWith('.js') || f.endsWith('.mjs'));
 for (const f of scripts) {
