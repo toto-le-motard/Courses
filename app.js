@@ -740,6 +740,8 @@ function vueMagasin() {
               message: 'Type « ' + type.nom + ' » ' + (resultat.typeCree ? 'créé' : 'restauré') + ' · Annuler',
               annuler: async jeton => {
                 await annulerCreationTypeEtArticle(jeton);
+                const indexTypeAnnule = types.findIndex(x => x.type.id === jeton.typeId);
+                if (indexTypeAnnule >= 0) types.splice(indexTypeAnnule, 1);
                 typeChoisi = null; recherche.value = ''; valeurFormat.value = ''; prix.value = '';
                 formulaireModifie = false; verifier();
               }
