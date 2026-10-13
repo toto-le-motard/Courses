@@ -168,6 +168,60 @@ export function supprimerType(id) {
 }
 
 
+// Création/restauration d'un type et rattachement d'un code dans une transaction atomique.
+export async function creerTypeEtArticle({ nom, unite, codeBarres, format, marque = '', nomArticle = '' }) {
+  const n = String(nom ?? '').trim(), normalise = normaliserNom(n);
+  if (!n || !normalise) throw new Error('Saisissez un nom de type.');
+  if (!['kg', 'l', 'unit'].includes(unite)) throw new Error('Unité de comparaison invalide.');
+  if (!String(codeBarres ?? '').trim()) throw new Error('Code-barres absent.');
+  if (!Number.isSafeInteger(format) || format <= 0) throw new Error('Format invalide.');
+  return new Promise((resolve, reject) => {
+    const tx = _db.transaction(['ProductType', 'Article'], 'readwrite');
+    const types = tx.objectStore('ProductType'), articles = tx.objectStore('Article');
+    let jeton = null, echec = null;
+    const rq = types.index('nomNormalise').get(normalise);
+    rq.onsuccess = () => {
+      let type = rq.result;
+      if (type && type.unite !== unite) { echec = new Error('Ce type se compare en ' + type.unite + '.'); tx.abort(); return; }
+      const ajouterArticle = (t, cree, restaure) => {
+        jeton = { codeBarres: String(codeBarres).trim(), typeId: t.id, typeCree: cree, typeRestaure: restaure };
+        articles.put({ codeBarres: jeton.codeBarres, type: t.id, format, marque: String(marque).trim(), nom: String(nomArticle).trim() });
+      };
+      if (!type) {
+        const nouveau = { nom: n, nomNormalise: normalise, unite, marque: String(marque).trim(), nomArticle: String(nomArticle).trim(), archive: 0 };
+        const ajout = types.add(nouveau);
+        ajout.onsuccess = () => ajouterArticle({ ...nouveau, id: ajout.result }, true, false);
+        ajout.onerror = () => { echec = ajout.error; };
+      } else {
+        const restaure = Boolean(type.archive);
+        if (restaure) { type = { ...type, archive: 0 }; types.put(type); }
+        ajouterArticle(type, false, restaure);
+      }
+    };
+    rq.onerror = () => { echec = rq.error; };
+    tx.oncomplete = () => resolve({ type: jeton && jeton.typeId, jeton, typeCree: Boolean(jeton?.typeCree), typeRestaure: Boolean(jeton?.typeRestaure), nom: n });
+    tx.onerror = () => reject(echec || tx.error);
+    tx.onabort = () => reject(echec || tx.error || new Error('Création du rattachement annulée.'));
+  });
+}
+
+export function annulerCreationTypeEtArticle(jeton) {
+  if (!jeton || !jeton.codeBarres || !Number.isSafeInteger(jeton.typeId)) return Promise.reject(new Error('Jeton d’annulation invalide.'));
+  return new Promise((resolve, reject) => {
+    const tx = _db.transaction(['ProductType', 'Article'], 'readwrite');
+    tx.objectStore('Article').delete(jeton.codeBarres);
+    const types = tx.objectStore('ProductType');
+    if (jeton.typeCree) types.delete(jeton.typeId);
+    else if (jeton.typeRestaure) {
+      const rq = types.get(jeton.typeId);
+      rq.onsuccess = () => { if (rq.result) types.put({ ...rq.result, archive: 1 }); };
+    }
+    tx.oncomplete = resolve;
+    tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error || new Error('Annulation impossible.'));
+  });
+}
+
 // ---- Observations (E3, stories 3-2 et suivantes) -------------------------------------------
 export async function lireObservations(typeId) {
   return requete('Observation', 'readonly', (s) => s.index('type').getAll(typeId));

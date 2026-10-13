@@ -50,6 +50,10 @@ export const LIBELLE_UNITE = Object.freeze({ g: 'g', kg: 'kg', ml: 'ml', l: 'l',
 export function normaliserNom(texte) {
   return String(texte == null ? '' : texte).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
 }
+export function deduireUniteComparaison(uniteFormat) {
+  const unite = UNITES_DETAIL[uniteFormat];
+  return unite ? unite.type : null;
+}
 export function nomTypeValide(nom) {
   const n = String(nom == null ? '' : nom).trim();
   return n.length >= 1 && n.length <= 60;

@@ -1,6 +1,6 @@
 // app.js — interface et navigation (stories 1.2 à 3-2).
-import { initDb, dbPrete, listerTypes, lireDernierReleve, lireObservations, dernierReleve, trouverDoublon, enregistrerReleves, analyserDoublons, annulerEnregistrement, listerReleves, modifierReleve, supprimerReleve, enregistrerAchat, listerAchats, modifierAchat, supprimerAchat, demanderStockagePersistant, lireReglage, ecrireReglage, compter, STORES, VERSION_SCHEMA, exporterCollections, remplacerCollections, lire, mettre, toutLire, supprimer } from './db.js';
-import { MAGASIN, UNITES, LIBELLE_UNITE, VERDICT, analyserPrixSaisie, verifierFormat, prixNormalise, formaterPrixEuros, formaterPrixNormalise, calculerVerdict, prixHabituel, calculerEconomieRealisee, estPrixIncoherent, unitesCompatibles, formatAffichage, calculerPositionDock, modeSaisieActif, positionDefilement, frequencePromos, listeAvantCourses } from './domain.js';
+import { initDb, dbPrete, listerTypes, creerTypeEtArticle, annulerCreationTypeEtArticle, lireDernierReleve, lireObservations, dernierReleve, trouverDoublon, enregistrerReleves, analyserDoublons, annulerEnregistrement, listerReleves, modifierReleve, supprimerReleve, enregistrerAchat, listerAchats, modifierAchat, supprimerAchat, demanderStockagePersistant, lireReglage, ecrireReglage, compter, STORES, VERSION_SCHEMA, exporterCollections, remplacerCollections, lire, mettre, toutLire, supprimer } from './db.js';
+import { MAGASIN, UNITES, LIBELLE_UNITE, VERDICT, analyserPrixSaisie, verifierFormat, prixNormalise, formaterPrixEuros, formaterPrixNormalise, calculerVerdict, prixHabituel, calculerEconomieRealisee, estPrixIncoherent, unitesCompatibles, formatAffichage, calculerPositionDock, modeSaisieActif, positionDefilement, frequencePromos, listeAvantCourses, deduireUniteComparaison, normaliserNom } from './domain.js';
 import { accueilVide, vueTypes, vueTypeForm } from './types-ui.js';
 import { creerSauvegarde, validerSauvegarde, etatRappelExport } from './backup.js';
 
@@ -87,17 +87,18 @@ function afficherErreur(msg) {
   if (zone) { zone.textContent = msg || ''; zone.hidden = !msg; }
 }
 
-function afficherAnnulation(jeton, magasin) {
+function afficherAnnulation(jeton, magasin, options = {}) {
   annulationActive = jeton;
   if (annulationTimer) clearTimeout(annulationTimer);
   document.getElementById('bandeau-annulation')?.remove();
   const b = el('div', { id: 'bandeau-annulation', class: 'bandeau-annulation', role: 'status' },
-    el('span', { text: 'Enregistré chez ' + libelleMagasin(magasin) }),
+    el('span', { text: options.message || ('Enregistré chez ' + libelleMagasin(magasin)) }),
     el('button', { type: 'button', class: 'btn-annuler-enregistrement', text: 'Annuler', onclick: async () => {
       if (!annulationActive) return;
       const a = annulationActive; annulationActive = null; clearTimeout(annulationTimer); b.remove();
       try {
-        await annulerEnregistrement(a);
+        if (options.annuler) await options.annuler(a);
+        else await annulerEnregistrement(a);
         if (location.hash.startsWith('#/historique/')) void afficher();
       } catch {
         afficherErreur('Annulation impossible.');
@@ -686,19 +687,21 @@ function vueMagasin() {
     }
   }
   async function ouvrirRattachement(code, articleExistant) {
+    const tousLesTypes = await listerTypes();
     const dialogue = el('dialog', { class: 'feuille dialog-rattachement dialog-rattacher' },
       el('h2', { text: 'Rattacher ce code' }),
-      el('p', { text: 'Associez ce code-barres à un type de produit existant.' }),
+      el('p', { text: 'Associez ce code-barres à un type existant ou créez un type.' }),
       el('label', { class: 'etiquette', for: 'scan-type-search', text: 'Type de produit' }),
-      el('input', { id: 'scan-type-search', class: 'champ', type: 'search', placeholder: 'Rechercher un type' }),
+      el('input', { id: 'scan-type-search', class: 'champ', type: 'search', placeholder: 'Rechercher ou créer un type', autocomplete: 'off' }),
       el('div', { id: 'scan-suggestions', class: 'suggestions' }),
+      el('p', { id: 'scan-nouveau-type', role: 'status', hidden: true }),
       el('label', { class: 'etiquette', for: 'scan-format', text: 'Format' }),
       el('input', { id: 'scan-format', class: 'champ', type: 'number', min: '0', step: 'any', value: articleExistant?.format ? String(articleExistant.format) : '' }),
       el('label', { class: 'etiquette', for: 'scan-unite', text: 'Unité' }),
       el('select', { id: 'scan-unite', class: 'champ' },
         el('option', { value: 'g', text: 'g' }), el('option', { value: 'kg', text: 'kg' }),
         el('option', { value: 'ml', text: 'ml' }), el('option', { value: 'l', text: 'l' }),
-        el('option', { value: 'unit', text: 'unité' })
+        el('option', { value: 'unit', text: 'unités' })
       ),
       el('label', { class: 'etiquette', for: 'scan-marque', text: 'Marque (facultatif)' }),
       el('input', { id: 'scan-marque', class: 'champ', value: articleExistant?.marque || '' }),
@@ -707,48 +710,75 @@ function vueMagasin() {
       el('p', { id: 'scan-rattacher-message', class: 'erreur', role: 'alert', hidden: true }),
       el('div', { class: 'feuille-actions' },
         el('button', { type: 'button', class: 'btn btn-primaire', text: 'Rattacher ce code', onclick: async () => {
-          const id = dialogue.dataset.typeId;
-          const type = types.find(x => String(x.type.id) === String(id))?.type;
+          const champ = dialogue.querySelector('#scan-type-search'), nom = champ.value.trim();
+          const uniteSaisie = dialogue.querySelector('#scan-unite').value;
           const format = Number(dialogue.querySelector('#scan-format').value);
-          const unite = dialogue.querySelector('#scan-unite').value;
-          const formatBase = format * (unite === 'kg' || unite === 'l' ? 1000 : 1);
-          if (!type) { const m=dialogue.querySelector('#scan-rattacher-message'); m.textContent='Choisissez un type de produit.'; m.hidden=false; return; }
-          if (!Number.isFinite(formatBase) || formatBase <= 0 || (type.unite === 'kg' && !['g','kg'].includes(unite)) || (type.unite === 'l' && !['ml','l'].includes(unite)) || (type.unite === 'unit' && unite !== 'unit')) {
-            const m=dialogue.querySelector('#scan-rattacher-message'); m.textContent='Saisissez un format valide dans une unité compatible avec le type.'; m.hidden=false; return;
+          const formatBase = format * (uniteSaisie === 'kg' || uniteSaisie === 'l' ? 1000 : 1);
+          const uniteCompare = deduireUniteComparaison(uniteSaisie);
+          const marque = dialogue.querySelector('#scan-marque').value.trim(), nomArticle = dialogue.querySelector('#scan-nom').value.trim();
+          const message = dialogue.querySelector('#scan-rattacher-message');
+          const existant = tousLesTypes.find(t => t.nomNormalise === normaliserNom(nom));
+          if (!nom) { message.textContent='Saisissez un type de produit.'; message.hidden=false; return; }
+          if (!uniteCompare || !Number.isFinite(formatBase) || formatBase <= 0 || !Number.isSafeInteger(Math.round(formatBase))) {
+            message.textContent='Saisissez un format valide.'; message.hidden=false; return;
+          }
+          if (existant && existant.unite !== uniteCompare) {
+            message.textContent='Ce type se compare en ' + existant.unite + '.'; message.hidden=false; return;
           }
           try {
-            await mettre('Article', { codeBarres: code, type: type.id, format: Math.round(formatBase), marque: dialogue.querySelector('#scan-marque').value.trim(), nom: dialogue.querySelector('#scan-nom').value.trim() });
-            dialogue.close();
-            typeChoisi = type; recherche.value = type.nom; suggestions.replaceChildren();
+            const resultat = await creerTypeEtArticle({ nom, unite: uniteCompare, codeBarres: code, format: Math.round(formatBase), marque, nomArticle });
+            const type = tousLesTypes.find(t => t.id === resultat.type) || { id: resultat.type, nom, nomNormalise: normaliserNom(nom), unite: uniteCompare, archive: 0 };
+            type.archive = 0;
+            if (!types.some(x => x.type.id === type.id)) types.push({ type, dernier: null });
+            dialogue.close(); typeChoisi = type; recherche.value = type.nom; suggestions.replaceChildren();
             chargerDernierEtFormat();
             const affichage = formatAffichage(formatBase, type.unite);
-            valeurFormat.value = String(affichage.valeur).replace(',', '.'); uniteFormat.value = affichage.unite || uniteFormat.value;
+            valeurFormat.value = String(affichage.valeur).replace(',', '.');
+            uniteFormat.value = affichage.unite || uniteFormat.value;
             verifier(); recherche.focus(); garderChampVisible(recherche);
-          } catch {
-            const m=dialogue.querySelector('#scan-rattacher-message'); m.textContent='Impossible d’enregistrer ce rattachement.'; m.hidden=false;
-          }
+            if (resultat.typeCree || resultat.typeRestaure) afficherAnnulation(resultat.jeton, magasinCourant, {
+              message: 'Type « ' + type.nom + ' » ' + (resultat.typeCree ? 'créé' : 'restauré') + ' · Annuler',
+              annuler: async jeton => {
+                await annulerCreationTypeEtArticle(jeton);
+                typeChoisi = null; recherche.value = ''; valeurFormat.value = ''; prix.value = '';
+                formulaireModifie = false; verifier();
+              }
+            });
+            prix.focus();
+          } catch (e) { message.textContent = e?.message || 'Impossible d’enregistrer ce rattachement.'; message.hidden = false; }
         }}),
         el('button', { type: 'button', class: 'btn btn-secondaire', text: 'Annuler', onclick: () => dialogue.close() })
       )
     );
-    // Affecter aussi les propriétés value après création : les champs préremplis doivent être visibles dans Chromium et sur mobile.
     dialogue.querySelector('#scan-marque').value = String(articleExistant?.marque || '');
     dialogue.querySelector('#scan-nom').value = String(articleExistant?.nom || '');
     dialogue.addEventListener('close', () => dialogue.remove(), { once: true });
-    const champ = dialogue.querySelector('#scan-type-search');
-    const zone = dialogue.querySelector('#scan-suggestions');
+    const champ = dialogue.querySelector('#scan-type-search'), zone = dialogue.querySelector('#scan-suggestions');
+    const ligneNouveau = dialogue.querySelector('#scan-nouveau-type'), message = dialogue.querySelector('#scan-rattacher-message');
+    const actualiserAide = () => {
+      const nom = champ.value.trim(), existant = tousLesTypes.find(t => t.nomNormalise === normaliserNom(nom));
+      const unite = deduireUniteComparaison(dialogue.querySelector('#scan-unite').value);
+      ligneNouveau.hidden = !nom || Boolean(existant) || !unite;
+      ligneNouveau.textContent = nom && unite ? 'Nouveau type « ' + nom + ' », se compare en ' + unite : '';
+      if (existant && unite && existant.unite !== unite) { message.textContent = 'Ce type se compare en ' + existant.unite + '.'; message.hidden = false; }
+      else message.hidden = true;
+    };
     const afficherSuggestions = () => {
-      const q=champ.value.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
-      const candidats=types.filter(x=>x.type.nomNormalise.includes(q)).slice(0,8);
-      zone.replaceChildren(...candidats.map(x=>el('button',{type:'button',class:'suggestion-rattacher',text:x.type.nom,onclick:()=>{
-        dialogue.dataset.typeId=String(x.type.id); champ.value=x.type.nom; zone.replaceChildren();
-        const compatibles=unitesCompatibles(x.type.unite);
-        dialogue.querySelector('#scan-unite').replaceChildren(...compatibles.map(u=>el('option',{value:u,text:LIBELLE_UNITE[u]})));
-        const inputFormat=dialogue.querySelector('#scan-format');
-        if (!inputFormat.value) inputFormat.value=x.dernier?.format ? String(formatAffichage(Number(x.dernier.format),x.type.unite).valeur).replace(',','.') : '';
-      }})));
+      const q = normaliserNom(champ.value), candidats = tousLesTypes.filter(t => t.nomNormalise.includes(q)).slice(0, 8);
+      zone.replaceChildren(...candidats.map(t => el('button', {
+        type: 'button', class: 'suggestion-rattacher', text: t.nom + (t.archive ? ' (archivé)' : ''),
+        onclick: () => {
+          champ.value = t.nom; zone.replaceChildren();
+          const compatibles = unitesCompatibles(t.unite);
+          dialogue.querySelector('#scan-unite').replaceChildren(...compatibles.map(u => el('option', { value: u, text: LIBELLE_UNITE[u] })));
+          actualiserAide();
+        }
+      })));
+      actualiserAide();
     };
     champ.addEventListener('input', afficherSuggestions);
+    dialogue.querySelector('#scan-unite').addEventListener('change', actualiserAide);
+    dialogue.querySelector('#scan-format').addEventListener('input', actualiserAide);
     if (!dialogue.isConnected) document.body.append(dialogue);
     dialogue.showModal();
   }
