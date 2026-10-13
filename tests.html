@@ -42,7 +42,12 @@ test('UX 5 / story 3.6','doublon plus bas',()=>egal(decisionDoublon(100,90),'rem
 test('UX 5 / story 3.6','doublon plus haut',()=>egal(decisionDoublon(100,110),'conserver'));
 const obs=(magasin,date,prixCentimes,formatBase=1000,promo=false)=>({magasin,date,prixCentimes,formatBase,promo});
 test('FR1','normalisation du nom',()=>{egal(normaliserNom('CAFÉ Moulu'),'cafe moulu');egal(normaliserNom('  café   moulu '),'cafe moulu');});
-test('FR1/FR3','déduire unité de comparaison depuis le format',()=>{egal(deduireUniteComparaison('g'),'kg');egal(deduireUniteComparaison('kg'),'kg');egal(deduireUniteComparaison('ml'),'l');egal(deduireUniteComparaison('l'),'l');egal(deduireUniteComparaison('unit'),'unit');egal(deduireUniteComparaison('invalide'),null);});
+test('FR1/FR3','déduire unité de comparaison pour g',()=>egal(deduireUniteComparaison('g'),'kg'));
+test('FR1/FR3','déduire unité de comparaison pour kg',()=>egal(deduireUniteComparaison('kg'),'kg'));
+test('FR1/FR3','déduire unité de comparaison pour ml',()=>egal(deduireUniteComparaison('ml'),'l'));
+test('FR1/FR3','déduire unité de comparaison pour l',()=>egal(deduireUniteComparaison('l'),'l'));
+test('FR1/FR3','déduire unité de comparaison pour unités',()=>egal(deduireUniteComparaison('unit'),'unit'));
+test('FR1/FR3','unité de comparaison inconnue renvoie null',()=>egal(deduireUniteComparaison('invalide'),null));
 test('FR1','nom valide',()=>{egal(nomTypeValide('Café'),true);egal(nomTypeValide('   '),false);egal(nomTypeValide('a'.repeat(60)),true);egal(nomTypeValide('a'.repeat(61)),false);});
 test('FR1','unités historiques',()=>egal(UNITES.join(','),'kg,l,unit'));
 test('FR5','conversions',()=>{egal(versUniteDeBase(500,'g'),500);egal(versUniteDeBase(.5,'kg'),500);egal(versUniteDeBase(1.5,'l'),1500);egal(versUniteDeBase(6,'unit'),6);egal(convertir(500,'g','kg'),.5);egal(convertir(750,'ml','l'),.75);});

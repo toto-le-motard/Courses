@@ -481,6 +481,44 @@ if (playwright) {
       await page.click('#bandeau-annulation button');
       await page.waitForFunction(async()=>{const db=await new Promise((resolve,reject)=>{const q=indexedDB.open('appli-courses');q.onsuccess=()=>resolve(q.result);q.onerror=()=>reject(q.error)});const t=db.transaction(['Article','ProductType'],'readonly');const a=await new Promise(res=>{const q=t.objectStore('Article').get('9999999999999');q.onsuccess=()=>res(q.result)});const ts=await new Promise(res=>{const q=t.objectStore('ProductType').getAll();q.onsuccess=()=>res(q.result)});db.close();return !a&&!ts.some(x=>x.nom==='Nouveau type scan H')},null,{timeout:5000});
       ok('H6.6 Annuler supprime le type créé et le code-barres');
+
+      // H6.6(b) : la normalisation doit retrouver un type actif sans créer de doublon.
+      await page.evaluate(()=>{window.__barcodeTestCode='9999999999998';});
+      await page.click('#btn-scanner'); await page.waitForSelector('dialog.dialog-scan[open]',{timeout:5000});
+      await page.waitForSelector('dialog.dialog-rattacher[open]',{timeout:8000});
+      await page.fill('#scan-type-search','zz mensuel tést'); await page.fill('#scan-format','500'); await page.selectOption('#scan-unite','g');
+      await page.click('dialog.dialog-rattacher button:has-text("Rattacher ce code")');
+      await page.waitForFunction(()=>document.querySelector('#champ-type')?.value.toLowerCase().includes('zz mensuel'),null,{timeout:5000});
+      const normaliseRattachement=await page.evaluate(()=>new Promise((resolve,reject)=>{const q=indexedDB.open('appli-courses');q.onsuccess=()=>{const db=q.result,t=db.transaction(['Article','ProductType'],'readonly'),a=t.objectStore('Article').get('9999999999998');a.onsuccess=()=>{const art=a.result;if(!art){db.close();resolve(null);return;}const all=t.objectStore('ProductType').getAll();all.onsuccess=()=>{db.close();resolve({article:art,types:all.filter(x=>x.nomNormalise==='zz mensuel test')});};};q.onerror=()=>reject(q.error)};q.onerror=()=>reject(q.error)}));
+      if(!normaliseRattachement||normaliseRattachement.types.length!==1||normaliseRattachement.article.type!==normaliseRattachement.types[0].id) throw new Error('H6.6 : casse/accents différents ont créé un doublon ou mal rattaché le code');
+      ok('H6.6 nom existant normalisé : aucun doublon et rattachement correct');
+
+      // H6.6(c) : restauration atomique puis annulation qui ré-archive.
+      await page.evaluate(async()=>{const db=await new Promise((resolve,reject)=>{const q=indexedDB.open('appli-courses');q.onsuccess=()=>resolve(q.result);q.onerror=()=>reject(q.error)});await new Promise((resolve,reject)=>{const tx=db.transaction('ProductType','readwrite'),q=tx.objectStore('ProductType').add({nom:'Type archive H',nomNormalise:'type archive h',unite:'kg',marque:'',nomArticle:'',archive:1});q.onerror=()=>reject(q.error);tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error)});db.close();});
+      await page.evaluate(()=>{window.__barcodeTestCode='9999999999997';});
+      await page.click('#btn-scanner'); await page.waitForSelector('dialog.dialog-scan[open]',{timeout:5000}); await page.waitForSelector('dialog.dialog-rattacher[open]',{timeout:8000});
+      await page.fill('#scan-type-search','Type archive H'); await page.fill('#scan-format','500'); await page.selectOption('#scan-unite','g');
+      await page.click('dialog.dialog-rattacher button:has-text("Rattacher ce code")'); await page.waitForSelector('#bandeau-annulation',{timeout:3000});
+      const restaureOk=await page.evaluate(()=>new Promise((resolve,reject)=>{const q=indexedDB.open('appli-courses');q.onsuccess=()=>{const db=q.result,t=db.transaction(['Article','ProductType'],'readonly'),a=t.objectStore('Article').get('9999999999997');a.onsuccess=()=>{const art=a.result;if(!art){db.close();resolve(false);return;}const p=t.objectStore('ProductType').get(art.type);p.onsuccess=()=>{db.close();resolve(p.result?.archive===0&&p.result?.nomNormalise==='type archive h')};};};q.onerror=()=>reject(q.error)}));
+      if(!restaureOk) throw new Error('H6.6 : le type archivé n’a pas été restauré');
+      await page.click('#bandeau-annulation button');
+      const rearchiveOk=await page.evaluate(()=>new Promise((resolve,reject)=>{const q=indexedDB.open('appli-courses');q.onsuccess=()=>{const db=q.result,t=db.transaction(['Article','ProductType'],'readonly'),a=t.objectStore('Article').get('9999999999997');a.onsuccess=()=>{const all=t.objectStore('ProductType').getAll();all.onsuccess=()=>{db.close();resolve(!a.result&&all.some(x=>x.nomNormalise==='type archive h'&&x.archive===1))};};};q.onerror=()=>reject(q.error)}));
+      if(!rearchiveOk) throw new Error('H6.6 : Annuler n’a pas supprimé l’Article et ré-archivé le type');
+      ok('H6.6 type archivé restauré puis ré-archivé par Annuler');
+
+      // H6.6(d) : unité incompatible bloquée avant toute écriture.
+      await page.evaluate(async()=>{const db=await new Promise((resolve,reject)=>{const q=indexedDB.open('appli-courses');q.onsuccess=()=>resolve(q.result);q.onerror=()=>reject(q.error)});await new Promise((resolve,reject)=>{const tx=db.transaction('ProductType','readwrite'),q=tx.objectStore('ProductType').add({nom:'Type liquide H',nomNormalise:'type liquide h',unite:'l',marque:'',nomArticle:'',archive:0});q.onerror=()=>reject(q.error);tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error)});db.close();});
+      await page.evaluate(()=>{window.__barcodeTestCode='9999999999996';});
+      await page.click('#btn-scanner'); await page.waitForSelector('dialog.dialog-scan[open]',{timeout:5000}); await page.waitForSelector('dialog.dialog-rattacher[open]',{timeout:8000});
+      await page.fill('#scan-type-search','Type liquide H'); await page.fill('#scan-format','500'); await page.selectOption('#scan-unite','g');
+      await page.click('dialog.dialog-rattacher button:has-text("Rattacher ce code")');
+      if(!(await page.locator('#scan-rattacher-message').innerText()).includes('Ce type se compare en l')) throw new Error('H6.6 : unité incompatible sans message attendu');
+      if(!await page.locator('dialog.dialog-rattacher[open]').count()) throw new Error('H6.6 : le rattachement incompatible n’a pas été bloqué');
+      const articleIncompatible=await page.evaluate(()=>new Promise((resolve,reject)=>{const q=indexedDB.open('appli-courses');q.onsuccess=()=>{const db=q.result,r=db.transaction('Article').objectStore('Article').get('9999999999996');r.onsuccess=()=>{db.close();resolve(r.result||null)};};q.onerror=()=>reject(q.error)}));
+      if(articleIncompatible) throw new Error('H6.6 : un Article a été créé malgré une unité incompatible');
+      ok('H6.6 unité incompatible : message affiché et validation bloquée');
+      await page.locator('dialog.dialog-rattacher button:has-text("Annuler")').click();
+
       await page.evaluate(()=>{Object.defineProperty(navigator.mediaDevices,'getUserMedia',{configurable:true,value:()=>Promise.reject(Object.assign(new Error('refus caméra'),{name:'NotAllowedError'}))})});
       await page.setViewportSize({width:390,height:500});
       await page.evaluate(()=>window.__forcerModeSaisie(true));
