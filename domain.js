@@ -274,3 +274,38 @@ export function frequencePromos(observations, magasin) {
   const nbPromos = retenus.filter(o => o.promo === true || o.promo === 1).length;
   return { ok: true, nbPromos, nbReleves: retenus.length, pourcentage: Math.round(nbPromos * 1000 / retenus.length) / 10 };
 }
+
+
+// FR22 / Story 5.3 — liste comparative avant les courses.
+export function listeAvantCourses(types, observations, seuil, dateCourante) {
+  const actifs = (Array.isArray(types) ? types : []).filter(type => type && !type.archive);
+  const releves = Array.isArray(observations) ? observations : [];
+  return actifs.map(type => {
+    const historique = releves.filter(o => o && o.type === type.id);
+    const leclerc = referenceLeclerc(historique, type.unite, dateCourante);
+    const intermarche = habituelIntermarche(historique, type.unite);
+    const derniers = [leclerc.dernierConnu, intermarche.dernierConnu].filter(Boolean).map(o => o.date).sort();
+    const dateDernierPrix = derniers.length ? derniers[derniers.length - 1] : null;
+    const prixDisponibles = [leclerc.ok ? leclerc.valeur : null, intermarche.ok ? intermarche.valeur : null]
+      .filter(v => Number.isFinite(v) && v > 0);
+    if (!leclerc.ok || !intermarche.ok) return {
+      typeId: type.id, resultat: 'donnees-insuffisantes',
+      prixNormaliseCentimes: prixDisponibles.length ? arrondirCentimes(Math.min(...prixDisponibles)) : null,
+      economiePourcent: null, dateDernierPrix
+    };
+    const formatBase = type.unite === 'unit' ? 1 : 1000;
+    const verdict = calculerVerdict({
+      prixCentimes: arrondirCentimes(leclerc.valeur), formatBase, typeUnit: type.unite,
+      magasin: MAGASIN.LECLERC, observations: historique, aujourdhui: dateCourante, seuilPct: seuil
+    });
+    const moinsCher = Math.min(leclerc.valeur, intermarche.valeur);
+    const plusCher = Math.max(leclerc.valeur, intermarche.valeur);
+    const resultat = verdict.resultat === VERDICT.ACHETER_ICI ? 'leclerc'
+      : verdict.resultat === VERDICT.ATTENDRE ? 'intermarche' : 'indifferent';
+    return {
+      typeId: type.id, resultat, prixNormaliseCentimes: arrondirCentimes(moinsCher),
+      economiePourcent: plusCher > 0 ? Math.round(((plusCher - moinsCher) / plusCher) * 10000) / 100 : null,
+      dateDernierPrix: null
+    };
+  });
+}

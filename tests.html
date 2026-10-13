@@ -12,7 +12,7 @@ li { padding:6px 0; border-bottom:1px solid rgba(255,255,255,.1); } .exi { color
 const calculerPositionDock = await import('./domain.js').then(m => m.calculerPositionDock);
 import { creerSauvegarde, validerSauvegarde, etatRappelExport } from './backup.js';
 import { frequencePromos } from './domain.js';
-import { modeSaisieActif, positionDefilement, MAGASIN, VERDICT, UNITES, LIBELLE_UNITE, normaliserNom, nomTypeValide, unitesCompatibles, estCompatible, versUniteDeBase, convertir, verifierFormat, arrondirCentimes, analyserPrixSaisie, formaterPrixEuros, formaterPrixNormalise, prixNormalise, joursEntre, mediane, referenceLeclerc, habituelIntermarche, prixHabituel, prixHabituelAutreMagasin, autreMagasin, calculerVerdict, estPrixIncoherent, decisionDoublon, analyserDoublon, cleDoublon, formatAffichage, trierReleves } from './domain.js';
+import { modeSaisieActif, positionDefilement, MAGASIN, VERDICT, UNITES, LIBELLE_UNITE, normaliserNom, nomTypeValide, unitesCompatibles, estCompatible, versUniteDeBase, convertir, verifierFormat, arrondirCentimes, analyserPrixSaisie, formaterPrixEuros, formaterPrixNormalise, prixNormalise, joursEntre, mediane, referenceLeclerc, habituelIntermarche, prixHabituel, prixHabituelAutreMagasin, autreMagasin, calculerVerdict, estPrixIncoherent, decisionDoublon, analyserDoublon, cleDoublon, formatAffichage, trierReleves, listeAvantCourses } from './domain.js';
 const calculerEconomieRealisee = (await import('./domain.js')).calculerEconomieRealisee;
 const resultats={reussis:0,echecs:0,details:[]},lignes=[]; function test(exigence,nom,fn){let msg=null;try{fn()}catch(e){msg=e.message}if(msg){resultats.echecs++;resultats.details.push(exigence+' '+nom+' : '+msg)}else resultats.reussis++;lignes.push({ok:!msg,exigence,nom,msg});}
 function egal(a,b,msg=''){if(JSON.stringify(a)!==JSON.stringify(b))throw new Error(msg+' attendu '+JSON.stringify(b)+', obtenu '+JSON.stringify(a));}
@@ -131,6 +131,43 @@ test('FR26 / E7.4','achat sans prix de comparaison exclu du cumul',()=>{const r=
 test('FR26 / E7.4','conversion ml vers litre et quantité de paquets',()=>{const r=calculerEconomieRealisee({achete:1,quantite:2,prixPayeCentimes:150,format:500,prixComparaisonCentimes:400,prixHabituelMemeMagasinCentimes:400},'l');egal(r.ok,true);egal(r.economieCentimes,100);});
 test('FR26 / E7.4','gain promo séparé du gain de comparaison',()=>{const r=calculerEconomieRealisee({achete:1,quantite:2,prixPayeCentimes:200,format:500,prixComparaisonCentimes:500,prixHabituelMemeMagasinCentimes:600},'kg');egal(r.economieCentimes,100);egal(r.gainPromoCentimes,200);});
 test('FR26 / E7.4','non-achat ignoré et comparaison figée portée par l’achat',()=>{const non=calculerEconomieRealisee({achete:0,quantite:5,prixPayeCentimes:100,format:1000,prixComparaisonCentimes:500,prixHabituelMemeMagasinCentimes:600},'kg');egal(non.compte,false);egal(non.raison,'non-achat');const achat=calculerEconomieRealisee({achete:1,quantite:1,prixPayeCentimes:300,format:1000,prixComparaisonCentimes:500,prixHabituelMemeMagasinCentimes:null},'kg');egal(achat.economieCentimes,200);egal(achat.gainPromoCentimes,null);});
+
+ // FR22 / FR14 / FR16 — liste comparative avant les courses.
+const typesListe=[{id:101,unite:'kg',archive:0},{id:102,unite:'kg',archive:0},{id:103,unite:'kg',archive:0},{id:104,unite:'kg',archive:0},{id:105,unite:'kg',archive:1}];
+const obsListe=[
+ ...[1,2,3].map(n=>({type:101,magasin:LE,date:'2026-10-0'+n,prixCentimes:100,format:1000,promo:0})),{type:101,magasin:IM,date:'2026-10-03',prixCentimes:120,format:1000,promo:0},
+ ...[1,2,3].map(n=>({type:102,magasin:LE,date:'2026-10-0'+n,prixCentimes:100,format:1000,promo:0})),{type:102,magasin:IM,date:'2026-10-03',prixCentimes:90,format:1000,promo:0},
+ ...[1,2,3].map(n=>({type:103,magasin:LE,date:'2026-10-0'+n,prixCentimes:100,format:1000,promo:0})),{type:103,magasin:IM,date:'2026-10-03',prixCentimes:105,format:1000,promo:0},
+ {type:104,magasin:LE,date:'2026-10-03',prixCentimes:100,format:1000,promo:0},{type:104,magasin:LE,date:'2026-10-03',prixCentimes:1,format:1000,promo:1},{type:104,magasin:IM,date:'2026-10-03',prixCentimes:110,format:1000,promo:0},
+ {type:105,magasin:LE,date:'2026-10-03',prixCentimes:10,format:1000,promo:0}
+];
+test('FR22 / FR14 / FR16','listeAvantCourses couvre les quatre résultats et exclut les types archivés',()=>{
+ const r=listeAvantCourses(typesListe,obsListe,5,'2026-10-04');
+ egal(r.map(x=>x.resultat),['leclerc','intermarche','indifferent','donnees-insuffisantes']);
+ egal(r.some(x=>x.typeId===105),false); egal(r[0].prixNormaliseCentimes,100); egal(r[0].dateDernierPrix,null);
+});
+test('FR22 / FR16','listeAvantCourses applique le seuil exact de 5 %',()=>{
+ const r=listeAvantCourses([{id:1,unite:'kg',archive:0}],[
+ ...[1,2,3].map(n=>({type:1,magasin:LE,date:'2026-10-0'+n,prixCentimes:100,format:1000,promo:0})),
+ {type:1,magasin:IM,date:'2026-10-03',prixCentimes:105,format:1000,promo:0}
+ ],5,'2026-10-04');
+ egal(r[0].resultat,'indifferent');
+});
+test('FR22 / FR10 / FR14','listeAvantCourses exclut les promos et signale moins de trois relevés Leclerc',()=>{
+ const r=listeAvantCourses([{id:1,unite:'kg',archive:0}],[
+ {type:1,magasin:LE,date:'2026-10-03',prixCentimes:100,format:1000,promo:0},{type:1,magasin:LE,date:'2026-10-03',prixCentimes:1,format:1000,promo:1},
+ {type:1,magasin:IM,date:'2026-10-03',prixCentimes:110,format:1000,promo:0}
+ ],5,'2026-10-04')[0];
+ egal(r.resultat,'donnees-insuffisantes'); egal(r.dateDernierPrix,'2026-10-03');
+});
+test('FR22 / FR11','listeAvantCourses signale Intermarché sans relevé hors promotion',()=>{
+ const r=listeAvantCourses([{id:1,unite:'kg',archive:0}],[
+ ...[1,2,3].map(n=>({type:1,magasin:LE,date:'2026-10-0'+n,prixCentimes:100,format:1000,promo:0})),
+ {type:1,magasin:IM,date:'2026-10-03',prixCentimes:1,format:1000,promo:1}
+ ],5,'2026-10-04')[0];
+ egal(r.resultat,'donnees-insuffisantes');
+});
+
 const ko=lignes.filter(r=>!r.ok), bilanTexte=ko.length?ko.length+' échec(s) sur '+lignes.length:'Tous les tests passent ('+lignes.length+')';
 if(typeof document==='undefined'){console.log(bilanTexte);ko.forEach(r=>console.log('ÉCHEC ['+r.exigence+'] '+r.nom+' — '+r.msg));if(ko.length)process.exitCode=1;}
 else{const bilan=document.getElementById('bilan');bilan.textContent=bilanTexte;bilan.className=ko.length?'ko':'ok';const ul=document.getElementById('liste');[...ko,...lignes.filter(r=>r.ok)].forEach(r=>{const li=document.createElement('li');li.className=r.ok?'ok':'ko';const ex=document.createElement('span');ex.className='exi';ex.textContent=r.exigence;li.append(ex,document.createTextNode((r.ok?'✓':'✗')+' '+r.nom));if(!r.ok){const m=document.createElement('span');m.className='msg';m.textContent=r.msg;li.append(m);}ul.append(li);});}

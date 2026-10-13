@@ -1,6 +1,6 @@
 // app.js — interface et navigation (stories 1.2 à 3-2).
 import { initDb, dbPrete, listerTypes, lireDernierReleve, lireObservations, dernierReleve, trouverDoublon, enregistrerReleves, analyserDoublons, annulerEnregistrement, listerReleves, modifierReleve, supprimerReleve, enregistrerAchat, listerAchats, modifierAchat, supprimerAchat, demanderStockagePersistant, lireReglage, ecrireReglage, compter, STORES, VERSION_SCHEMA, exporterCollections, remplacerCollections, lire, mettre, toutLire, supprimer } from './db.js';
-import { MAGASIN, UNITES, LIBELLE_UNITE, VERDICT, analyserPrixSaisie, verifierFormat, prixNormalise, formaterPrixEuros, formaterPrixNormalise, calculerVerdict, prixHabituel, calculerEconomieRealisee, estPrixIncoherent, unitesCompatibles, formatAffichage, calculerPositionDock, modeSaisieActif, positionDefilement, frequencePromos } from './domain.js';
+import { MAGASIN, UNITES, LIBELLE_UNITE, VERDICT, analyserPrixSaisie, verifierFormat, prixNormalise, formaterPrixEuros, formaterPrixNormalise, calculerVerdict, prixHabituel, calculerEconomieRealisee, estPrixIncoherent, unitesCompatibles, formatAffichage, calculerPositionDock, modeSaisieActif, positionDefilement, frequencePromos, listeAvantCourses } from './domain.js';
 import { accueilVide, vueTypes, vueTypeForm } from './types-ui.js';
 import { creerSauvegarde, validerSauvegarde, etatRappelExport } from './backup.js';
 
@@ -1004,25 +1004,25 @@ async function vueListeCourses() {
     const q=recherche.value.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
     const types=(await listerTypes()).filter(t=>!t.archive&&t.nomNormalise.includes(q)).sort((a,b)=>a.nom.localeCompare(b.nom,'fr'));
     const seuilPct=Number(await lireReglage('seuilIndifference',5)),dateDuJour=aujourdHui();
-    const analyses=await Promise.all(types.map(async type=>{
-      const observations=await lireObservations(type.id),autreMagasin=magasinListe===MAGASIN.LECLERC?MAGASIN.INTERMARCHE:MAGASIN.LECLERC;
-      const courant=prixHabituel(observations,magasinListe,type.unite,dateDuJour),autre=prixHabituel(observations,autreMagasin,type.unite,dateDuJour);
-      let resultat=VERDICT.INSUFFISANT,details='Aucun prix connu.';
-      if(courant.ok&&autre.ok){
-        const formatBase=type.unite==='unit'?1:1000;
-        const v=calculerVerdict({prixCentimes:Math.round(courant.valeur),formatBase,typeUnit:type.unite,magasin:magasinListe,observations,aujourdhui:dateDuJour,seuilPct});
-        resultat=v.resultat;
-        const moinsCher=Math.min(courant.valeur,autre.valeur);
-        details='Prix normalisé le moins cher : '+formaterPrixNormalise(moinsCher,type.unite);
-        if(Number.isFinite(v.ecart))details+=' · écart '+String(Math.round(Math.abs(v.ecart)*1000)/10).replace('.',',')+' %';
-      }else{
-        const dernier=courant.dernierConnu||autre.dernierConnu;
-        if(dernier)details='Dernier prix connu : '+formaterPrixNormalise(dernier.valeur,type.unite)+' · '+dateAffichee(dernier.date);
-        else if(courant.ok)details='Prix habituel ici : '+formaterPrixNormalise(courant.valeur,type.unite)+' · comparaison insuffisante';
-        else if(autre.ok)details='Prix habituel autre magasin : '+formaterPrixNormalise(autre.valeur,type.unite)+' · comparaison insuffisante';
+    const tousTypes=(await listerTypes()).filter(t=>!t.archive);
+    const tousReleves=[];
+    for(const type of tousTypes)tousReleves.push(...await lireObservations(type.id));
+    const comparaisons=listeAvantCourses(tousTypes,tousReleves,seuilPct,dateDuJour);
+    const analyses=types.map(type=>{
+      const comparaison=comparaisons.find(r=>r.typeId===type.id);
+      const groupe=comparaison?.resultat==='donnees-insuffisantes'?VERDICT.INSUFFISANT
+        :comparaison?.resultat==='indifferent'?VERDICT.INDIFFERENT
+        :(comparaison?.resultat==='leclerc')===(magasinListe===MAGASIN.LECLERC)?VERDICT.ACHETER_ICI:VERDICT.ATTENDRE;
+      let details='Aucun prix connu.';
+      if(comparaison?.resultat!=='donnees-insuffisantes'){
+        details='Prix normalisé le moins cher : '+formaterPrixNormalise(comparaison.prixNormaliseCentimes,type.unite);
+        if(comparaison.economiePourcent!=null)details+=' · écart '+String(comparaison.economiePourcent).replace('.',',')+' %';
+      }else if(comparaison?.dateDernierPrix){
+        details='Dernier prix connu : '+dateAffichee(comparaison.dateDernierPrix);
+        if(comparaison.prixNormaliseCentimes!=null)details+=' · '+formaterPrixNormalise(comparaison.prixNormaliseCentimes,type.unite);
       }
-      return {type,resultat,details};
-    }));
+      return {type,resultat:groupe,details};
+    });
     contenu.replaceChildren();
     for(const [resultat,titreGroupe] of groupes){
       const lignes=analyses.filter(a=>a.resultat===resultat),liste=el('div',{class:'lignes-groupe'});
