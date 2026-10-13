@@ -592,20 +592,38 @@ function vueMagasin() {
     );
     let stream = null;
     let actif = true;
+    let fermee = false;
     const fermer = () => {
+      if (fermee) return;
+      fermee = true;
       actif = false;
       requeteOpenFoodFacts?.abort();
       requeteOpenFoodFacts = null;
       if (delaiOpenFoodFacts) clearTimeout(delaiOpenFoodFacts);
       delaiOpenFoodFacts = null;
-      stream?.getTracks?.().forEach(t => t.stop());
+      stream?.getTracks?.().forEach(piste => { try { piste.stop(); } catch {} });
       window.removeEventListener('online', actualiserBoutonCompleter);
       window.removeEventListener('offline', actualiserBoutonCompleter);
       window.visualViewport?.removeEventListener('resize', garderChampScannerVisible);
       window.visualViewport?.removeEventListener('scroll', garderChampScannerVisible);
+      window.removeEventListener('pagehide', fermerSurSortie);
+      window.removeEventListener('hashchange', fermerSurSortie);
+      window.removeEventListener('popstate', fermerSurSortie);
+      document.removeEventListener('visibilitychange', fermerSiMasque);
       dialogue.remove();
     };
+    function fermerSurSortie() {
+      if (dialogue.open) dialogue.close();
+      fermer();
+    }
+    function fermerSiMasque() {
+      if (document.hidden) fermerSurSortie();
+    }
     dialogue.addEventListener('close', fermer, { once: true });
+    window.addEventListener('pagehide', fermerSurSortie);
+    document.addEventListener('visibilitychange', fermerSiMasque);
+    window.addEventListener('hashchange', fermerSurSortie);
+    window.addEventListener('popstate', fermerSurSortie);
     async function traiterCode(valeur) {
       const code = String(valeur || '').trim();
       if (!code) { const m=dialogue.querySelector('#scan-message'); m.textContent='Saisissez un code-barres.'; m.hidden=false; return; }
@@ -641,6 +659,10 @@ function vueMagasin() {
     try {
       if (!navigator.mediaDevices?.getUserMedia) throw new Error('Caméra indisponible');
       stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false });
+      if (!actif || fermee || !dialogue.isConnected) {
+        stream?.getTracks?.().forEach(piste => { try { piste.stop(); } catch {} });
+        return;
+      }
       const video = dialogue.querySelector('#scan-video'); video.srcObject = stream;
       await video.play().catch(() => {});
       if ('BarcodeDetector' in window) {

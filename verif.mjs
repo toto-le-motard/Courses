@@ -842,6 +842,37 @@ if (playwright) {
        await verifierDialogue('rattachement code 390x500',['Rattacher ce code','Type de produit','Format'],['Rattacher ce code','Annuler']);
        await page.click('dialog button:has-text("Annuler")');await page.setViewportSize({width:390,height:844});await aller('#/magasin');
        ok('relecture adverse : 11 écrans aux viewports 390x844 et 390x500, scanner et rattachement à 390x500');
+        // G3 / Story 6.1 : pistes simulées, fermeture sur masquage et retour arrière.
+        const scannerCtx = await navigateur.newContext({viewport:{width:390,height:844}});
+        await scannerCtx.addInitScript(() => {
+          window.__trackStopCount = 0;
+          window.__forcedHidden = false;
+          Object.defineProperty(document, 'hidden', {configurable:true,get:()=>Boolean(window.__forcedHidden)});
+          const piste = {stop:()=>{window.__trackStopCount++},get readyState(){return 'live'},addEventListener(){},removeEventListener(){}};
+          const flux = new MediaStream();
+          Object.defineProperty(flux,'getTracks',{configurable:true,value:()=>[piste]});
+          Object.defineProperty(navigator.mediaDevices,'getUserMedia',{configurable:true,value:async()=>flux});
+        });
+        const pageMasquee = await scannerCtx.newPage();
+        await pageMasquee.goto(base+'#/magasin');
+        await pageMasquee.waitForSelector('#btn-scanner',{timeout:8000});
+        await pageMasquee.click('#btn-scanner');
+        await pageMasquee.waitForSelector('dialog.dialog-scan[open]',{timeout:5000});
+        await pageMasquee.evaluate(()=>{window.__forcedHidden=true;document.dispatchEvent(new Event('visibilitychange'));});
+        await pageMasquee.waitForFunction(()=>window.__trackStopCount===1&&!document.querySelector('dialog.dialog-scan'),null,{timeout:5000});
+        if(await pageMasquee.evaluate(()=>window.__trackStopCount)!==1)throw new Error('G3 visibilitychange : la piste n’a pas été arrêtée exactement une fois');
+        ok('G3 scanner : visibilitychange hidden arrête les pistes et retire le dialogue');
+        const pageRetour = await scannerCtx.newPage();
+        await pageRetour.goto(base+'#/magasin');
+        await pageRetour.waitForSelector('#btn-scanner',{timeout:8000});
+        await pageRetour.click('#btn-scanner');
+        await pageRetour.waitForSelector('dialog.dialog-scan[open]',{timeout:5000});
+        await pageRetour.evaluate(()=>{history.pushState({test:true},'', '#/types');history.back();});
+        await pageRetour.waitForFunction(()=>window.__trackStopCount===1&&!document.querySelector('dialog.dialog-scan'),null,{timeout:5000});
+        if(await pageRetour.evaluate(()=>window.__trackStopCount)!==1)throw new Error('G3 retour arrière : la piste n’a pas été arrêtée exactement une fois');
+        ok('G3 scanner : history.back arrête les pistes et retire le dialogue');
+        await scannerCtx.close();
+
        
 // service worker actif et page contrôlée, puis test hors ligne
       await page.evaluate(() => navigator.serviceWorker.ready);
