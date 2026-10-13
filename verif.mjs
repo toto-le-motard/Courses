@@ -854,8 +854,17 @@ if (playwright) {
           Object.defineProperty(navigator.mediaDevices,'getUserMedia',{configurable:true,value:async()=>flux});
         });
         const pageMasquee = await scannerCtx.newPage();
+        // Ce contexte est isolé : préparer une base et un type avant de tester le scanner.
+        // Sans type, l'écran premier lancement masque le bouton Scanner et le test échoue avant l'action visée.
+        await pageMasquee.goto(base+'tests.html');
+        await pageMasquee.evaluate(async()=>{
+          const db=await import('/db.js');
+          await db.initDb();
+          await db.mettre('ProductType',{id:9998,nom:'Type scanner G3',nomNormalise:'type scanner g3',unite:'kg',archive:0});
+        });
         await pageMasquee.goto(base+'#/magasin');
         await pageMasquee.waitForSelector('#btn-scanner',{timeout:8000});
+        etapeParcours = 'G3 scanner : fermeture quand la page est masquée';
         await pageMasquee.click('#btn-scanner');
         await pageMasquee.waitForSelector('dialog.dialog-scan[open]',{timeout:5000});
         await pageMasquee.evaluate(()=>{window.__forcedHidden=true;document.dispatchEvent(new Event('visibilitychange'));});
@@ -865,6 +874,7 @@ if (playwright) {
         const pageRetour = await scannerCtx.newPage();
         await pageRetour.goto(base+'#/magasin');
         await pageRetour.waitForSelector('#btn-scanner',{timeout:8000});
+        etapeParcours = 'G3 scanner : fermeture au retour arrière';
         await pageRetour.click('#btn-scanner');
         await pageRetour.waitForSelector('dialog.dialog-scan[open]',{timeout:5000});
         await pageRetour.evaluate(()=>{history.pushState({test:true},'', '#/types');history.back();});
