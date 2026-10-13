@@ -8,6 +8,7 @@ permissions:
 jobs:
   verif:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
         with:
@@ -20,4 +21,5 @@ jobs:
           npm install --no-save playwright
           npx playwright install --with-deps chromium
       - name: Vérifier
+        timeout-minutes: 3
         run: node verif.mjs
