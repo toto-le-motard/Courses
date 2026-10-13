@@ -763,6 +763,22 @@ if (playwright) {
       }));
       for (const cle of ['types','articles','releves','achats','reglages']) if(JSON.stringify(snapshotApresImport[cle])!==JSON.stringify(snapshotAvantExport[cle])) throw new Error('import différent des données exportées pour '+cle);
       ok('E8.2 import restaure intégralement les cinq collections');
+       // G1 / FR20 : export réel, validation, vidage des cinq collections, import et comparaison.
+       const allerRetourFR20 = await page.evaluate(async () => {
+         const dbmod = await import('./db.js');
+         const backup = await import('./backup.js');
+         const avant = await dbmod.exporterCollections();
+         const payload = backup.creerSauvegarde({schemaVersion: dbmod.VERSION_SCHEMA, ...avant, dateExport: '2026-10-13'});
+         await dbmod.remplacerCollections({types: [], articles: [], releves: [], achats: [], reglages: []});
+         const validation = backup.validerSauvegarde(payload, dbmod.VERSION_SCHEMA);
+         if (!validation.ok) throw new Error('FR20 : sauvegarde exportée refusée à la validation : ' + validation.erreur);
+         await dbmod.remplacerCollections(validation.valeur);
+         const apres = await dbmod.exporterCollections();
+         const differences = ['types','articles','releves','achats','reglages'].filter(cle => JSON.stringify(avant[cle]) !== JSON.stringify(apres[cle]));
+         if (differences.length) throw new Error('FR20 : différence après export → vidage → validation → import → ré-export : ' + differences.join(', '));
+         return {collections: Object.fromEntries(['types','articles','releves','achats','reglages'].map(cle => [cle, avant[cle].length]))};
+       });
+       ok('FR20 aller-retour export/import : cinq collections identiques après vidage, validation et ré-export (' + JSON.stringify(allerRetourFR20.collections) + ')');
        await page.setViewportSize({width:390,height:844});
       const dateRetard = new Date(Date.now()-31*86400000).toISOString().slice(0,10);
       await page.evaluate(date=>new Promise((resolve,reject)=>{const rq=indexedDB.open('appli-courses');rq.onsuccess=()=>{const db=rq.result;const tx=db.transaction('Settings','readwrite');tx.objectStore('Settings').put({cle:'dernierExport',valeur:date});tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error)};rq.onerror=()=>reject(rq.error)}),dateRetard);
