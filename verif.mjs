@@ -485,12 +485,12 @@ if (playwright) {
       // H6.6(b) : la normalisation doit retrouver un type actif sans créer de doublon.
       await page.evaluate(()=>{window.__barcodeTestCode='9999999999998';});
       await page.click('#btn-scanner'); await page.waitForSelector('dialog.dialog-scan[open]',{timeout:5000});
-      await page.waitForSelector('dialog.dialog-rattacher[open]',{timeout:8000});
+      await page.waitForSelector('dialog.dialog-rattacher[open]',{timeout:8000}); console.log('TRACE H6.6 normalisation : dialogue ouvert');
       await page.fill('#scan-type-search','zz mensuel tést'); await page.fill('#scan-format','500'); await page.selectOption('#scan-unite','g');
-      await page.click('dialog.dialog-rattacher button:has-text("Rattacher ce code")');
-      await page.waitForFunction(()=>document.querySelector('#champ-type')?.value.toLowerCase().includes('zz mensuel'),null,{timeout:5000});
+      await page.click('dialog.dialog-rattacher button:has-text("Rattacher ce code")'); console.log('TRACE H6.6 normalisation : clic rattacher terminé');
+      await page.waitForFunction(()=>document.querySelector('#champ-type')?.value.toLowerCase().includes('zz mensuel'),null,{timeout:5000}); console.log('TRACE H6.6 normalisation : formulaire prérempli');
       const normaliseRattachement=await page.evaluate(()=>new Promise((resolve,reject)=>{const q=indexedDB.open('appli-courses');q.onsuccess=()=>{const db=q.result,t=db.transaction(['Article','ProductType'],'readonly'),a=t.objectStore('Article').get('9999999999998');a.onsuccess=()=>{const art=a.result;if(!art){db.close();resolve(null);return;}const all=t.objectStore('ProductType').getAll();all.onsuccess=()=>{db.close();resolve({article:art,types:all.filter(x=>x.nomNormalise==='zz mensuel test')});};};q.onerror=()=>reject(q.error)};q.onerror=()=>reject(q.error)}));
-      if(!normaliseRattachement||normaliseRattachement.types.length!==1||normaliseRattachement.article.type!==normaliseRattachement.types[0].id) throw new Error('H6.6 : casse/accents différents ont créé un doublon ou mal rattaché le code');
+      console.log('TRACE H6.6 normalisation : lecture IndexedDB terminée'); if(!normaliseRattachement||normaliseRattachement.types.length!==1||normaliseRattachement.article.type!==normaliseRattachement.types[0].id) throw new Error('H6.6 : casse/accents différents ont créé un doublon ou mal rattaché le code');
       ok('H6.6 nom existant normalisé : aucun doublon et rattachement correct'); console.log('TRACE H6.6 normalisation terminée');
 
       // H6.6(c) : restauration atomique puis annulation qui ré-archive.
