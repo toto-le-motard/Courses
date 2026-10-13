@@ -146,12 +146,16 @@ test('FR22 / FR14 / FR16','listeAvantCourses couvre les quatre résultats et exc
  egal(r.map(x=>x.resultat),['leclerc','intermarche','indifferent','donnees-insuffisantes']);
  egal(r.some(x=>x.typeId===105),false); egal(r[0].prixNormaliseCentimes,100); egal(r[0].dateDernierPrix,null);
 });
-test('FR22 / FR16','listeAvantCourses applique le seuil exact de 5 %',()=>{
- const r=listeAvantCourses([{id:1,unite:'kg',archive:0}],[
- ...[1,2,3].map(n=>({type:1,magasin:LE,date:'2026-10-0'+n,prixCentimes:100,format:1000,promo:0})),
- {type:1,magasin:IM,date:'2026-10-03',prixCentimes:105,format:1000,promo:0}
- ],5,'2026-10-04');
- egal(r[0].resultat,'indifferent');
+test('FR22 / FR16','listeAvantCourses applique exactement les seuils de +5 % et -5 %',()=>{
+ const types=[{id:1,unite:'kg',archive:0},{id:2,unite:'kg',archive:0}];
+ const observations=[
+  ...[1,2,3].map(n=>({type:1,magasin:LE,date:'2026-10-0'+n,prixCentimes:105,format:1000,promo:0})),
+  {type:1,magasin:IM,date:'2026-10-03',prixCentimes:100,format:1000,promo:0},
+  ...[1,2,3].map(n=>({type:2,magasin:LE,date:'2026-10-0'+n,prixCentimes:95,format:1000,promo:0})),
+  {type:2,magasin:IM,date:'2026-10-03',prixCentimes:100,format:1000,promo:0}
+ ];
+ const r=listeAvantCourses(types,observations,5,'2026-10-04');
+ egal(r.map(x=>x.resultat),['intermarche','leclerc']);
 });
 test('FR22 / FR10 / FR14','listeAvantCourses exclut les promos et signale moins de trois relevés Leclerc',()=>{
  const r=listeAvantCourses([{id:1,unite:'kg',archive:0}],[
