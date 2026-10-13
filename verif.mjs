@@ -461,7 +461,7 @@ if (playwright) {
       await page.waitForSelector('dialog.dialog-scan[open]',{timeout:5000});
       await page.waitForFunction(()=>document.querySelector('#champ-type')?.value==='ZZ mensuel test'&&document.querySelector('#champ-format')?.value!=='',null,{timeout:8000});
       if(await page.evaluate(()=>window.__barcodeDetectCalls)<2)throw new Error('E6.1 : le scanner ne réessaie pas après une image sans code');
-      ok('E6.1 code connu après une image vide : BarcodeDetector réessaie et remplit type/format hors ligne');
+      ok('E6.1 code connu après une image vide : BarcodeDetector réessaie et remplit type/format hors ligne'); console.log('TRACE E6.1 terminé');
       await page.evaluate(()=>{window.__barcodeTestCode='9999999999999'});
       await page.click('#btn-scanner');
       await page.waitForSelector('dialog.dialog-scan[open]',{timeout:5000});
@@ -477,10 +477,10 @@ if (playwright) {
       await page.waitForSelector('#bandeau-annulation',{timeout:3000});
       const codeRattache=await page.evaluate(()=>new Promise((resolve,reject)=>{const rq=indexedDB.open('appli-courses');rq.onsuccess=()=>{const db=rq.result,t=db.transaction(['Article','ProductType'],'readonly'),q=t.objectStore('Article').get('9999999999999');q.onsuccess=()=>{const article=q.result;if(!article){db.close();resolve(null);return;}const p=t.objectStore('ProductType').get(article.type);p.onsuccess=()=>{db.close();resolve({article,type:p.result});};};q.onerror=()=>reject(q.error)};rq.onerror=()=>reject(rq.error)}));
       if(!codeRattache||codeRattache.article.format!==500||codeRattache.type.unite!=='kg'||codeRattache.type.nom!=='Nouveau type scan H') throw new Error('H6.6 : type ou Article créé avec des données incorrectes');
-      ok('H6.6 code inconnu : type créé avec unité déduite, Article rattaché et relevé prérempli');
+      ok('H6.6 code inconnu : type créé avec unité déduite, Article rattaché et relevé prérempli'); console.log('TRACE H6.6 création terminée');
       await page.click('#bandeau-annulation button');
       await page.waitForFunction(async()=>{const db=await new Promise((resolve,reject)=>{const q=indexedDB.open('appli-courses');q.onsuccess=()=>resolve(q.result);q.onerror=()=>reject(q.error)});const t=db.transaction(['Article','ProductType'],'readonly');const a=await new Promise(res=>{const q=t.objectStore('Article').get('9999999999999');q.onsuccess=()=>res(q.result)});const ts=await new Promise(res=>{const q=t.objectStore('ProductType').getAll();q.onsuccess=()=>res(q.result)});db.close();return !a&&!ts.some(x=>x.nom==='Nouveau type scan H')},null,{timeout:5000});
-      ok('H6.6 Annuler supprime le type créé et le code-barres');
+      ok('H6.6 Annuler supprime le type créé et le code-barres'); console.log('TRACE H6.6 annulation terminée');
 
       // H6.6(b) : la normalisation doit retrouver un type actif sans créer de doublon.
       await page.evaluate(()=>{window.__barcodeTestCode='9999999999998';});
@@ -491,7 +491,7 @@ if (playwright) {
       await page.waitForFunction(()=>document.querySelector('#champ-type')?.value.toLowerCase().includes('zz mensuel'),null,{timeout:5000});
       const normaliseRattachement=await page.evaluate(()=>new Promise((resolve,reject)=>{const q=indexedDB.open('appli-courses');q.onsuccess=()=>{const db=q.result,t=db.transaction(['Article','ProductType'],'readonly'),a=t.objectStore('Article').get('9999999999998');a.onsuccess=()=>{const art=a.result;if(!art){db.close();resolve(null);return;}const all=t.objectStore('ProductType').getAll();all.onsuccess=()=>{db.close();resolve({article:art,types:all.filter(x=>x.nomNormalise==='zz mensuel test')});};};q.onerror=()=>reject(q.error)};q.onerror=()=>reject(q.error)}));
       if(!normaliseRattachement||normaliseRattachement.types.length!==1||normaliseRattachement.article.type!==normaliseRattachement.types[0].id) throw new Error('H6.6 : casse/accents différents ont créé un doublon ou mal rattaché le code');
-      ok('H6.6 nom existant normalisé : aucun doublon et rattachement correct');
+      ok('H6.6 nom existant normalisé : aucun doublon et rattachement correct'); console.log('TRACE H6.6 normalisation terminée');
 
       // H6.6(c) : restauration atomique puis annulation qui ré-archive.
       await page.evaluate(async()=>{const db=await new Promise((resolve,reject)=>{const q=indexedDB.open('appli-courses');q.onsuccess=()=>resolve(q.result);q.onerror=()=>reject(q.error)});await new Promise((resolve,reject)=>{const tx=db.transaction('ProductType','readwrite'),q=tx.objectStore('ProductType').add({nom:'Type archive H',nomNormalise:'type archive h',unite:'kg',marque:'',nomArticle:'',archive:1});q.onerror=()=>reject(q.error);tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error)});db.close();});
@@ -504,7 +504,7 @@ if (playwright) {
       await page.click('#bandeau-annulation button');
       const rearchiveOk=await page.evaluate(()=>new Promise((resolve,reject)=>{const q=indexedDB.open('appli-courses');q.onsuccess=()=>{const db=q.result,t=db.transaction(['Article','ProductType'],'readonly'),a=t.objectStore('Article').get('9999999999997');a.onsuccess=()=>{const all=t.objectStore('ProductType').getAll();all.onsuccess=()=>{db.close();resolve(!a.result&&all.some(x=>x.nomNormalise==='type archive h'&&x.archive===1))};};};q.onerror=()=>reject(q.error)}));
       if(!rearchiveOk) throw new Error('H6.6 : Annuler n’a pas supprimé l’Article et ré-archivé le type');
-      ok('H6.6 type archivé restauré puis ré-archivé par Annuler');
+      ok('H6.6 type archivé restauré puis ré-archivé par Annuler'); console.log('TRACE H6.6 restauration/annulation terminée');
 
       // H6.6(d) : unité incompatible bloquée avant toute écriture.
       await page.evaluate(async()=>{const db=await new Promise((resolve,reject)=>{const q=indexedDB.open('appli-courses');q.onsuccess=()=>resolve(q.result);q.onerror=()=>reject(q.error)});await new Promise((resolve,reject)=>{const tx=db.transaction('ProductType','readwrite'),q=tx.objectStore('ProductType').add({nom:'Type liquide H',nomNormalise:'type liquide h',unite:'l',marque:'',nomArticle:'',archive:0});q.onerror=()=>reject(q.error);tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error)});db.close();});
@@ -516,7 +516,7 @@ if (playwright) {
       if(!await page.locator('dialog.dialog-rattacher[open]').count()) throw new Error('H6.6 : le rattachement incompatible n’a pas été bloqué');
       const articleIncompatible=await page.evaluate(()=>new Promise((resolve,reject)=>{const q=indexedDB.open('appli-courses');q.onsuccess=()=>{const db=q.result,r=db.transaction('Article').objectStore('Article').get('9999999999996');r.onsuccess=()=>{db.close();resolve(r.result||null)};};q.onerror=()=>reject(q.error)}));
       if(articleIncompatible) throw new Error('H6.6 : un Article a été créé malgré une unité incompatible');
-      ok('H6.6 unité incompatible : message affiché et validation bloquée');
+      ok('H6.6 unité incompatible : message affiché et validation bloquée'); console.log('TRACE H6.6 unité incompatible terminée');
       await page.locator('dialog.dialog-rattacher button:has-text("Annuler")').click();
 
       await page.evaluate(()=>{Object.defineProperty(navigator.mediaDevices,'getUserMedia',{configurable:true,value:()=>Promise.reject(Object.assign(new Error('refus caméra'),{name:'NotAllowedError'}))})});
