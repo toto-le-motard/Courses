@@ -148,8 +148,8 @@ async function initialiserMagasinsParDefaut() {
   if (!stores.length) {
     for (const magasin of MAGASINS_INITIAUX) await ajouter('Store', { ...magasin });
   }
-  if ((await lireReglage('magasinCourant')) === undefined) await ecrireReglage('magasinCourant', 'leclerc');
-  if ((await lireReglage('magasinReleveMensuel')) === undefined) await ecrireReglage('magasinReleveMensuel', 'intermarche');
+  if ((await lireReglage('magasinCourant')) === undefined) await ecrireReglage('magasinCourant', MAGASINS_INITIAUX[0].id);
+  if ((await lireReglage('magasinReleveMensuel')) === undefined) await ecrireReglage('magasinReleveMensuel', MAGASINS_INITIAUX[1].id);
 }
 
 function normaliserNomMagasin(nom) {
@@ -208,8 +208,8 @@ export async function archiverMagasin(id) {
   const prochain = actifs.find(m => m.id !== id);
   const resultat = { ...magasin, archive: true };
   await mettre('Store', resultat);
-  if (await lireReglage('magasinCourant', 'leclerc') === id) await ecrireReglage('magasinCourant', prochain.id);
-  if (await lireReglage('magasinReleveMensuel', 'intermarche') === id) await ecrireReglage('magasinReleveMensuel', prochain.id);
+  if (await lireReglage('magasinCourant', MAGASINS_INITIAUX[0].id) === id) await ecrireReglage('magasinCourant', prochain.id);
+  if (await lireReglage('magasinReleveMensuel', MAGASINS_INITIAUX[1].id) === id) await ecrireReglage('magasinReleveMensuel', prochain.id);
   return resultat;
 }
 export async function restaurerMagasin(id) {
@@ -226,8 +226,8 @@ export async function supprimerMagasin(id) {
   if (releves.some(o => o.magasin === id) || achats.some(a => a.magasin === id)) throw new Error('Ce magasin a des prix constatés ou des achats : archivez-le pour le retirer');
   if (!magasin.archive && actifs.length <= 1) throw new Error('Impossible de supprimer le dernier magasin actif.');
   await supprimer('Store', id);
-  if (!magasin.archive && await lireReglage('magasinCourant', 'leclerc') === id) await ecrireReglage('magasinCourant', actifs.find(m => m.id !== id)?.id || '');
-  if (!magasin.archive && await lireReglage('magasinReleveMensuel', 'intermarche') === id) await ecrireReglage('magasinReleveMensuel', actifs.find(m => m.id !== id)?.id || '');
+  if (!magasin.archive && await lireReglage('magasinCourant', MAGASINS_INITIAUX[0].id) === id) await ecrireReglage('magasinCourant', actifs.find(m => m.id !== id)?.id || '');
+  if (!magasin.archive && await lireReglage('magasinReleveMensuel', MAGASINS_INITIAUX[1].id) === id) await ecrireReglage('magasinReleveMensuel', actifs.find(m => m.id !== id)?.id || '');
   return true;
 }
 
