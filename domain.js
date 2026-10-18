@@ -254,6 +254,9 @@ export function calculerEconomieRealisee(achat, typeUnit) {
   for (const prix of [achat.prixComparaisonCentimes, achat.prixHabituelMemeMagasinCentimes]) {
     if (prix !== null && prix !== undefined && (!Number.isInteger(prix) || prix <= 0)) return base;
   }
+  if (Object.prototype.hasOwnProperty.call(achat, 'magasinComparaison') && !achat.magasinComparaison) {
+    return { ok: true, compte: false, exclu: true, raison: 'comparaison-indisponible', economieCentimes: 0, gainPromoCentimes: null };
+  }
   if (achat.prixComparaisonCentimes === null || achat.prixComparaisonCentimes === undefined) {
     return { ok: true, compte: false, exclu: true, raison: 'comparaison-indisponible', economieCentimes: 0, gainPromoCentimes: null };
   }

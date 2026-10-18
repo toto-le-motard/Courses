@@ -425,6 +425,8 @@ if (playwright) {
       await page.click('a[href="#/releve-mensuel"]');
       await page.waitForFunction(()=>(document.getElementById('titre-ecran')?.textContent||'')==='Relevé mensuel',null,{timeout:5000});
       await page.waitForSelector('.releve-mensuel',{timeout:5000});
+      await page.waitForSelector('.feuille-mensuel-magasin[open]',{timeout:5000});
+      await page.click('.feuille-mensuel-magasin button:has-text("Intermarché")');
       const progressionMensuelle = await page.locator('.progression-mensuelle').innerText();
       const actifCount = await page.evaluate(()=>new Promise((resolve,reject)=>{const rq=indexedDB.open('appli-courses');rq.onsuccess=()=>{const db=rq.result,q=db.transaction('ProductType').objectStore('ProductType').getAll();q.onsuccess=()=>resolve(q.result.filter(t=>!t.archive).length);q.onerror=()=>reject(q.error)};rq.onerror=()=>reject(rq.error)}));
       const nTotalMensuel = Number(progressionMensuelle.split('/')[1]?.trim());

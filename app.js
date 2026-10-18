@@ -1121,52 +1121,45 @@ function vueHistorique(typeId, integre = false) {
 
 // ---- Relevé mensuel enchaîné (FR7 / E5.1 / E5.2) --------------------------------------------
 async function vueListeCourses() {
-  await dbPrete;
+  await dbPrete; await actualiserMagasins();
   const racine=el('div',{class:'liste-avant-courses'});
   const titreListe=el('h2',{text:'Avant les courses'});
   const aide=el('p',{class:'aide',text:'Comparaison des prix habituels, sans dépendance au réseau.'});
   const recherche=el('input',{type:'search',class:'champ',placeholder:'Rechercher un type','aria-label':'Rechercher un type',autocomplete:'off'});
-  const choix=el('div',{class:'selecteur-magasin'});
   const contenu=el('div',{class:'groupes-liste-courses'});
-  let magasinListe=await lireReglage('magasinCourant',MAGASIN.LECLERC);
-  const boutons=[MAGASIN.LECLERC,MAGASIN.INTERMARCHE].map(m=>el('button',{type:'button',class:'magasin-btn','aria-pressed':m===magasinListe,text:libelleMagasin(m),onclick:async()=>{magasinListe=m;magasinCourant=m;await ecrireReglage('magasinCourant',m);boutons.forEach(b=>b.setAttribute('aria-pressed',String(b.textContent===libelleMagasin(m))));await dessiner();}}));
-  choix.append(...boutons); racine.append(titreListe,aide,recherche,choix,contenu);
-  const groupes=[
-    [VERDICT.ACHETER_ICI,()=>libelleMagasin(magasinListe)],
-    [VERDICT.ATTENDRE,()=>libelleMagasin(magasinListe===MAGASIN.LECLERC?MAGASIN.INTERMARCHE:MAGASIN.LECLERC)],
-    [VERDICT.INDIFFERENT,()=> 'Indifférent'],
-    [VERDICT.INSUFFISANT,()=> 'Données insuffisantes']
-  ];
+  racine.append(titreListe,aide,recherche,contenu);
   async function dessiner(){
     const q=recherche.value.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
-    const types=(await listerTypes()).filter(t=>!t.archive&&t.nomNormalise.includes(q)).sort((a,b)=>a.nom.localeCompare(b.nom,'fr'));
-    const seuilPct=Number(await lireReglage('seuilIndifference',5)),dateDuJour=aujourdHui();
     const tousTypes=(await listerTypes()).filter(t=>!t.archive);
-    const tousReleves=[];
-    for(const type of tousTypes)tousReleves.push(...await lireObservations(type.id));
-    const comparaisons=listeAvantCourses(tousTypes,tousReleves,seuilPct,dateDuJour);
+    const types=tousTypes.filter(t=>t.nomNormalise.includes(q)).sort((a,b)=>a.nom.localeCompare(b.nom,'fr'));
+    const tousReleves=[]; for(const type of tousTypes)tousReleves.push(...await lireObservations(type.id));
+    const seuilPct=Number(await lireReglage('seuilIndifference',5)),dateDuJour=aujourdHui();
+    const comparaisons=listeAvantCoursesMagasins(tousTypes,tousReleves,magasinsTous,seuilPct,dateDuJour);
     const analyses=types.map(type=>{
-      const comparaison=comparaisons.find(r=>r.typeId===type.id);
-      const groupe=comparaison?.resultat==='donnees-insuffisantes'?VERDICT.INSUFFISANT
-        :comparaison?.resultat==='indifferent'?VERDICT.INDIFFERENT
-        :(comparaison?.resultat==='leclerc')===(magasinListe===MAGASIN.LECLERC)?VERDICT.ACHETER_ICI:VERDICT.ATTENDRE;
+      const c=comparaisons.find(r=>r.typeId===type.id);
       let details='Aucun prix connu.';
-      if(comparaison?.resultat!=='donnees-insuffisantes'){
-        details='Prix normalisé le moins cher : '+formaterPrixNormalise(comparaison.prixNormaliseCentimes,type.unite);
-        if(comparaison.economiePourcent!=null)details+=' · écart '+String(comparaison.economiePourcent).replace('.',',')+' %';
-      }else if(comparaison?.dateDernierPrix){
-        details='Dernier prix connu : '+dateAffichee(comparaison.dateDernierPrix);
-        if(comparaison.prixNormaliseCentimes!=null)details+=' · '+formaterPrixNormalise(comparaison.prixNormaliseCentimes,type.unite);
+      if(c?.resultat==='donnees-insuffisantes'){
+        if(c.dateDernierPrix) details='Dernier prix connu : '+dateAffichee(c.dateDernierPrix)+(c.prixNormaliseCentimes!=null?' · '+formaterPrixNormalise(c.prixNormaliseCentimes,type.unite):'');
+      } else {
+        details='Prix normalisé le moins cher : '+formaterPrixNormalise(c.prixNormaliseCentimes,type.unite);
+        if(c.economiePourcent!=null)details+=' · écart '+String(c.economiePourcent).replace('.',',')+' %';
       }
-      return {type,resultat:groupe,details};
+      return {type,resultat:c?.resultat||'donnees-insuffisantes',details};
     });
     contenu.replaceChildren();
-    for(const [resultat,titreGroupe] of groupes){
-      const lignes=analyses.filter(a=>a.resultat===resultat),liste=el('div',{class:'lignes-groupe'});
+    const groupes=[
+      ...magasinsDisponibles.filter(m=>m.comparable).map(m=>({id:m.id,titre:m.nom,couleur:m.couleur})),
+      {id:'indifferent',titre:'Indifférent'},
+      {id:'donnees-insuffisantes',titre:'Données insuffisantes'}
+    ];
+    for(const groupe of groupes){
+      const lignes=analyses.filter(a=>a.resultat===groupe.id);
+      if(groupe.id!== 'indifferent' && groupe.id!=='donnees-insuffisantes' && !lignes.length)continue;
+      const liste=el('div',{class:'lignes-groupe'});
       if(lignes.length)liste.append(...lignes.map(a=>el('a',{class:'ligne-liste-course',href:'#/fiche/'+a.type.id},
         el('strong',{text:a.type.nom}),el('span',{class:'puce',text:LIBELLE_UNITE[a.type.unite]}),el('span',{class:'detail-prix-liste',text:a.details}))));
       else liste.append(el('p',{class:'aide',text:'Aucun type dans ce groupe.'}));
-      contenu.append(el('details',{class:'carte groupe-liste-courses',open:true},el('summary',{text:titreGroupe()+' ('+lignes.length+')'}),liste));
+      contenu.append(el('details',{class:'carte groupe-liste-courses',open:true},el('summary',{text:groupe.titre+' ('+lignes.length+')'}),liste));
     }
     if(!types.length)contenu.prepend(el('section',{class:'carte',text:q?'Aucun type ne correspond à cette recherche.':'Aucun type actif. Créez un type ou restaurez-en un depuis la liste Types.'}));
   }
@@ -1174,7 +1167,7 @@ async function vueListeCourses() {
   await dessiner(); return racine;
 }
 async function vueReleveMensuel() {
-  await dbPrete;
+  await dbPrete; await actualiserMagasins();
   const racine = el('div', { class: 'releve-mensuel' });
   const types = (await listerTypes()).filter(t => !t.archive).sort((a,b)=>a.nom.localeCompare(b.nom,'fr'));
   const contenu = el('section', { class: 'carte carte-mensuelle' });
@@ -1187,6 +1180,9 @@ async function vueReleveMensuel() {
   const boutonQuitter = el('button', { type: 'button', class: 'btn btn-secondaire', text: 'Quitter', onclick: () => { location.hash = '#/types'; } });
   actions.append(boutonPasser, boutonSuivant);
   racine.append(boutonQuitter, progression, contenu, zoneMiniVerdict, message, actions);
+  let magasinMensuel = await lireReglage('magasinReleveMensuel', MAGASIN.INTERMARCHE);
+  if (!magasinsDisponibles.some(m=>m.id===magasinMensuel)) magasinMensuel=magasinsDisponibles[0]?.id || '';
+  let feuilleChoixMagasin = null;
   let index = 0, saisis = 0, passes = 0, date = aujourdHui(), typeActuel = null, tokenVerdict = 0;
   let dernier = null;
   const champPrix = el('input', { id:'mensuel-prix', class:'champ champ-prix', inputmode:'decimal', enterkeyhint:'next', autocomplete:'off', placeholder:'0,00', 'aria-label':'Prix en euros' });
@@ -1208,8 +1204,8 @@ async function vueReleveMensuel() {
     try {
       const observations = await lireObservations(typeActuel.id), seuilPct = await lireReglage('seuilIndifference', 5);
       if (token !== tokenVerdict || !valide()) return;
-      const v = calculerVerdict({ prixCentimes:prix, formatBase:f.formatBase, typeUnit:typeActuel.unite, magasin:MAGASIN.INTERMARCHE, observations, aujourdhui:date, seuilPct, promo:promo.checked });
-      const label = v.resultat === VERDICT.ACHETER_ICI ? 'Acheter ici' : v.resultat === VERDICT.ATTENDRE ? 'Attendre Leclerc' : v.resultat === VERDICT.INDIFFERENT ? 'Indifférent' : 'Données insuffisantes';
+      const v = calculerVerdictMagasins({ prixCentimes:prix, formatBase:f.formatBase, typeUnit:typeActuel.unite, magasinCourant:magasinMensuel, magasins:magasinsTous, observations, aujourdhui:date, seuilPct, promo:promo.checked });
+      const label = v.resultat === VERDICT.ACHETER_ICI ? 'Acheter ici' : v.resultat === VERDICT.ATTENDRE ? 'Attendre '+libelleMagasin(v.magasinComparaison) : v.resultat === VERDICT.INDIFFERENT ? 'Indifférent' : 'Données insuffisantes';
       const ecart = Number.isFinite(v.ecart) ? ' · ' + (v.ecart>0?'+':'') + Math.round(v.ecart*100) + ' %' : '';
       zoneMiniVerdict.textContent = label + ecart; zoneMiniVerdict.hidden = false; boutonSuivant.disabled = false;
     } catch { zoneMiniVerdict.textContent = 'Données insuffisantes'; zoneMiniVerdict.hidden = false; boutonSuivant.disabled = false; }
@@ -1226,7 +1222,7 @@ async function vueReleveMensuel() {
       contenu.replaceChildren(el('h2',{text:'Relevé mensuel terminé'}),el('p',{text:saisis+' saisi'+(saisis>1?'s':'')+', '+passes+' passé'+(passes>1?'s':'')+'.'}));
       actions.hidden = true; return;
     }
-    typeActuel = types[index]; dernier = await lireDernierReleve(typeActuel.id, MAGASIN.INTERMARCHE);
+    typeActuel = types[index]; dernier = await lireDernierReleve(typeActuel.id, magasinMensuel);
     progression.textContent = (index+1)+' / '+types.length;
     const compatibles = unitesCompatibles(typeActuel.unite), aff = dernier ? formatAffichage(Number(dernier.format),typeActuel.unite) : {valeur:'',unite:compatibles[0]||''};
     champPrix.value = ''; champFormat.value = aff.valeur===''?'':String(aff.valeur).replace(',','.');
@@ -1252,7 +1248,7 @@ async function vueReleveMensuel() {
   async function enregistrerEtAvancer() {
     if (!valide()) return;
     const prixCentimes=analyserPrixSaisie(champPrix.value),f=verifierFormat(typeActuel.unite,Number(champFormat.value),champUnite.value);
-    const observation={type:typeActuel.id,magasin:MAGASIN.INTERMARCHE,date,prixCentimes,format:f.formatBase,promo:promo.checked};
+    const observation={type:typeActuel.id,magasin:magasinMensuel,date,prixCentimes,format:f.formatBase,promo:promo.checked};
     boutonSuivant.disabled=true;
     try {
       const nNouveau=prixNormalise(prixCentimes,f.formatBase,typeActuel.unite).centimesParUnite;
@@ -1285,37 +1281,52 @@ async function vueReleveMensuel() {
   const viewport=()=>modeMensuel();
   window.addEventListener('resize',viewport); window.visualViewport?.addEventListener('resize',viewport); window.visualViewport?.addEventListener('scroll',viewport);
   window.__actualiserModeMensuel=modeMensuel;
-  window.__releveMensuelCleanup=()=>{window.removeEventListener('resize',viewport);window.visualViewport?.removeEventListener('resize',viewport);window.visualViewport?.removeEventListener('scroll',viewport);delete window.__actualiserModeMensuel;document.body.classList.remove('mode-saisie');};
+  window.__releveMensuelCleanup=()=>{window.removeEventListener('resize',viewport);window.visualViewport?.removeEventListener('resize',viewport);window.visualViewport?.removeEventListener('scroll',viewport);delete window.__actualiserModeMensuel;document.body.classList.remove('mode-saisie');if(feuilleChoixMagasin?.open)feuilleChoixMagasin.close();};
   champPrix.addEventListener('focus',modeMensuel); champFormat.addEventListener('focus',modeMensuel);
   champPrix.addEventListener('input',()=>void actualiserMiniVerdict()); champFormat.addEventListener('input',()=>void actualiserMiniVerdict()); champUnite.addEventListener('change',()=>void actualiserMiniVerdict());promo.addEventListener('change',()=>void actualiserMiniVerdict());
   champFormat.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();champFormat.blur();}});
   await chargerCarte();
   if(types.length) requestAnimationFrame(()=>champPrix.focus());
+  feuilleChoixMagasin=el('dialog',{class:'feuille feuille-mensuel-magasin'},
+    el('h2',{text:'Quel magasin relevez-vous ?'}),
+    el('p',{text:'Ce choix est mémorisé pour le prochain relevé mensuel.'}),
+    el('div',{class:'liste-magasins-choix'},...magasinsDisponibles.map(m=>el('button',{type:'button',class:'magasin-btn','aria-pressed':m.id===magasinMensuel,style:'--couleur-magasin:'+m.couleur,text:m.nom+(m.localisation?' · '+m.localisation:''),onclick:async()=>{magasinMensuel=m.id;await ecrireReglage('magasinReleveMensuel',m.id);feuilleChoixMagasin.close();await chargerCarte();}}))),
+    el('button',{type:'button',class:'btn btn-secondaire btn-bloc',text:'Gérer les magasins',onclick:()=>{feuilleChoixMagasin.close();location.hash='#/reglages/magasins';}})
+  );
+  feuilleChoixMagasin.addEventListener('close',()=>feuilleChoixMagasin.remove());document.body.append(feuilleChoixMagasin);feuilleChoixMagasin.showModal();
   return racine;
 }
 
 async function vueFicheType(typeId) {
-  await dbPrete;
+  await dbPrete; await actualiserMagasins();
   const type = await lireTypeSafe(typeId);
   if (!type) return carte('Fiche du type', 'Type introuvable.');
   const racine = el('div', { class: 'fiche-type' });
   racine.append(el('a', { href: '#/types', class: 'btn btn-secondaire btn-bloc', text: '← Retour aux types' }));
   const observations = await lireObservations(typeId), dateDuJour = aujourdHui();
-  const leclerc = prixHabituel(observations, MAGASIN.LECLERC, type.unite, dateDuJour);
-  const inter = prixHabituel(observations, MAGASIN.INTERMARCHE, type.unite, dateDuJour);
-  const freqLeclerc = frequencePromos(observations, MAGASIN.LECLERC), freqInter = frequencePromos(observations, MAGASIN.INTERMARCHE);
   const dernierPromo = magasin => observations.filter(o => o.magasin === magasin && Boolean(o.promo)).sort((a,b) => a.date !== b.date ? (a.date < b.date ? 1 : -1) : (b.id||0)-(a.id||0))[0] || null;
-  const promoTexte = magasin => { const o=dernierPromo(magasin); if(!o)return 'Aucun relevé promo.'; const p=prixNormalise(o.prixCentimes,o.format,type.unite); return 'Dernier prix promo : '+(p.ok?formaterPrixNormalise(p.centimesParUnite,type.unite):'indisponible')+' · '+dateAffichee(o.date); };
+  const promoTexte = (magasin, m) => { const o=dernierPromo(magasin); if(!o)return 'Aucun relevé promo.'; const p=prixNormalise(o.prixCentimes,o.format,type.unite); return 'Dernier prix promo : '+(p.ok?formaterPrixNormalise(p.centimesParUnite,type.unite):'indisponible')+' · '+dateAffichee(o.date); };
   const freqTexte = f => f.ok ? f.nbPromos+' relevé'+(f.nbPromos>1?'s':'')+' sur '+f.nbReleves+' en promo ('+String(f.pourcentage).replace('.',',')+' %)' : 'Fréquence indisponible (aucun relevé).';
-  const leclercCarte=el('section',{class:'carte carte-prix'},el('h3',{text:'Leclerc'}),
-    el('p',{text:leclerc.ok?'Prix habituel : '+formaterPrixNormalise(leclerc.valeur,type.unite)+' · médiane de '+leclerc.nbReleves+' relevés hors promo sur 8 semaines':'Prix habituel : données insuffisantes ('+leclerc.nbReleves+' relevés hors promo sur 8 semaines).'}),
-    el('p',{text:promoTexte(MAGASIN.LECLERC)}),el('p',{text:'Fréquence : '+freqTexte(freqLeclerc)}));
-  const interCarte=el('section',{class:'carte carte-prix'},el('h3',{text:'Intermarché'}),
-    el('p',{text:inter.ok?'Prix habituel : '+formaterPrixNormalise(inter.valeur,type.unite)+' · relevé du '+dateAffichee(inter.date):'Prix habituel : données insuffisantes.'}),
-    el('p',{text:promoTexte(MAGASIN.INTERMARCHE)}),el('p',{text:'Fréquence : '+freqTexte(freqInter)}));
-  const vals=[leclerc.ok?leclerc.valeur:null,inter.ok?inter.valeur:null].filter(Number.isFinite),max=vals.length?Math.max(...vals):0;
-  const barre=(nom,r,magasin)=>{const valeur=r.ok?r.valeur:null,largeur=valeur!=null&&max>0?Math.max(0,Math.min(100,valeur/max*100)):0;return el('div',{class:'barre-comparaison'},el('span',{text:nom}),el('div',{class:'barre-fond',role:'img','aria-label':nom+' : '+(valeur==null?'données insuffisantes':formaterPrixNormalise(valeur,type.unite))},el('div',{class:'barre-remplissage '+(magasin===MAGASIN.LECLERC?'barre-leclerc':'barre-intermarche'),style:'width:'+largeur+'%'})),el('strong',{text:valeur==null?'—':formaterPrixNormalise(valeur,type.unite)}));};
-  const barres=el('section',{class:'carte'},el('h3',{text:'Comparaison des prix habituels'}),el('div',{class:'barres-comparaison'},barre('Leclerc',leclerc,MAGASIN.LECLERC),barre('Intermarché',inter,MAGASIN.INTERMARCHE)));
+  async function carteMagasin(m) {
+    const habituel=prixHabituelMagasin(observations,m,type.unite,dateDuJour), freq=frequencePromos(observations,m.id);
+    const cartePrix=el('section',{class:'carte carte-prix',style:'border-color:'+m.couleur},
+      el('h3',{text:m.nom+(m.archive?' (archivé)':'')}),
+      el('p',{text:habituel.ok?(habituel.type==='mediane'?'Prix habituel : '+formaterPrixNormalise(habituel.valeur,type.unite)+' · médiane de '+habituel.nbReleves+' relevés hors promo sur 8 semaines':'Prix habituel : '+formaterPrixNormalise(habituel.valeur,type.unite)+' · relevé du '+dateAffichee(habituel.date)):'Prix habituel : données insuffisantes'+(m.modePrixHabituel==='mediane'?' ('+habituel.nbReleves+' relevés hors promo sur 8 semaines).':'.')}),
+      el('p',{text:promoTexte(m.id,m)}),el('p',{text:'Fréquence : '+freqTexte(freq)}));
+    return {magasin:m,habituel,carte:cartePrix};
+  }
+  const actives=magasinsDisponibles, cartes=await Promise.all(actives.map(carteMagasin));
+  const archives=magasinsTous.filter(m=>m.archive&&observations.some(o=>o.magasin===m.id));
+  const cartesArchive=await Promise.all(archives.map(carteMagasin));
+  const valeurs=cartes.filter(x=>x.magasin.comparable&&x.habituel.ok).map(x=>x.habituel.valeur), max=valeurs.length?Math.max(...valeurs):0;
+  const barres=el('section',{class:'carte'},el('h3',{text:'Comparaison des prix habituels'}));
+  const zoneBarres=el('div',{class:'barres-comparaison'});
+  for(const x of cartes.filter(x=>x.magasin.comparable)){
+    const valeur=x.habituel.ok?x.habituel.valeur:null, largeur=valeur!=null&&max>0?Math.max(0,Math.min(100,valeur/max*100)):0;
+    zoneBarres.append(el('div',{class:'barre-comparaison'},el('span',{text:x.magasin.nom}),el('div',{class:'barre-fond',role:'img','aria-label':x.magasin.nom+' : '+(valeur==null?'données insuffisantes':formaterPrixNormalise(valeur,type.unite))},el('div',{class:'barre-remplissage',style:'width:'+largeur+'%;background:'+x.magasin.couleur})),el('strong',{text:valeur==null?'—':formaterPrixNormalise(valeur,type.unite)})));
+  }
+  if(!zoneBarres.childElementCount)zoneBarres.append(el('p',{class:'aide',text:'Aucun magasin comparable avec un prix habituel disponible.'}));
+  barres.append(zoneBarres);
   const sectionCodes = el('section',{class:'carte codes-barres'},el('h3',{text:'Codes-barres rattachés'}));
   const listeCodes = el('div',{class:'liste-codes-barres'});
   const actualiserCodes = async () => {
@@ -1326,23 +1337,15 @@ async function vueFicheType(typeId) {
       const details = [article.nom,article.marque].filter(Boolean).join(' · ');
       const format = Number(article.format)>0 ? formatAffichage(Number(article.format),type.unite) : null;
       const formatTexte = format ? ' · '+String(format.valeur).replace('.',',')+' '+(format.unite||LIBELLE_UNITE[type.unite]) : '';
-      const ligne = el('div',{class:'ligne-code-barres'},
-        el('div',{class:'code-barres-infos'},
-          el('strong',{text:String(article.codeBarres)}),
-          el('span',{text:(details||'Article sans nom')+formatTexte})),
-        el('button',{type:'button',class:'btn btn-secondaire btn-supprimer-code',text:'Supprimer',onclick:async()=>{
-          try { await supprimer('Article',article.codeBarres); await actualiserCodes(); }
-          catch { afficherErreur('Impossible de supprimer ce code-barres.'); }
-        }})
-      );
-      listeCodes.append(ligne);
+      listeCodes.append(el('div',{class:'ligne-code-barres'},el('div',{class:'code-barres-infos'},el('strong',{text:String(article.codeBarres)}),el('span',{text:(details||'Article sans nom')+formatTexte})),el('button',{type:'button',class:'btn btn-secondaire btn-supprimer-code',text:'Supprimer',onclick:async()=>{try{await supprimer('Article',article.codeBarres);await actualiserCodes();}catch{afficherErreur('Impossible de supprimer ce code-barres.');}}})));
     }
   };
-  sectionCodes.append(listeCodes);
-  await actualiserCodes();
-  racine.append(el('a',{href:'#/achats/'+typeId,class:'btn btn-secondaire btn-bloc',text:'Historique des achats'}),el('h2',{text:type.nom}),leclercCarte,interCarte,barres,
-    el('p',{class:'aide note-biais-promo',text:'Attention : si vos relevés sont surtout effectués en promotion, la fréquence affichée peut être biaisée.'}),
-    sectionCodes, el('h3',{text:'Historique des relevés'}),vueHistorique(typeId,true));
+  sectionCodes.append(listeCodes); await actualiserCodes();
+  racine.append(el('h2',{text:type.nom}),...cartes.map(x=>x.carte),barres);
+  if(cartesArchive.length)racine.append(el('details',{class:'carte magasins-archives'},el('summary',{text:'Magasins archivés ('+cartesArchive.length+')'}),...cartesArchive.map(x=>x.carte)));
+  racine.append(el('p',{class:'aide note-biais-promo',text:'Attention : si vos relevés sont surtout effectués en promotion, la fréquence affichée peut être biaisée.'}),
+    el('a',{href:'#/achats/'+typeId,class:'btn btn-secondaire btn-bloc',text:'Historique des achats'}),sectionCodes,
+    el('h3',{text:'Historique des relevés'}),vueHistorique(typeId,true));
   return racine;
 }
 
