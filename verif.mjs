@@ -154,7 +154,8 @@ if (playwright) {
           obs.createIndex('type', 'type'); obs.createIndex('cleJour', ['type', 'magasin', 'date', 'promo']);
           const achats = db.createObjectStore('Purchase', { keyPath: 'id', autoIncrement: true });
           achats.createIndex('type', 'type'); achats.createIndex('observation', 'observation');
-          db.createObjectStore('Settings', { keyPath: 'cle' });
+          const settings = db.createObjectStore('Settings', { keyPath: 'cle' });
+          settings.add({ cle: 'magasinCourant', valeur: 'intermarche' });
           types.add({ id: 42, nom: 'Type historique', nomNormalise: 'type historique', unite: 'kg', archive: 0 });
           obs.add({ id: 77, type: 42, magasin: 'leclerc', date: '2026-10-01', prixCentimes: 250, format: 250, promo: 0 });
           achats.add({ id: 81, type: 42, observation: 77, magasin: 'leclerc', date: '2026-10-01', achete: 1, quantite: 1, prixPayeCentimes: 250, format: 250, prixComparaisonCentimes: 300, prixHabituelMemeMagasinCentimes: 250 });
@@ -167,10 +168,10 @@ if (playwright) {
       const donneesHistoriques = await anciennePage.evaluate(() => new Promise((resolve, reject) => {
         const req = indexedDB.open('appli-courses');
         req.onsuccess = () => {
-          const db = req.result, tx = db.transaction(['ProductType','Observation','Purchase','Store'], 'readonly');
+          const db = req.result, tx = db.transaction(['ProductType','Observation','Purchase','Store','Settings'], 'readonly');
           const qType = tx.objectStore('ProductType').get(42), qObs = tx.objectStore('Observation').get(77);
-          const qAchat = tx.objectStore('Purchase').get(81), qMagasins = tx.objectStore('Store').getAll();
-          tx.oncomplete = () => { resolve({ type:qType.result || null, observation:qObs.result || null, achat:qAchat.result || null, magasins:qMagasins.result || [] }); db.close(); };
+          const qAchat = tx.objectStore('Purchase').get(81), qMagasins = tx.objectStore('Store').getAll(), qMagasinCourant = tx.objectStore('Settings').get('magasinCourant');
+          tx.oncomplete = () => { resolve({ type:qType.result || null, observation:qObs.result || null, achat:qAchat.result || null, magasins:qMagasins.result || [], magasinCourant:qMagasinCourant.result?.valeur }); db.close(); };
           tx.onerror = () => { db.close(); reject(tx.error); };
         };
         req.onerror = () => reject(req.error);
@@ -178,10 +179,10 @@ if (playwright) {
       if (!donneesHistoriques.type || donneesHistoriques.type.nom !== 'Type historique' || donneesHistoriques.type.unite !== 'kg'
         || !donneesHistoriques.observation || donneesHistoriques.observation.prixCentimes !== 250
         || !donneesHistoriques.achat || donneesHistoriques.achat.prixPayeCentimes !== 250 || donneesHistoriques.achat.magasinComparaison !== ''
-        || !['leclerc','intermarche'].every(id => donneesHistoriques.magasins.some(m => m.id === id))) {
+        || !['leclerc','intermarche'].every(id => donneesHistoriques.magasins.some(m => m.id === id)) || donneesHistoriques.magasinCourant !== 'intermarche') {
         throw new Error('base historique v1 : type, relevé, achat ou magasins initiaux perdus/modifiés');
       }
-      ok('compatibilité base IndexedDB v1 : types, relevés et achats préservés, magasins initiaux ajoutés');
+      ok('compatibilité base IndexedDB v1 : types, relevés, achats et réglage du magasin préservés, magasins initiaux ajoutés');
       await ancienCtx.close();
     }
 
