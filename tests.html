@@ -166,8 +166,8 @@ test('FR22 / FR14 / FR16','listeAvantCourses couvre les quatre résultats et exc
 test('FR22 / FR16','listeAvantCourses applique exactement les seuils de +5 % et -5 %',()=>{
  const types=[{id:1,unite:'kg',archive:0},{id:2,unite:'kg',archive:0}];
  const observations=[
-  ...[1,2,3].map(n=>({type:1,magasin:LE,date:'2026-10-0'+n,prixCentimes:105,format:1000,promo:0})),
-  {type:1,magasin:IM,date:'2026-10-03',prixCentimes:100,format:1000,promo:0},
+  ...[1,2,3].map(n=>({type:1,magasin:LE,date:'2026-10-0'+n,prixCentimes:100,format:1000,promo:0})),
+  {type:1,magasin:IM,date:'2026-10-03',prixCentimes:95,format:1000,promo:0},
   ...[1,2,3].map(n=>({type:2,magasin:LE,date:'2026-10-0'+n,prixCentimes:95,format:1000,promo:0})),
   {type:2,magasin:IM,date:'2026-10-03',prixCentimes:100,format:1000,promo:0}
  ];
