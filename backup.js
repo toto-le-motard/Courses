@@ -8,15 +8,19 @@ function dateIsoValide(date) {
   return d.getUTCFullYear() === a && d.getUTCMonth() === m - 1 && d.getUTCDate() === j;
 }
 
-export function creerSauvegarde({ schemaVersion, types, articles, releves, achats, reglages, dateExport }) {
-  return { schemaVersion, dateExport, types, articles, releves, achats, reglages };
+export function creerSauvegarde({ schemaVersion, types, articles, releves, achats, reglages, magasins = null, dateExport }) {
+  return { schemaVersion, dateExport, types, articles, releves, achats, reglages, magasins: magasins || [
+    { id: 'leclerc', nom: 'Leclerc', nomNormalise: 'leclerc', enseigne: 'Leclerc', localisation: '', couleur: '#5B8CFF', modePrixHabituel: 'mediane', comparable: true, archive: false, ordre: 1 },
+    { id: 'intermarche', nom: 'Intermarché', nomNormalise: 'intermarche', enseigne: 'Intermarché', localisation: '', couleur: '#FF6B5E', modePrixHabituel: 'dernier', comparable: true, archive: false, ordre: 2 }
+  ] };
 }
 
 export function validerSauvegarde(payload, schemaVersionAttendu) {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
     return { ok: false, erreur: "Le fichier ne contient pas une sauvegarde JSON valide." };
   }
-  if (!Number.isInteger(payload.schemaVersion) || payload.schemaVersion !== schemaVersionAttendu) {
+  const ancienneSansMagasins = payload.schemaVersion === schemaVersionAttendu - 1 && !Array.isArray(payload.magasins);
+  if (!Number.isInteger(payload.schemaVersion) || (payload.schemaVersion !== schemaVersionAttendu && !ancienneSansMagasins)) {
     return { ok: false, erreur: "Version de sauvegarde inconnue ou incompatible." };
   }
   if (!dateIsoValide(payload.dateExport)) {
@@ -25,7 +29,7 @@ export function validerSauvegarde(payload, schemaVersionAttendu) {
   const entierPositif = (v) => Number.isSafeInteger(v) && v > 0;
   const prixValide = (v) => v === null || (Number.isSafeInteger(v) && v > 0);
   const dateValide = (v) => dateIsoValide(v);
-  const magasinValide = (v) => v === "leclerc" || v === "intermarche";
+  const magasinValide = (v) => typeof v === 'string' && !!v.trim();
   const valideurs = {
     types: (v) => entierPositif(v.id) && typeof v.nom === "string" && !!v.nom.trim()
       && ["kg", "l", "unit"].includes(v.unite)
@@ -49,16 +53,37 @@ export function validerSauvegarde(payload, schemaVersionAttendu) {
       && Number.isSafeInteger(v.quantite) && v.quantite >= 1 && v.quantite <= 999
       && Number.isSafeInteger(v.prixPayeCentimes) && v.prixPayeCentimes > 0
       && entierPositif(v.format) && prixValide(v.prixComparaisonCentimes)
-      && prixValide(v.prixHabituelMemeMagasinCentimes),
+      && prixValide(v.prixHabituelMemeMagasinCentimes)
+      && (v.magasinComparaison === undefined || typeof v.magasinComparaison === 'string'),
     reglages: (v) => typeof v.cle === "string" && !!v.cle.trim()
-      && Object.prototype.hasOwnProperty.call(v, "valeur")
+      && Object.prototype.hasOwnProperty.call(v, "valeur"),
+    magasins: (v) => typeof v.id === 'string' && !!v.id.trim() && typeof v.nom === 'string' && !!v.nom.trim()
+      && (v.enseigne === undefined || typeof v.enseigne === 'string')
+      && (v.localisation === undefined || typeof v.localisation === 'string')
+      && typeof v.couleur === 'string' && /^#[0-9a-f]{6}$/i.test(v.couleur)
+      && ['mediane','dernier'].includes(v.modePrixHabituel) && typeof v.comparable === 'boolean'
+      && typeof v.archive === 'boolean' && Number.isInteger(v.ordre) && v.ordre > 0
   };
+  if (ancienneSansMagasins) {
+    payload.magasins = [
+      { id: 'leclerc', nom: 'Leclerc', nomNormalise: 'leclerc', enseigne: 'Leclerc', localisation: '', couleur: '#5B8CFF', modePrixHabituel: 'mediane', comparable: true, archive: false, ordre: 1 },
+      { id: 'intermarche', nom: 'Intermarché', nomNormalise: 'intermarche', enseigne: 'Intermarché', localisation: '', couleur: '#FF6B5E', modePrixHabituel: 'dernier', comparable: true, archive: false, ordre: 2 }
+    ];
+    if (Array.isArray(payload.achats)) payload.achats = payload.achats.map(a => ({ ...a, magasinComparaison: '' }));
+    payload.schemaVersion = schemaVersionAttendu;
+  }
   for (const cle of Object.keys(valideurs)) {
     if (!Array.isArray(payload[cle]) || payload[cle].some((item) =>
       !item || typeof item !== "object" || Array.isArray(item) || !valideurs[cle](item))) {
       return { ok: false, erreur: "La sauvegarde est invalide : collection « " + cle + " » absente ou contenant un enregistrement incorrect." };
     }
   }
+  const magasinsIds = new Set(payload.magasins.map(m => m.id));
+  if (payload.magasins.some(m => !m || typeof m.id !== 'string') || payload.magasins.some((m,i) => payload.magasins.some((n,j) => j < i && n.id === m.id))) return { ok: false, erreur: 'La sauvegarde contient des identifiants de magasin en double ou invalides.' };
+  const nomsMagasins = new Set();
+  for (const m of payload.magasins) { const n = String(m.nom).normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').toLocaleLowerCase('fr').trim().replace(/\\s+/g,' '); if (nomsMagasins.has(n)) return { ok:false, erreur:'La sauvegarde contient des noms de magasin en double.' }; nomsMagasins.add(n); }
+  if (payload.releves.some(o => !magasinsIds.has(o.magasin)) || payload.achats.some(a => !magasinsIds.has(a.magasin))) return { ok:false, erreur:'La sauvegarde contient un relevé ou un achat rattaché à un magasin absent.' };
+  payload.achats = payload.achats.map(a => ({ ...a, magasinComparaison: a.magasinComparaison ?? '' }));
   const typeIds = new Set(payload.types.map((item) => item.id));
   if (["articles", "releves", "achats"].some((cle) => payload[cle].some((item) => !typeIds.has(item.type)))) {
     return { ok: false, erreur: "La sauvegarde contient un article, un relevé ou un achat sans type existant." };
@@ -69,7 +94,7 @@ export function validerSauvegarde(payload, schemaVersionAttendu) {
   }
   const uniques = [
     ["types", "id"], ["types", "nomNormalise"], ["articles", "codeBarres"],
-    ["releves", "id"], ["achats", "id"], ["reglages", "cle"]
+    ["releves", "id"], ["achats", "id"], ["reglages", "cle"], ["magasins", "id"]
   ];
   for (const [collection, cle] of uniques) {
     const vus = new Set();

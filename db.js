@@ -14,8 +14,8 @@
 import { normaliserNom, prixNormalise, decisionDoublon, analyserDoublon, cleDoublon, verifierFormat, MAGASIN, trierReleves } from './domain.js';
 
 export const NOM_BASE = 'appli-courses';
-export const VERSION_SCHEMA = 1;
-export const STORES = ['ProductType', 'Article', 'Observation', 'Purchase', 'Settings'];
+export const VERSION_SCHEMA = 2;
+export const STORES = ['ProductType', 'Article', 'Observation', 'Purchase', 'Settings', 'Store'];
 
 // Migrations : une fonction par version de schéma, jouées dans l'ordre. Ne jamais modifier une
 // migration déjà publiée : ajouter la suivante (VERSION_SCHEMA + 1).
@@ -36,6 +36,26 @@ const MIGRATIONS = {
     achats.createIndex('observation', 'observation');
 
     db.createObjectStore('Settings', { keyPath: 'cle' });
+  },
+  2(db, transaction) {
+    const stores = db.createObjectStore('Store', { keyPath: 'id' });
+    stores.createIndex('nomNormalise', 'nomNormalise', { unique: true });
+    stores.add({ id: 'leclerc', nom: 'Leclerc', nomNormalise: 'leclerc', enseigne: 'Leclerc', localisation: '', couleur: '#5B8CFF', modePrixHabituel: 'mediane', comparable: true, archive: false, ordre: 1 });
+    stores.add({ id: 'intermarche', nom: 'Intermarché', nomNormalise: 'intermarche', enseigne: 'Intermarché', localisation: '', couleur: '#FF6B5E', modePrixHabituel: 'dernier', comparable: true, archive: false, ordre: 2 });
+    const settings = transaction.objectStore('Settings');
+    for (const [cle, valeur] of [['magasinCourant', 'leclerc'], ['magasinReleveMensuel', 'intermarche']]) {
+      const rq = settings.get(cle);
+      rq.onsuccess = () => { if (!rq.result) settings.put({ cle, valeur }); };
+    }
+    const achats = transaction.objectStore('Purchase');
+    const cursor = achats.openCursor();
+    cursor.onsuccess = () => {
+      const c = cursor.result;
+      if (!c) return;
+      const achat = c.value;
+      if (!Object.prototype.hasOwnProperty.call(achat, 'magasinComparaison')) c.update({ ...achat, magasinComparaison: '' });
+      c.continue();
+    };
   }
 };
 
@@ -49,7 +69,7 @@ function ouvrir() {
   return new Promise((resolve, reject) => {
     const rq = indexedDB.open(NOM_BASE, VERSION_SCHEMA);
     rq.onupgradeneeded = (e) => {
-      for (let v = e.oldVersion + 1; v <= e.newVersion; v++) MIGRATIONS[v](rq.result);
+      for (let v = e.oldVersion + 1; v <= e.newVersion; v++) MIGRATIONS[v](rq.result, rq.transaction);
     };
     rq.onsuccess = () => {
       const db = rq.result;
@@ -88,9 +108,9 @@ export const ecrireReglage = (cle, valeur) => mettre('Settings', { cle, valeur }
 
 // Réglages par défaut (seuil « indifférent » : 5 %, FR16).
 async function reglagesParDefaut() {
-  if ((await lire('Settings', 'seuilIndifference')) === undefined) {
-    await ecrireReglage('seuilIndifference', 5);
-  }
+  if ((await lire('Settings', 'seuilIndifference')) === undefined) await ecrireReglage('seuilIndifference', 5);
+  if ((await lire('Settings', 'magasinCourant')) === undefined) await ecrireReglage('magasinCourant', 'leclerc');
+  if ((await lire('Settings', 'magasinReleveMensuel')) === undefined) await ecrireReglage('magasinReleveMensuel', 'intermarche');
 }
 
 // Demande le stockage persistant (NFR5) ; le résultat est conservé dans Settings.
@@ -109,9 +129,106 @@ export async function initDb() {
     _db = await ouvrir();
     try { await nettoyerChampsParasites(); } catch (e) { console.error('Nettoyage des champs parasites impossible.', e); }
     await reglagesParDefaut();
+    await initialiserMagasinsParDefaut();
     _ok(_db);
     return _db;
   } catch (e) { _ko(e); throw e; }
+}
+
+
+// ---- Magasins configurables (E9) --------------------------------------------------------------
+const MAGASINS_INITIAUX = [
+  { id: 'leclerc', nom: 'Leclerc', nomNormalise: 'leclerc', enseigne: 'Leclerc', localisation: '', couleur: '#5B8CFF', modePrixHabituel: 'mediane', comparable: true, archive: false, ordre: 1 },
+  { id: 'intermarche', nom: 'Intermarché', nomNormalise: 'intermarche', enseigne: 'Intermarché', localisation: '', couleur: '#FF6B5E', modePrixHabituel: 'dernier', comparable: true, archive: false, ordre: 2 }
+];
+export const magasinsParDefaut = () => MAGASINS_INITIAUX.map(m => ({ ...m }));
+
+async function initialiserMagasinsParDefaut() {
+  const stores = await toutLire('Store');
+  if (!stores.length) {
+    for (const magasin of MAGASINS_INITIAUX) await ajouter('Store', { ...magasin });
+  }
+  if ((await lireReglage('magasinCourant')) === undefined) await ecrireReglage('magasinCourant', 'leclerc');
+  if ((await lireReglage('magasinReleveMensuel')) === undefined) await ecrireReglage('magasinReleveMensuel', 'intermarche');
+}
+
+function normaliserNomMagasin(nom) {
+  return String(nom ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('fr').trim().replace(/\s+/g, ' ');
+}
+function idMagasinDepuisNom(nom, existants) {
+  const base = String(nom ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'magasin';
+  let id = base, suffixe = 2;
+  while (existants.some(m => m.id === id)) id = base + '-' + suffixe++;
+  return id;
+}
+function validerChampsMagasin(champs, existants, id = null) {
+  const nom = String(champs.nom ?? '').trim();
+  if (!nom) throw new Error('Le nom du magasin est obligatoire.');
+  if (existants.some(m => m.id !== id && normaliserNomMagasin(m.nom) === normaliserNomMagasin(nom))) throw new Error('Un magasin porte déjà ce nom.');
+  if (champs.couleur != null && !/^#[0-9a-f]{6}$/i.test(champs.couleur)) throw new Error('Couleur invalide.');
+  if (champs.modePrixHabituel != null && !['mediane', 'dernier'].includes(champs.modePrixHabituel)) throw new Error('Mode de prix habituel invalide.');
+  if (champs.comparable != null && typeof champs.comparable !== 'boolean') throw new Error('Le réglage de comparaison est invalide.');
+  return { nom, nomNormalise: normaliserNomMagasin(nom), enseigne: String(champs.enseigne ?? '').trim(), localisation: String(champs.localisation ?? '').trim() };
+}
+export async function listerMagasins({ inclureArchives = true } = {}) {
+  const magasins = await toutLire('Store');
+  return magasins.filter(m => inclureArchives || !m.archive).sort((a,b) => (a.ordre || 0) - (b.ordre || 0) || a.nom.localeCompare(b.nom, 'fr'));
+}
+export const lireMagasin = (id) => lire('Store', id);
+export async function creerMagasin(champs = {}) {
+  const existants = await listerMagasins();
+  const champsValides = validerChampsMagasin(champs, existants);
+  const couleurs = ['#5B8CFF','#FF6B5E','#3DDC97','#B07CFF','#2EC4D6','#FF8FC7','#D9A066','#8FA3C7'];
+  const couleur = champs.couleur || couleurs.find(c => !existants.some(m => m.couleur === c)) || couleurs[0];
+  const magasin = { ...champsValides, id: idMagasinDepuisNom(champsValides.nom, existants), couleur,
+    modePrixHabituel: champs.modePrixHabituel || 'dernier', comparable: champs.comparable !== false,
+    archive: false, ordre: existants.reduce((max,m) => Math.max(max, Number(m.ordre) || 0), 0) + 1 };
+  await ajouter('Store', magasin);
+  return magasin;
+}
+export async function modifierMagasin(id, champs = {}) {
+  const actuel = await lireMagasin(id);
+  if (!actuel) throw new Error('Magasin introuvable.');
+  const existants = await listerMagasins();
+  const champsValides = validerChampsMagasin({ ...actuel, ...champs }, existants, id);
+  const prochain = { ...actuel, ...champsValides };
+  if (champs.couleur !== undefined) prochain.couleur = champs.couleur;
+  if (champs.modePrixHabituel !== undefined) prochain.modePrixHabituel = champs.modePrixHabituel;
+  if (champs.comparable !== undefined) prochain.comparable = champs.comparable;
+  await mettre('Store', prochain);
+  return prochain;
+}
+export async function archiverMagasin(id) {
+  const magasin = await lireMagasin(id);
+  if (!magasin) throw new Error('Magasin introuvable.');
+  if (magasin.archive) return magasin;
+  const actifs = await listerMagasins({ inclureArchives: false });
+  if (actifs.length <= 1) throw new Error('Impossible d’archiver le dernier magasin actif.');
+  const prochain = actifs.find(m => m.id !== id);
+  const resultat = { ...magasin, archive: true };
+  await mettre('Store', resultat);
+  if (await lireReglage('magasinCourant', 'leclerc') === id) await ecrireReglage('magasinCourant', prochain.id);
+  if (await lireReglage('magasinReleveMensuel', 'intermarche') === id) await ecrireReglage('magasinReleveMensuel', prochain.id);
+  return resultat;
+}
+export async function restaurerMagasin(id) {
+  const magasin = await lireMagasin(id);
+  if (!magasin) throw new Error('Magasin introuvable.');
+  const resultat = { ...magasin, archive: false };
+  await mettre('Store', resultat);
+  return resultat;
+}
+export async function supprimerMagasin(id) {
+  const magasin = await lireMagasin(id);
+  if (!magasin) throw new Error('Magasin introuvable.');
+  const [releves, achats, actifs] = await Promise.all([toutLire('Observation'), toutLire('Purchase'), listerMagasins({ inclureArchives: false })]);
+  if (releves.some(o => o.magasin === id) || achats.some(a => a.magasin === id)) throw new Error('Ce magasin a des prix constatés ou des achats : archivez-le pour le retirer');
+  if (!magasin.archive && actifs.length <= 1) throw new Error('Impossible de supprimer le dernier magasin actif.');
+  await supprimer('Store', id);
+  if (!magasin.archive && await lireReglage('magasinCourant', 'leclerc') === id) await ecrireReglage('magasinCourant', actifs.find(m => m.id !== id)?.id || '');
+  if (!magasin.archive && await lireReglage('magasinReleveMensuel', 'intermarche') === id) await ecrireReglage('magasinReleveMensuel', actifs.find(m => m.id !== id)?.id || '');
+  return true;
 }
 
 // ---- Types de produits (FR1, FR2) ------------------------------------------------------------
@@ -445,7 +562,7 @@ export async function enregistrerAchat({ type, observation, magasin, date, achet
   }
   return ajouter('Purchase', {
     type, observation, magasin, date, achete: achete ? 1 : 0, quantite,
-    prixPayeCentimes, format, prixComparaisonCentimes, prixHabituelMemeMagasinCentimes
+    prixPayeCentimes, format, prixComparaisonCentimes, prixHabituelMemeMagasinCentimes, magasinComparaison: ''
   });
 }
 
@@ -455,7 +572,7 @@ export function exporterCollections() {
     const resultat = {};
     const correspondances = [
       ['ProductType', 'types'], ['Article', 'articles'], ['Observation', 'releves'],
-      ['Purchase', 'achats'], ['Settings', 'reglages']
+      ['Purchase', 'achats'], ['Settings', 'reglages'], ['Store', 'magasins']
     ];
     const transaction = _db.transaction(correspondances.map(([store]) => store), 'readonly');
     for (const [store, cle] of correspondances) {
@@ -474,7 +591,7 @@ export function exporterCollections() {
 export function remplacerCollections(payload) {
   const correspondances = [
     ['ProductType', payload.types], ['Article', payload.articles], ['Observation', payload.releves],
-    ['Purchase', payload.achats], ['Settings', payload.reglages]
+    ['Purchase', payload.achats], ['Settings', payload.reglages], ['Store', Array.isArray(payload.magasins) ? payload.magasins : MAGASINS_INITIAUX]
   ];
   if (correspondances.some(([, valeurs]) => !Array.isArray(valeurs))) {
     return Promise.reject(new Error('Sauvegarde invalide : collections manquantes.'));
