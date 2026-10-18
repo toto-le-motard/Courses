@@ -216,7 +216,7 @@ if (playwright) {
       await migrationPage.waitForFunction(()=>document.querySelector('#titre-ecran')?.textContent==='Magasin',null,{timeout:10000});
       const apres=await migrationPage.evaluate(()=>new Promise((resolve,reject)=>{
         const req=indexedDB.open('appli-courses');
-        req.onsuccess=()=>{const db=req.result,tx=db.transaction(['Observation','Purchase','Store','Settings'],'readonly'),o=tx.objectStore('Observation').get(177),a=tx.objectStore('Purchase').get(181),s=tx.objectStore('Store').getAll(),r=tx.objectStore('Settings').get('magasinReference');tx.oncomplete=()=>{resolve({observation:o.result,achat:a.result,magasins:s,reference:r.result?.valeur});db.close();};};
+        req.onsuccess=()=>{const db=req.result,tx=db.transaction(['Observation','Purchase','Store','Settings'],'readonly'),o=tx.objectStore('Observation').get(177),a=tx.objectStore('Purchase').get(181),s=tx.objectStore('Store').getAll(),r=tx.objectStore('Settings').get('magasinReference');tx.oncomplete=()=>{resolve({observation:o.result,achat:a.result,magasins:s.result,reference:r.result?.valeur});db.close();};};
         req.onerror=()=>reject(req.error);
       }));
       if(apres.reference!=='leclerc'||apres.magasins.some(m=>Object.prototype.hasOwnProperty.call(m,'comparable'))||JSON.stringify(apres.observation)!==JSON.stringify(avant.observation)||JSON.stringify(apres.achat)!==JSON.stringify(avant.achat)) throw new Error('migration v2 : référence, suppression du champ ou intégrité relevé/achat incorrecte');
