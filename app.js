@@ -216,8 +216,24 @@ async function vueReglages() {
         return;
       }
       await remplacerCollections(validation.valeur);
-      message.textContent = 'Sauvegarde restaurée. Toutes les données ont été remplacées.';
-      message.hidden = false;
+      // L'import remplace aussi la collection Store : invalider les caches UI avant de
+      // réafficher Réglages, sinon la liste reste sur les anciens magasins jusqu'au retour écran.
+      await actualiserMagasins();
+      const courantImporte = await lireReglage('magasinCourant', magasinsDisponibles[0]?.id || '');
+      magasinCourant = magasinsDisponibles.some(m => m.id === courantImporte)
+        ? courantImporte
+        : (magasinsDisponibles[0]?.id || '');
+      if (magasinCourant && courantImporte !== magasinCourant) await ecrireReglage('magasinCourant', magasinCourant);
+      const mensuelImporte = await lireReglage('magasinReleveMensuel', magasinsDisponibles[0]?.id || '');
+      if (magasinsDisponibles.length && !magasinsDisponibles.some(m => m.id === mensuelImporte)) {
+        await ecrireReglage('magasinReleveMensuel', magasinsDisponibles[0].id);
+      }
+      await afficher();
+      const messageActualise = vue.querySelector('.message-sauvegarde');
+      if (messageActualise) {
+        messageActualise.textContent = 'Sauvegarde restaurée. Toutes les données ont été remplacées.';
+        messageActualise.hidden = false;
+      }
       diagnostic.comptes = (await Promise.all(STORES.map(async s => s + ' ' + (await compter(s))))).join(' · ');
     } catch (e) {
       message.textContent = e.message || 'Import impossible. Aucune donnée modifiée.';

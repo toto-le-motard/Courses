@@ -875,6 +875,32 @@ if (playwright) {
       }));
       for (const cle of ['types','articles','releves','achats','reglages','magasins']) if(JSON.stringify(snapshotApresImport[cle])!==JSON.stringify(snapshotAvantExport[cle])) throw new Error('import différent des données exportées pour '+cle);
       ok('E8.2 import restaure intégralement les six collections');
+      // E9 — un import avec moins de magasins doit actualiser immédiatement la liste Réglages.
+      const magasinConserve = snapshotAvantExport.magasins.find(m => !m.archive);
+      if (!magasinConserve) throw new Error('aucun magasin actif pour le test de remplacement');
+      const relevesConserves = snapshotAvantExport.releves.filter(o => o.magasin === magasinConserve.id);
+      const idsRelevesConserves = new Set(relevesConserves.map(o => o.id));
+      const achatsConserves = snapshotAvantExport.achats.filter(a => a.magasin === magasinConserve.id && (a.observation == null || idsRelevesConserves.has(a.observation)));
+      const magasinsReduits = {
+        schemaVersion: 2, dateExport: '2026-10-18',
+        types: snapshotAvantExport.types, articles: snapshotAvantExport.articles,
+        releves: relevesConserves, achats: achatsConserves,
+        reglages: snapshotAvantExport.reglages.map(r => ['magasinCourant','magasinReleveMensuel'].includes(r.cle) ? {...r,valeur:magasinConserve.id} : r),
+        magasins: [magasinConserve]
+      };
+      await page.locator('#fichier-sauvegarde').setInputFiles({name:'magasins-reduits.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(magasinsReduits))});
+      await page.waitForSelector('dialog:has-text("Remplace toutes les données actuelles")',{timeout:5000});
+      await page.click('dialog button:has-text("Remplacer toutes les données")');
+      await page.waitForFunction(()=>/restaurée/i.test(document.querySelector('.message-sauvegarde')?.textContent||''),null,{timeout:5000});
+      await page.waitForFunction(()=>document.querySelectorAll('#reglages-magasins .ligne-magasin').length===1,null,{timeout:5000});
+      if ((await page.locator('#reglages-magasins .ligne-magasin strong').allTextContents()).join('') !== magasinConserve.nom) throw new Error('la liste Réglages n’a pas reflété immédiatement le magasin unique importé');
+      ok('E9 : import avec moins de magasins rafraîchit immédiatement la liste de configuration');
+      await page.locator('#fichier-sauvegarde').setInputFiles(cheminSauvegarde);
+      await page.waitForSelector('dialog:has-text("Remplace toutes les données actuelles")',{timeout:5000});
+      await page.click('dialog button:has-text("Remplacer toutes les données")');
+      await page.waitForFunction(()=>/restaurée/i.test(document.querySelector('.message-sauvegarde')?.textContent||''),null,{timeout:5000});
+      await page.waitForFunction((n)=>document.querySelectorAll('#reglages-magasins .ligne-magasin').length===n,snapshotAvantExport.magasins.filter(m=>!m.archive).length,{timeout:5000});
+      ok('E9 : réimport de la sauvegarde restaure immédiatement la liste des magasins');
        // G1 / FR20 : export réel, validation, vidage des cinq collections, import et comparaison.
        const allerRetourFR20 = await page.evaluate(async () => {
          const dbmod = await import('./db.js');
