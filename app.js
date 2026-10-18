@@ -972,7 +972,7 @@ async function vueMagasin() {
     const classe = v.resultat === VERDICT.ACHETER_ICI ? 'acheter' : v.resultat === VERDICT.ATTENDRE ? 'attendre' : v.resultat === VERDICT.INDIFFERENT ? 'indifferent' : 'insuffisant';
     verdictCarte.className = 'carte verdict-carte verdict-' + classe;
     verdictCarte.replaceChildren();
-    const autre = v.magasinComparaison ? libelleMagasin(v.magasinComparaison) : (v.autreMagasin ? libelleMagasin(v.autreMagasin) : 'Aucun magasin comparable');
+    const autre = v.magasinComparaison ? libelleMagasin(v.magasinComparaison) : (v.autreMagasin ? libelleMagasin(v.autreMagasin) : 'Aucun autre magasin avec un prix habituel disponible');
     let libelle='Données insuffisantes', icone='?';
     if(v.resultat===VERDICT.ACHETER_ICI){libelle='Acheter ici';icone='✓';}
     else if(v.resultat===VERDICT.ATTENDRE){libelle='Attendre '+autre;icone='…';}
