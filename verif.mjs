@@ -43,6 +43,12 @@ if (!principaux) {
 // ---- 1c. Historique des achats : quantité et prix doivent être distincts ----------------------
 const appTexte = readFileSync(join(racine, 'app.js'), 'utf8');
 const stylesTexte = readFileSync(join(racine, 'styles.css'), 'utf8');
+const domainTexte = readFileSync(join(racine, 'domain.js'), 'utf8');
+const typesUiTexte = readFileSync(join(racine, 'types-ui.js'), 'utf8');
+const codeMagasinsGenerique = [['app.js', appTexte], ['domain.js', domainTexte], ['types-ui.js', typesUiTexte], ['styles.css', stylesTexte]];
+const magasinsEnDur = codeMagasinsGenerique.filter(([, source]) => /\\b(?:leclerc|intermarche|intermarché)\\b/i.test(source)).map(([f]) => f);
+if (magasinsEnDur.length) ko('noms/identifiants de magasins en dur hors amorçage : ' + magasinsEnDur.join(', '));
+else ok('E9 : aucun nom ou identifiant de magasin en dur dans le code générique');
 const contratHistorique = [
   ['quantité affichée au format demandé × n', /class:'achat-valeur achat-quantite',text:'× '\+achat\.quantite/],
   ['prix payé affiché avec son libellé', /class:'achat-valeur achat-prix',text:'Prix payé : '\+formaterPrixEuros\(achat\.prixPayeCentimes\)/],
@@ -731,9 +737,9 @@ if (playwright) {
        await page.setViewportSize({width:390,height:844});await page.evaluate(()=>window.scrollTo(0,0));await page.waitForTimeout(50);
        const geoRappel844=await page.evaluate(()=>{const r=s=>{const e=document.querySelector(s);if(!e)return null;const b=e.getBoundingClientRect();return {top:Math.round(b.top),bottom:Math.round(b.bottom)};};return {scrollY:Math.round(scrollY),type:r('#champ-type'),prix:r('#champ-prix'),format:r('#champ-format'),rappel:r('#rappel-type'),dock:r('#dock-magasin'),tabs:r('.tabs')};});
        if(geoRappel844.scrollY!==0||!geoRappel844.type||!geoRappel844.prix||!geoRappel844.format||!geoRappel844.rappel||geoRappel844.type.top<0||geoRappel844.prix.bottom>geoRappel844.dock.top||geoRappel844.format.bottom>geoRappel844.dock.top||geoRappel844.dock.bottom>geoRappel844.tabs.top)throw new Error('E10-3 : champs et dock avec rappel hors zone à 390x844 '+JSON.stringify(geoRappel844));
-       await page.setViewportSize({width:390,height:500});await page.waitForTimeout(50);
+       await page.setViewportSize({width:390,height:500});await page.locator('#champ-prix').focus();await page.waitForTimeout(80);
        const geoRappel500=await page.evaluate(()=>{const r=s=>{const e=document.querySelector(s);if(!e)return null;const b=e.getBoundingClientRect();return {top:Math.round(b.top),bottom:Math.round(b.bottom)};};return {type:r('#champ-type'),prix:r('#champ-prix'),format:r('#champ-format'),rappel:r('#rappel-type'),dock:r('#dock-magasin'),tabs:r('.tabs')};});
-       if(!geoRappel500.type||!geoRappel500.prix||!geoRappel500.format||!geoRappel500.dock||!geoRappel500.tabs||geoRappel500.type.top<0||geoRappel500.prix.bottom>geoRappel500.dock.top||geoRappel500.format.bottom>geoRappel500.dock.top||geoRappel500.dock.bottom>geoRappel500.tabs.top||geoRappel500.tabs.bottom>500)throw new Error('E10-3 : champs et dock avec rappel se chevauchent à 390x500 '+JSON.stringify(geoRappel500));
+       if(!geoRappel500.type||!geoRappel500.prix||!geoRappel500.format||!geoRappel500.dock||geoRappel500.type.top<0||geoRappel500.prix.bottom>geoRappel500.dock.top||geoRappel500.format.bottom>geoRappel500.dock.top||geoRappel500.dock.bottom>500||!await page.evaluate(()=>document.body.classList.contains('mode-saisie')))throw new Error('E10-3 : champs et dock avec rappel se chevauchent à 390x500 '+JSON.stringify(geoRappel500));
        await page.setViewportSize({width:390,height:844});
        await partiesRappel.nth(0).click();
        await page.waitForFunction(()=>document.querySelector('#titre-ecran')?.textContent==='Fiche du type',null,{timeout:5000});
