@@ -13,7 +13,7 @@ const calculerPositionDock = await import('./domain.js').then(m => m.calculerPos
 import { creerSauvegarde, validerSauvegarde, etatRappelExport } from './backup.js';
 import { frequencePromos } from './domain.js';
 import { modeSaisieActif, positionDefilement, VERDICT, UNITES, LIBELLE_UNITE, normaliserNom, nomTypeValide, deduireUniteComparaison, unitesCompatibles, estCompatible, versUniteDeBase, convertir, verifierFormat, arrondirCentimes, analyserPrixSaisie, formaterPrixEuros, formaterPrixNormalise, prixNormalise, joursEntre, mediane,  estPrixIncoherent, decisionDoublon, analyserDoublon, cleDoublon, formatAffichage, trierReleves, prixHabituelMagasin, trouverMagasinComparaison, calculerVerdictMagasins, listeAvantCoursesMagasins } from './domain.js';
-const { calculerEconomieRealisee, calculerEconomieSur12Mois, calculerEconomieDepuisDebut, calculerEconomieParType, compterAchatsExclus, compterAchatsAutreMagasinReference } = await import('./domain.js');
+const { calculerEconomieRealisee, calculerCumulEconomieAchats, dateMoinsDouzeMois, calculerEconomieSur12Mois, calculerEconomieDepuisDebut, calculerEconomieParType, compterAchatsExclus, compterAchatsAutreMagasinReference } = await import('./domain.js');
 const resultats={reussis:0,echecs:0,details:[]},lignes=[]; function test(exigence,nom,fn){let msg=null;try{fn()}catch(e){msg=e.message}if(msg){resultats.echecs++;resultats.details.push(exigence+' '+nom+' : '+msg)}else resultats.reussis++;lignes.push({ok:!msg,exigence,nom,msg});}
 function egal(a,b,msg=''){if(JSON.stringify(a)!==JSON.stringify(b))throw new Error(msg+' attendu '+JSON.stringify(b)+', obtenu '+JSON.stringify(a));}
 function proche(a,b,eps=1e-6){if(typeof a!=='number'||Math.abs(a-b)>eps)throw new Error('attendu ≈ '+b+', obtenu '+a);}
@@ -316,6 +316,17 @@ test('FR26 / Story 11-1','les bornes des douze mois glissants excluent exactemen
  const type=[{id:1,unite:'kg'}],base={type:1,achete:1,quantite:1,prixPayeCentimes:100,format:1000,prixComparaisonCentimes:200,prixHabituelMemeMagasinCentimes:150,magasinComparaison:'ref'};
  const r=calculerEconomieSur12Mois([{...base,id:1,date:'2025-10-04'},{...base,id:2,date:'2025-10-05'},{...base,id:3,date:'2026-10-05'}],type,'2026-10-04','ref');
  egal(r.achatsComptes,1);egal(r.economieCentimes,100);
+});
+
+
+test('FR26 / Story 11-1','la borne glissante gère les fins de mois et les années bissextiles',()=>{
+ egal(dateMoinsDouzeMois('2024-02-29'),'2023-02-28');
+ egal(dateMoinsDouzeMois('2026-03-31'),'2025-03-31');
+});
+test('FR26 / Story 11-1','le cumul générique retourne économies, exclusions, références et totaux par type',()=>{
+ const types=[{id:1,unite:'kg'}],base={type:1,achete:1,quantite:1,prixPayeCentimes:200,format:1000,prixComparaisonCentimes:100,prixHabituelMemeMagasinCentimes:300,magasinComparaison:'ref',date:'2026-10-02'};
+ const r=calculerCumulEconomieAchats([base,{...base,id:2,prixComparaisonCentimes:null,magasinComparaison:''}],types,{dateDebut:'2026-10-01',dateFin:'2026-10-04',magasinReference:'ref'});
+ egal(r.economieCentimes,-100);egal(r.achatsComptes,1);egal(r.achatsExclus,1);egal(r.achatsAutreMagasinReference,0);egal(r.parType.length,1);egal(r.parType[0].economieCentimes,-100);
 });
 
 const ko=lignes.filter(r=>!r.ok), bilanTexte=ko.length?ko.length+' échec(s) sur '+lignes.length:'Tous les tests passent ('+lignes.length+')';

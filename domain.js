@@ -230,7 +230,7 @@ export function calculerEconomieRealisee(achat, typeUnit) {
 }
 
 
-function dateMoinsDouzeMois(date) {
+export function dateMoinsDouzeMois(date) {
   if (Number.isNaN(parserDate(date))) return null;
   const [annee, mois, jour] = date.split('-').map(Number);
   const cibleMoisIndex = annee * 12 + (mois - 1) - 12;

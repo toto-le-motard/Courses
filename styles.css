@@ -356,6 +356,9 @@ svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width:
 .bilan-economies { display:flex; flex-direction:column; gap:16px; }
 .carte-bilan-total { text-align:center; }
 .bilan-total { font-size:clamp(30px,8vw,42px); font-weight:800; margin:8px 0 14px; font-variant-numeric:tabular-nums; }
+.bilan-reference { font-size:14px; margin:0 0 4px; opacity:.82; }
+.bilan-depuis-debut { font-size:13px; font-weight:600; margin:0 0 12px; opacity:.78; }
+.bilan-achats-autre-reference { font-size:13px; margin:8px 0; opacity:.82; }
 .anneau-progression { width:124px; height:124px; border-radius:50%; margin:0 auto 12px; display:grid; place-items:center; background:conic-gradient(var(--accent,#C6FF3D) var(--progression),rgba(255,255,255,.12) 0); }
 .anneau-interieur { width:94px; height:94px; border-radius:50%; background:var(--surface,#151923); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; }
 .anneau-interieur strong { font-size:22px; } .anneau-interieur span { font-size:12px; color:var(--muted,#A4ACBD); }
