@@ -249,7 +249,7 @@ test('FR20 / E9 story 9-6','import ancien sans magasins recrée les deux magasin
 test('FR20 / E9 story 9-6','import ancien conserve les relevés et ajoute un identifiant de comparaison vide aux achats',()=>{const p={schemaVersion:1,dateExport:'2026-10-18',types:[{id:1,nom:'Café',nomNormalise:'cafe',unite:'kg',archive:0}],articles:[],releves:[{id:1,type:1,magasin:'leclerc',date:'2026-10-10',prixCentimes:100,format:1000,promo:0}],achats:[{id:1,type:1,observation:1,magasin:'leclerc',date:'2026-10-10',achete:1,quantite:1,prixPayeCentimes:100,format:1000,prixComparaisonCentimes:120,prixHabituelMemeMagasinCentimes:120}],reglages:[]};const r=validerSauvegarde(p,3);egal(r.ok,true);egal(r.valeur.releves.length,1);egal(r.valeur.achats[0].magasinComparaison,'');egal(r.valeur.magasinReference,'leclerc');});
 test('FR20 / E9 story 9-6','refuse une sauvegarde avec un relevé rattaché à un magasin absent',()=>{const p={schemaVersion:2,dateExport:'2026-10-18',types:[],articles:[],releves:[{id:1,type:1,magasin:'absent',date:'2026-10-10',prixCentimes:100,format:1000,promo:0}],achats:[],reglages:[],magasins:[{id:'leclerc',nom:'Leclerc',nomNormalise:'leclerc',enseigne:'Leclerc',localisation:'',couleur:'#5B8CFF',modePrixHabituel:'mediane',comparable:true,archive:false,ordre:1}]};egal(validerSauvegarde(p,2).ok,false);});
 
-test('FR26 / E9 story 9-1','achat migré sans magasin de comparaison exclu du cumul',()=>{const r=calculerEconomieRealisee({achete:1,quantite:1,prixPayeCentimes:100,format:1000,prixComparaisonCentimes:200,prixHabituelMemeMagasinCentimes:150,magasinComparaison:''},'kg');egal(r.ok,true);egal(r.compte,false);egal(r.exclu,true);egal(r.raison,'comparaison-indisponible');});
+test('FR26 / E9 story 9-1','achat migré sans identifiant de comparaison mais avec prix figé reste calculé',()=>{const r=calculerEconomieRealisee({achete:1,quantite:1,prixPayeCentimes:100,format:1000,prixComparaisonCentimes:200,prixHabituelMemeMagasinCentimes:150,magasinComparaison:''},'kg');egal(r.ok,true);egal(r.compte,true);egal(r.exclu,false);egal(r.economieCentimes,100);});
 
 test('FR14 / Story 11-1','verdict et liste utilisent quatre magasins sans champ comparable et ignorent seulement l’archivé',()=>{
  const magasins=MAGASINS_TEST.map(({comparable,...m})=>m);
@@ -328,6 +328,9 @@ test('FR26 / Story 11-1','le cumul générique retourne économies, exclusions, 
  const r=calculerCumulEconomieAchats([base,{...base,id:2,prixComparaisonCentimes:null,magasinComparaison:''}],types,{dateDebut:'2026-10-01',dateFin:'2026-10-04',magasinReference:'ref'});
  egal(r.economieCentimes,-100);egal(r.achatsComptes,1);egal(r.achatsExclus,1);egal(r.achatsAutreMagasinReference,0);egal(r.parType.length,1);egal(r.parType[0].economieCentimes,-100);
 });
+
+
+test('FR26 / FR33 / Story 11-1','achat sans identifiant de comparaison compte dans les gains mais pas dans le signalement de référence',()=>{const types=[{id:1,unite:'kg'}],a={type:1,achete:1,quantite:1,prixPayeCentimes:100,format:1000,prixComparaisonCentimes:200,prixHabituelMemeMagasinCentimes:150,magasinComparaison:'',date:'2026-10-02'};const r=calculerEconomieDepuisDebut([a],types,'2026-10-04','actuelle');egal(r.achatsComptes,1);egal(r.economieCentimes,100);egal(r.achatsAutreMagasinReference,0);});
 
 const ko=lignes.filter(r=>!r.ok), bilanTexte=ko.length?ko.length+' échec(s) sur '+lignes.length:'Tous les tests passent ('+lignes.length+')';
 if(typeof document==='undefined'){console.log(bilanTexte);ko.forEach(r=>console.log('ÉCHEC ['+r.exigence+'] '+r.nom+' — '+r.msg));if(ko.length)process.exitCode=1;}
