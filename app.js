@@ -1,6 +1,6 @@
 // app.js — interface et navigation (stories 1.2 à 3-2).
-import { initDb, dbPrete, listerTypes, creerTypeEtArticle, annulerCreationTypeEtArticle, lireDernierReleve, lireObservations, dernierReleve, trouverDoublon, enregistrerReleves, analyserDoublons, annulerEnregistrement, listerReleves, modifierReleve, supprimerReleve, enregistrerAchat, listerAchats, modifierAchat, supprimerAchat, demanderStockagePersistant, lireReglage, ecrireReglage, compter, STORES, VERSION_SCHEMA, exporterCollections, remplacerCollections, lire, mettre, toutLire, supprimer } from './db.js';
-import { MAGASIN, UNITES, LIBELLE_UNITE, VERDICT, analyserPrixSaisie, verifierFormat, prixNormalise, formaterPrixEuros, formaterPrixNormalise, calculerVerdict, prixHabituel, calculerEconomieRealisee, estPrixIncoherent, unitesCompatibles, formatAffichage, calculerPositionDock, modeSaisieActif, positionDefilement, frequencePromos, listeAvantCourses, deduireUniteComparaison, normaliserNom } from './domain.js';
+import { initDb, dbPrete, listerTypes, creerTypeEtArticle, annulerCreationTypeEtArticle, lireDernierReleve, lireObservations, dernierReleve, trouverDoublon, enregistrerReleves, analyserDoublons, annulerEnregistrement, listerReleves, modifierReleve, supprimerReleve, enregistrerAchat, listerAchats, modifierAchat, supprimerAchat, demanderStockagePersistant, lireReglage, ecrireReglage, compter, STORES, VERSION_SCHEMA, exporterCollections, remplacerCollections, lire, mettre, toutLire, supprimer, listerMagasins, lireMagasin, creerMagasin, modifierMagasin, archiverMagasin, restaurerMagasin, supprimerMagasin } from './db.js';
+import { MAGASIN, UNITES, LIBELLE_UNITE, VERDICT, analyserPrixSaisie, verifierFormat, prixNormalise, formaterPrixEuros, formaterPrixNormalise, calculerVerdict, prixHabituel, calculerEconomieRealisee, estPrixIncoherent, unitesCompatibles, formatAffichage, calculerPositionDock, modeSaisieActif, positionDefilement, frequencePromos, listeAvantCourses, deduireUniteComparaison, normaliserNom, calculerVerdictMagasins, prixHabituelMagasin, listeAvantCoursesMagasins } from './domain.js';
 import { accueilVide, vueTypes, vueTypeForm } from './types-ui.js';
 import { creerSauvegarde, validerSauvegarde, etatRappelExport } from './backup.js';
 
@@ -12,6 +12,9 @@ const onglets = document.querySelectorAll('.tabs a');
 let versionAppli = '…';
 let diagnostic = { base: 'ouverture…', persistant: '…', lancements: '…', comptes: '' };
 let magasinCourant = MAGASIN.LECLERC;
+let magasinsTous = [];
+let magasinsDisponibles = [];
+async function actualiserMagasins() { magasinsTous = await listerMagasins(); magasinsDisponibles = magasinsTous.filter(m => !m.archive); return magasinsTous; }
 let annulationActive = null;
 let annulationTimer = null;
 let rappelMasqueSession = false;
@@ -138,8 +141,9 @@ function dateAffichee(s) {
   const [a,m,j] = s.split('-');
   return j + '/' + m + '/' + a;
 }
-function libelleMagasin(m) { return m === MAGASIN.LECLERC ? 'Leclerc' : 'Intermarché'; }
-function classeMagasin(m) { return m === MAGASIN.LECLERC ? 'magasin-leclerc' : 'magasin-intermarche'; }
+function libelleMagasin(m) { const magasin = magasinsTous.find(s => s.id === m); return magasin?.nom || (m === MAGASIN.LECLERC ? 'Leclerc' : m === MAGASIN.INTERMARCHE ? 'Intermarché' : String(m || 'Magasin')); }
+function classeMagasin(m) { return 'magasin-' + String(m || 'inconnu').normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').toLowerCase().replace(/[^a-z0-9-]+/g,'-'); }
+function couleurMagasin(id) { return magasinsTous.find(s => s.id === id)?.couleur || '#8FA3C7'; }
 
 function majReseau() { pastille.hidden = navigator.onLine; }
 window.addEventListener('online', majReseau);
@@ -242,6 +246,68 @@ async function vueReglages() {
   carteSeuil.classList.add('reglage-seuil');
   carteSeuil.append(libelleSeuil, curseurSeuil, exempleSeuil, seuilMessage);
   d.append(carteSeuil);
+
+  // E9 / stories 9-3 et 9-4 — gestion locale des magasins.
+  await actualiserMagasins();
+  const carteMagasins = el('section',{class:'carte carte-magasins',id:'reglages-magasins'},
+    el('h2',{text:'Magasins'}),
+    el('p',{text:'Configurez les magasins comparés. Les prix constatés et achats déjà enregistrés restent conservés.'})
+  );
+  const messageMagasins = el('p',{class:'message-sauvegarde',role:'status',hidden:true});
+  function afficherMessageMagasins(texte) { messageMagasins.textContent=texte; messageMagasins.hidden=!texte; }
+  function boutonCouleur(m, petit=false) { return el('span',{class:'pastille-magasin'+(petit?' petite':''),style:'background:'+m.couleur,'aria-label':'Couleur '+m.nom}); }
+  function ouvrirFormulaireMagasin(magasin=null) {
+    const existants=magasinsTous.filter(m=>m.id!==magasin?.id);
+    const couleurs=['#5B8CFF','#FF6B5E','#3DDC97','#B07CFF','#2EC4D6','#FF8FC7','#D9A066','#8FA3C7'];
+    const couleurChoisie={value:magasin?.couleur || couleurs.find(c=>!existants.some(m=>m.couleur===c)) || couleurs[0]};
+    const nom=el('input',{class:'champ',type:'text',required:true,maxlength:'60',value:magasin?.nom||'',placeholder:'Nom du magasin','aria-label':'Nom du magasin'});
+    const enseigne=el('input',{class:'champ',type:'text',value:magasin?.enseigne||'',placeholder:'Enseigne','aria-label':'Enseigne'});
+    const localisation=el('input',{class:'champ',type:'text',value:magasin?.localisation||'',placeholder:'Ville ou adresse facultative','aria-label':'Localisation'});
+    const mode=el('select',{class:'champ','aria-label':'Prix habituel'},el('option',{value:'dernier',text:'Dernier relevé'}),el('option',{value:'mediane',text:'Médiane 8 semaines'}));
+    mode.value=magasin?.modePrixHabituel||'dernier';
+    const aide=el('p',{class:'aide-magasin',text:mode.value==='mediane'?'Médiane des relevés hors promo des 8 dernières semaines (3 minimum).':'Dernier relevé hors promo, avec sa date.'});
+    mode.addEventListener('change',()=>{aide.textContent=mode.value==='mediane'?'Médiane des relevés hors promo des 8 dernières semaines (3 minimum).':'Dernier relevé hors promo, avec sa date.';});
+    const comparable=el('input',{type:'checkbox',checked:magasin?magasin.comparable:true,'aria-label':'Participe aux comparaisons'});
+    const palette=el('div',{class:'palette-couleurs'},...couleurs.map(c=>el('button',{type:'button',class:'choix-couleur','aria-label':'Choisir '+c,'aria-pressed':c===couleurChoisie.value,style:'background:'+c,onclick:()=>{couleurChoisie.value=c;palette.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(b.getAttribute('aria-label')==='Choisir '+c)));}})));
+    const erreur=el('p',{class:'erreur',role:'alert',hidden:true});
+    const dialogue=el('dialog',{class:'feuille formulaire-magasin'},
+      el('h2',{text:magasin?'Modifier le magasin':'Nouveau magasin'}),
+      el('label',{text:'Nom *'},nom),el('label',{text:'Enseigne'},enseigne),el('label',{text:'Localisation'},localisation),
+      el('label',{text:'Couleur'}),palette,el('label',{text:'Prix habituel'}),mode,aide,
+      el('label',{class:'option-comparable'},comparable,el('span',{text:'Participe aux comparaisons'})),
+      erreur,
+      el('div',{class:'feuille-actions'},
+        el('button',{type:'button',class:'btn btn-primaire',text:'Enregistrer',onclick:async()=>{try{const champs={nom:nom.value,enseigne:enseigne.value,localisation:localisation.value,couleur:couleurChoisie.value,modePrixHabituel:mode.value,comparable:comparable.checked};if(magasin)await modifierMagasin(magasin.id,champs);else await creerMagasin(champs);dialogue.close();await actualiserMagasins();magasinCourant=await lireReglage('magasinCourant',magasinsDisponibles[0]?.id||'leclerc');await afficher();}catch(e){erreur.textContent=e.message||'Enregistrement impossible.';erreur.hidden=false;}}}),
+        el('button',{type:'button',class:'btn btn-secondaire',text:'Annuler',onclick:()=>dialogue.close()})
+      )
+    );
+    dialogue.addEventListener('close',()=>dialogue.remove());document.body.append(dialogue);dialogue.showModal();nom.focus();
+  }
+  async function actionMagasin(magasin,action) {
+    try {
+      if(action==='modifier'){ouvrirFormulaireMagasin(magasin);return;}
+      if(action==='archiver') await archiverMagasin(magasin.id);
+      if(action==='restaurer') await restaurerMagasin(magasin.id);
+      if(action==='supprimer') await supprimerMagasin(magasin.id);
+      await actualiserMagasins();
+      magasinCourant=await lireReglage('magasinCourant',magasinsDisponibles[0]?.id||'leclerc');
+      await afficher();
+    } catch(e) { afficherMessageMagasins(e.message||'Action impossible.'); }
+  }
+  function ligneMagasin(m,archive=false) {
+    const texte=el('div',{class:'magasin-details'},el('strong',{text:m.nom}),el('span',{text:[m.enseigne,m.localisation].filter(Boolean).join(' · ')}));
+    const ligne=el('div',{class:'ligne-magasin'},boutonCouleur(m),texte);
+    if(archive) ligne.append(el('button',{type:'button',class:'btn btn-secondaire',text:'Restaurer',onclick:()=>actionMagasin(m,'restaurer')}));
+    else ligne.append(el('button',{type:'button',class:'btn btn-secondaire bouton-menu-magasin','aria-label':'Options '+m.nom,text:'⋯',onclick:()=>{const menu=el('dialog',{class:'feuille menu-magasin'},el('h2',{text:m.nom}),el('button',{type:'button',class:'btn btn-secondaire btn-bloc',text:'Modifier',onclick:()=>{menu.close();actionMagasin(m,'modifier');}}),el('button',{type:'button',class:'btn btn-secondaire btn-bloc',text:'Archiver',onclick:()=>{menu.close();actionMagasin(m,'archiver');}}),el('button',{type:'button',class:'btn btn-secondaire btn-bloc',text:'Supprimer',onclick:()=>{menu.close();actionMagasin(m,'supprimer');}}),el('button',{type:'button',class:'btn btn-secondaire btn-bloc',text:'Fermer',onclick:()=>menu.close()}));menu.addEventListener('close',()=>menu.remove());document.body.append(menu);menu.showModal();}}));
+    return ligne;
+  }
+  const actifsStores=magasinsTous.filter(m=>!m.archive);
+  carteMagasins.append(el('div',{class:'liste-magasins'},...actifsStores.map(m=>ligneMagasin(m))));
+  carteMagasins.append(el('button',{type:'button',class:'btn btn-primaire btn-bloc',text:'+ Nouveau magasin',onclick:()=>ouvrirFormulaireMagasin()}));
+  const archivesStores=magasinsTous.filter(m=>m.archive);
+  if(archivesStores.length) carteMagasins.append(el('details',{class:'magasins-archives'},el('summary',{text:'Archivés'}),el('div',{class:'liste-magasins'},...archivesStores.map(m=>ligneMagasin(m,true)))));
+  carteMagasins.append(messageMagasins);
+  d.append(carteMagasins);
   if (evenementInstallation) {
     const boutonInstaller = el('button', { type: 'button', class: 'btn btn-secondaire', text: 'Installer l’appli', onclick: async () => {
       const event = evenementInstallation;
@@ -302,18 +368,35 @@ function demanderRemplacement(prixExistant, promo) {
     document.body.append(d); d.showModal();
   });
 }
-function vueMagasin() {
+async function vueMagasin() {
+  await dbPrete;
+  await actualiserMagasins();
+  if (!magasinsDisponibles.length) throw new Error('Ajoutez un magasin actif dans Réglages.');
+  if (!magasinsDisponibles.some(m => m.id === magasinCourant)) {
+    magasinCourant = (await lireReglage('magasinCourant', magasinsDisponibles[0].id));
+    if (!magasinsDisponibles.some(m => m.id === magasinCourant)) magasinCourant = magasinsDisponibles[0].id;
+  }
   document.getElementById('dock-magasin')?.remove(); dockResizeObserver?.disconnect();
   const racine = el('div', { class: 'ecran-magasin' });
   const entete = el('div', { class: 'selecteur-magasin ' + classeMagasin(magasinCourant) });
-  const boutonsMagasin = [MAGASIN.LECLERC, MAGASIN.INTERMARCHE].map((m) =>
-    el('button', { type: 'button', class: 'magasin-btn', 'aria-pressed': m === magasinCourant, text: libelleMagasin(m), onclick: async () => {
-      magasinCourant = m;
-      await ecrireReglage('magasinCourant', m);
-      await chargerFormulaire();
-    }})
-  );
-  entete.append(...boutonsMagasin);
+  const boutonSelectionMagasin = el('button', { type:'button', class:'selecteur-magasin-bouton', 'aria-label':'Changer de magasin', text:libelleMagasin(magasinCourant)+' ▾', onclick:ouvrirFeuilleMagasins });
+  function actualiserEnteteMagasin() {
+    entete.className = 'selecteur-magasin ' + classeMagasin(magasinCourant);
+    entete.style.background = couleurMagasin(magasinCourant) + '20';
+    entete.style.borderColor = couleurMagasin(magasinCourant);
+    boutonSelectionMagasin.textContent = libelleMagasin(magasinCourant) + ' ▾';
+  }
+  function ouvrirFeuilleMagasins() {
+    const feuille = el('dialog', { class:'feuille feuille-magasins' },
+      el('h2',{text:'Choisir un magasin'}),
+      el('div',{class:'liste-magasins-choix'},...magasinsDisponibles.map(m=>el('button',{type:'button',class:'magasin-btn','aria-pressed':m.id===magasinCourant,style:'--couleur-magasin:'+m.couleur,text:m.nom+(m.localisation?' · '+m.localisation:''),onclick:async()=>{magasinCourant=m.id;await ecrireReglage('magasinCourant',m.id);feuille.close();actualiserEnteteMagasin();await chargerFormulaire();}}))),
+      el('button',{type:'button',class:'btn btn-secondaire btn-bloc',text:'Gérer les magasins',onclick:()=>{feuille.close();location.hash='#/reglages/magasins';}})
+    );
+    feuille.addEventListener('close',()=>feuille.remove());
+    document.body.append(feuille);feuille.showModal();
+  }
+  entete.append(boutonSelectionMagasin);
+  actualiserEnteteMagasin();
   racine.append(entete);
 
   const formulaire = el('section', { id: 'formulaire-releve', class: 'carte formulaire-releve' });
@@ -440,11 +523,12 @@ function vueMagasin() {
         const observationId = jeton.ajoutes[0];
         if (!observationId) throw new Error('Le relevé n’a pas été créé : achat non enregistré.');
         const historiqueAvant = await lireObservations(typeChoisi.id);
-        const habituelMemeMagasin = prixHabituel(historiqueAvant.filter(o=>o.id!==observationId),magasinCourant,typeChoisi.unite,date);
+        const habituelMemeMagasin = prixHabituelMagasin(historiqueAvant.filter(o=>o.id!==observationId),magasinsTous.find(m=>m.id===magasinCourant),typeChoisi.unite,date);
         const achatId = await enregistrerAchat({
           type:typeChoisi.id, observation:observationId, magasin:magasinCourant, date,
           achete:statutAchat, quantite, prixPayeCentimes:prixPayeAchat ?? prixCentimes, format:formatPayeAchat ?? format.formatBase,
-          prixComparaisonCentimes:verdictAchat?.habituelAutre?.valeur ?? null,
+          prixComparaisonCentimes:verdictAchat?.habituelComparaison?.valeur ?? verdictAchat?.habituelAutre?.valeur ?? null,
+          magasinComparaison:verdictAchat?.magasinComparaison ?? '',
           prixHabituelMemeMagasinCentimes:habituelMemeMagasin.ok ? habituelMemeMagasin.valeur : null
         });
         jeton.achats = [achatId];
@@ -816,7 +900,7 @@ function vueMagasin() {
       const observations = await lireObservations(typeChoisi.id);
       const seuilPct = await lireReglage('seuilIndifference', 5);
       if (jetonCalcul !== calculVerdictToken || !typeChoisi || !estFormulaireValide()) { verdictCarte.hidden = true; return; }
-      const v = calculerVerdict({ prixCentimes:p, formatBase:f.formatBase, typeUnit:typeChoisi.unite, magasin:magasinCourant, observations, aujourdhui:date, seuilPct, promo:promo.checked });
+      const v = calculerVerdictMagasins({ prixCentimes:p, formatBase:f.formatBase, typeUnit:typeChoisi.unite, magasinCourant, magasins:magasinsTous, observations, aujourdhui:date, seuilPct, promo:promo.checked });
       dessinerVerdict(v, observations);
     } catch { verdictCarte.hidden = true; bouton.textContent='Enregistrer'; dockActions?.replaceChildren(bouton); }
   }
@@ -826,7 +910,7 @@ function vueMagasin() {
     const classe = v.resultat === VERDICT.ACHETER_ICI ? 'acheter' : v.resultat === VERDICT.ATTENDRE ? 'attendre' : v.resultat === VERDICT.INDIFFERENT ? 'indifferent' : 'insuffisant';
     verdictCarte.className = 'carte verdict-carte verdict-' + classe;
     verdictCarte.replaceChildren();
-    const autre = libelleMagasin(v.autreMagasin);
+    const autre = v.magasinComparaison ? libelleMagasin(v.magasinComparaison) : (v.autreMagasin ? libelleMagasin(v.autreMagasin) : 'Aucun magasin comparable');
     let libelle='Données insuffisantes', icone='?';
     if(v.resultat===VERDICT.ACHETER_ICI){libelle='Acheter ici';icone='✓';}
     else if(v.resultat===VERDICT.ATTENDRE){libelle='Attendre '+autre;icone='…';}
@@ -836,7 +920,7 @@ function vueMagasin() {
       const signe=v.differenceFormatCentimes<0?'−':v.differenceFormatCentimes>0?'+':'';
       const uniteTexte=typeChoisi.unite==='unit'?'par unité':'le '+LIBELLE_UNITE[typeChoisi.unite];
       verdictCarte.append(el('p',{class:'verdict-economie',text:signe+formaterPrixEuros(Math.abs(v.differenceUniteCentimes))+' '+uniteTexte+' · '+signe+formaterPrixEuros(Math.abs(v.differenceFormatCentimes))+' pour ce paquet'}));
-      const h=v.habituelAutre;
+      const h=v.habituelComparaison || v.habituelAutre;
       if(h){
         const prixRef=formaterPrixNormalise(h.valeur,typeChoisi.unite);
         const rappel=h.type==='mediane'?prixRef+', médiane de '+h.nbReleves+' relevé'+(h.nbReleves>1?'s':'')+' sur 8 semaines':prixRef+', relevé le '+dateAffichee(h.date);
@@ -847,7 +931,7 @@ function vueMagasin() {
       verdictCarte.append(el('p',{class:'verdict-rappel',text:autre+' : '+(d?'dernier prix connu le '+dateAffichee(d.date):'aucun relevé')}));
     }
     if(promo.checked) verdictCarte.append(el('span',{class:'badge-promo',text:'Promo'}));
-    const habituel = prixHabituel(observations,magasinCourant,typeChoisi.unite,date);
+    const habituel = prixHabituelMagasin(observations,magasinsTous.find(m=>m.id===magasinCourant),typeChoisi.unite,date);
     if(habituel.ok) verdictCarte.append(el('p',{class:'verdict-habituel',text:'Habituel chez '+libelleMagasin(magasinCourant)+' : '+formaterPrixNormalise(habituel.valeur,typeChoisi.unite)}));
     const quantite = el('input', { id:'quantite-achat', class:'champ quantite-achat', type:'number', min:'1', max:'999', step:'1', value:String(quantiteAchat), inputmode:'numeric', 'aria-label':'Quantité achetée', onchange:e=>{ const n=Number(e.target.value); if(Number.isInteger(n)&&n>=1&&n<=999) quantiteAchat=n; else {quantiteAchat=1;e.target.value='1';} } });
     bouton.textContent = 'Je n’achète pas';
@@ -1404,6 +1488,7 @@ async function afficher() {
   const contenu = await r.vue(param);
   if (sequence !== sequenceAffichage) return;
   vue.replaceChildren(contenu);
+  if (nom === 'reglages' && param === 'magasins') requestAnimationFrame(() => document.getElementById('reglages-magasins')?.scrollIntoView({block:'start'}));
   if (nom === 'magasin' && !rappelMasqueSession) {
     try {
       await dbPrete;
@@ -1435,7 +1520,9 @@ window.addEventListener('hashchange', () => { void afficher(); }); void afficher
 (async () => {
   try {
     await initDb();
-    magasinCourant = await lireReglage('magasinCourant', MAGASIN.LECLERC);
+    await actualiserMagasins();
+    magasinCourant = await lireReglage('magasinCourant', magasinsDisponibles[0]?.id || MAGASIN.LECLERC);
+    if (!magasinsDisponibles.some(m => m.id === magasinCourant)) magasinCourant = magasinsDisponibles[0]?.id || MAGASIN.LECLERC;
     diagnostic.base = 'ouverte (schéma v' + VERSION_SCHEMA + ')';
     const ok = await demanderStockagePersistant();
     diagnostic.persistant = ok === null ? 'non géré par ce navigateur' : (ok ? 'oui' : 'non (pensez à exporter régulièrement)');

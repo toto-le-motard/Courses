@@ -505,9 +505,7 @@ export async function modifierReleve(id, champs) {
   for (const champ of ['magasin', 'date', 'prixCentimes', 'format', 'promo']) {
     if (Object.prototype.hasOwnProperty.call(champs || {}, champ)) prochain[champ] = champs[champ];
   }
-  if (prochain.magasin !== MAGASIN.LECLERC && prochain.magasin !== MAGASIN.INTERMARCHE) {
-    throw new Error('Magasin invalide.');
-  }
+  if (typeof prochain.magasin !== 'string' || !(await lireMagasin(prochain.magasin))) throw new Error('Magasin invalide.');
   if (!Number.isInteger(prochain.prixCentimes) || prochain.prixCentimes <= 0) {
     throw new Error('Prix invalide.');
   }
@@ -548,11 +546,12 @@ export function supprimerReleve(id) {
 }
 
 // FR23 / E7.1 — achat associé au relevé enregistré, sans dépendance réseau.
-export async function enregistrerAchat({ type, observation, magasin, date, achete, quantite = 1, prixPayeCentimes, format, prixComparaisonCentimes = null, prixHabituelMemeMagasinCentimes = null }) {
+export async function enregistrerAchat({ type, observation, magasin, date, achete, quantite = 1, prixPayeCentimes, format, prixComparaisonCentimes = null, prixHabituelMemeMagasinCentimes = null, magasinComparaison = '' }) {
   if (!Number.isInteger(type) || type <= 0 || !Number.isInteger(observation) || observation <= 0) {
     throw new Error('Type ou relevé invalide pour cet achat.');
   }
-  if (magasin !== MAGASIN.LECLERC && magasin !== MAGASIN.INTERMARCHE) throw new Error('Magasin invalide.');
+  if (typeof magasin !== 'string' || !(await lireMagasin(magasin))) throw new Error('Magasin invalide.');
+  if (magasinComparaison && !(await lireMagasin(magasinComparaison))) throw new Error('Magasin de comparaison invalide.');
   if (!dateValide(date)) throw new Error('Date invalide.');
   if (!Number.isInteger(prixPayeCentimes) || prixPayeCentimes <= 0) throw new Error('Prix payé invalide.');
   if (!Number.isInteger(format) || format <= 0) throw new Error('Format invalide.');
@@ -562,7 +561,7 @@ export async function enregistrerAchat({ type, observation, magasin, date, achet
   }
   return ajouter('Purchase', {
     type, observation, magasin, date, achete: achete ? 1 : 0, quantite,
-    prixPayeCentimes, format, prixComparaisonCentimes, prixHabituelMemeMagasinCentimes, magasinComparaison: ''
+    prixPayeCentimes, format, prixComparaisonCentimes, prixHabituelMemeMagasinCentimes, magasinComparaison: magasinComparaison || ''
   });
 }
 

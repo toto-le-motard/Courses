@@ -426,3 +426,27 @@ svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width:
   .achat-resume-valeurs { grid-template-columns: minmax(0, 1fr); }
   .achat-format { grid-column: auto; }
 }
+
+/* E9 — sélecteur et gestion de magasins configurables. */
+.selecteur-magasin { border:1px solid var(--couleur-magasin,#5B8CFF); border-radius:18px; padding:8px; margin:0 0 12px; }
+.selecteur-magasin-bouton { width:100%; min-height:48px; border:0; border-radius:12px; background:transparent; color:var(--texte,#F4F6FA); font:inherit; font-weight:700; text-align:left; padding:0 14px; }
+.feuille-magasins .liste-magasins-choix { display:grid; gap:8px; margin:12px 0; }
+.liste-magasins-choix .magasin-btn { min-height:52px; border:1px solid var(--couleur-magasin,#8FA3C7); border-radius:12px; background:transparent; color:inherit; text-align:left; padding:10px 14px; font:inherit; }
+.carte-magasins { scroll-margin-top:16px; }
+.liste-magasins { display:grid; gap:8px; margin:12px 0; }
+.ligne-magasin { display:flex; align-items:center; gap:12px; min-height:56px; padding:8px; border:1px solid rgba(255,255,255,.12); border-radius:12px; }
+.pastille-magasin { width:14px; height:14px; border-radius:50%; flex:0 0 14px; display:inline-block; }
+.magasin-details { min-width:0; flex:1; display:grid; gap:3px; }
+.magasin-details span { color:var(--texte-secondaire,#A4ACBD); font-size:13px; overflow-wrap:anywhere; }
+.bouton-menu-magasin { min-width:48px; font-size:22px; }
+.formulaire-magasin { width:min(100% - 24px,460px); max-height:min(90dvh,760px); overflow:auto; }
+.formulaire-magasin label { display:grid; gap:6px; margin:12px 0; }
+.palette-couleurs { display:grid; grid-template-columns:repeat(8,minmax(0,1fr)); gap:8px; margin:8px 0; }
+.choix-couleur { width:100%; min-height:40px; border:2px solid transparent; border-radius:10px; }
+.choix-couleur[aria-pressed="true"] { outline:3px solid var(--texte,#F4F6FA); outline-offset:2px; }
+.aide-magasin { color:var(--texte-secondaire,#A4ACBD); font-size:13px; }
+.option-comparable { display:flex!important; align-items:center; gap:10px!important; min-height:48px; }
+.option-comparable input { width:24px; height:24px; }
+.magasins-archives { margin-top:14px; }
+.magasins-archives summary { min-height:48px; display:flex; align-items:center; cursor:pointer; font-weight:600; }
+@media (prefers-reduced-motion:reduce) { .selecteur-magasin-bouton,.magasin-btn { transition:none!important; } }
