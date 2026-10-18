@@ -8,16 +8,19 @@ function dateIsoValide(date) {
   return d.getUTCFullYear() === a && d.getUTCMonth() === m - 1 && d.getUTCDate() === j;
 }
 
-export function creerSauvegarde({ schemaVersion, types, articles, releves, achats, reglages, magasins = null, dateExport }) {
-  return { schemaVersion, dateExport, types, articles, releves, achats, reglages, magasins: Array.isArray(magasins) ? magasins : [] };
+export function creerSauvegarde({ schemaVersion, types, articles, releves, achats, reglages, magasins = null, magasinReference = null, dateExport }) {
+  const magasinsPropres = (Array.isArray(magasins) ? magasins : []).map(m => { const copie = { ...m }; delete copie.comparable; return copie; });
+  const reference = magasinReference || reglages.find(r => r.cle === 'magasinReference')?.valeur || null;
+  return { schemaVersion, dateExport, types, articles, releves, achats, reglages, magasins: magasinsPropres, magasinReference: reference };
 }
 
 export function validerSauvegarde(payload, schemaVersionAttendu) {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
     return { ok: false, erreur: "Le fichier ne contient pas une sauvegarde JSON valide." };
   }
-  const ancienneSansMagasins = payload.schemaVersion === schemaVersionAttendu - 1 && !Array.isArray(payload.magasins);
-  if (!Number.isInteger(payload.schemaVersion) || (payload.schemaVersion !== schemaVersionAttendu && !ancienneSansMagasins)) {
+  const ancienneVersion = Number.isInteger(payload.schemaVersion) && payload.schemaVersion >= 1 && payload.schemaVersion < schemaVersionAttendu;
+  const ancienneSansMagasins = ancienneVersion && !Array.isArray(payload.magasins);
+  if (!Number.isInteger(payload.schemaVersion) || (payload.schemaVersion !== schemaVersionAttendu && !ancienneVersion)) {
     return { ok: false, erreur: "Version de sauvegarde inconnue ou incompatible." };
   }
   if (!dateIsoValide(payload.dateExport)) {
@@ -58,17 +61,18 @@ export function validerSauvegarde(payload, schemaVersionAttendu) {
       && (v.enseigne === undefined || typeof v.enseigne === 'string')
       && (v.localisation === undefined || typeof v.localisation === 'string')
       && typeof v.couleur === 'string' && /^#[0-9a-f]{6}$/i.test(v.couleur)
-      && ['mediane','dernier'].includes(v.modePrixHabituel) && typeof v.comparable === 'boolean'
-      && typeof v.archive === 'boolean' && Number.isInteger(v.ordre) && v.ordre > 0
+      && ['mediane','dernier'].includes(v.modePrixHabituel)
+      && typeof v.archive === 'boolean && Number.isInteger(v.ordre) && v.ordre > 0
   };
   if (ancienneSansMagasins) {
     payload.magasins = [
-      { id: 'leclerc', nom: 'Leclerc', nomNormalise: 'leclerc', enseigne: 'Leclerc', localisation: '', couleur: '#5B8CFF', modePrixHabituel: 'mediane', comparable: true, archive: false, ordre: 1 },
-      { id: 'intermarche', nom: 'Intermarché', nomNormalise: 'intermarche', enseigne: 'Intermarché', localisation: '', couleur: '#FF6B5E', modePrixHabituel: 'dernier', comparable: true, archive: false, ordre: 2 }
+      { id: 'leclerc', nom: 'Leclerc', nomNormalise: 'leclerc', enseigne: 'Leclerc', localisation: '', couleur: '#5B8CFF', modePrixHabituel: 'mediane', archive: false, ordre: 1 },
+      { id: 'intermarche', nom: 'Intermarché', nomNormalise: 'intermarche', enseigne: 'Intermarché', localisation: '', couleur: '#FF6B5E', modePrixHabituel: 'dernier', archive: false, ordre: 2 }
     ];
     if (Array.isArray(payload.achats)) payload.achats = payload.achats.map(a => ({ ...a, magasinComparaison: '' }));
     payload.schemaVersion = schemaVersionAttendu;
   }
+  if (Array.isArray(payload.magasins)) payload.magasins = payload.magasins.map(m => { const copie = { ...m }; delete copie.comparable; return copie; });
   for (const cle of Object.keys(valideurs)) {
     if (!Array.isArray(payload[cle]) || payload[cle].some((item) =>
       !item || typeof item !== "object" || Array.isArray(item) || !valideurs[cle](item))) {
@@ -81,6 +85,14 @@ export function validerSauvegarde(payload, schemaVersionAttendu) {
   for (const m of payload.magasins) { const n = String(m.nom).normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').toLocaleLowerCase('fr').trim().replace(/\\s+/g,' '); if (nomsMagasins.has(n)) return { ok:false, erreur:'La sauvegarde contient des noms de magasin en double.' }; nomsMagasins.add(n); }
   if (payload.releves.some(o => !magasinsIds.has(o.magasin)) || payload.achats.some(a => !magasinsIds.has(a.magasin))) return { ok:false, erreur:'La sauvegarde contient un relevé ou un achat rattaché à un magasin absent.' };
   payload.achats = payload.achats.map(a => ({ ...a, magasinComparaison: a.magasinComparaison ?? '' }));
+  const actifs = payload.magasins.filter(m => !m.archive).sort((a,b) => (a.ordre || 0) - (b.ordre || 0) || a.nom.localeCompare(b.nom, 'fr'));
+  const referenceDemandee = typeof payload.magasinReference === 'string' ? payload.magasinReference : '';
+  const reference = actifs.find(m => m.id === referenceDemandee) || actifs.find(m => m.id === 'leclerc') || actifs[0];
+  payload.magasinReference = reference?.id || '';
+  const reglageReference = payload.reglages.findIndex(r => r.cle === 'magasinReference');
+  if (reglageReference >= 0) payload.reglages[reglageReference] = { cle: 'magasinReference', valeur: payload.magasinReference };
+  else payload.reglages.push({ cle: 'magasinReference', valeur: payload.magasinReference });
+  payload.schemaVersion = schemaVersionAttendu;
   const typeIds = new Set(payload.types.map((item) => item.id));
   if (["articles", "releves", "achats"].some((cle) => payload[cle].some((item) => !typeIds.has(item.type)))) {
     return { ok: false, erreur: "La sauvegarde contient un article, un relevé ou un achat sans type existant." };

@@ -11,10 +11,10 @@
 //                   prixHabituelMemeMagasinCentimes|null (prix habituel hors promo du MÊME magasin, figé à la date) }
 //   Settings    : { cle (clé), valeur }
 
-import { normaliserNom, prixNormalise, decisionDoublon, analyserDoublon, cleDoublon, verifierFormat, trierReleves } from './domain.js';
+import { normaliserNom, prixNormalise, decisionDoublon, analyserDoublon, cleDoublon, verifierFormat, trierReleves, prixHabituelMagasin } from './domain.js';
 
 export const NOM_BASE = 'appli-courses';
-export const VERSION_SCHEMA = 2;
+export const VERSION_SCHEMA = 3;
 export const STORES = ['ProductType', 'Article', 'Observation', 'Purchase', 'Settings', 'Store'];
 
 // Migrations : une fonction par version de schéma, jouées dans l'ordre. Ne jamais modifier une
@@ -40,8 +40,8 @@ const MIGRATIONS = {
   2(db, transaction) {
     const stores = db.createObjectStore('Store', { keyPath: 'id' });
     stores.createIndex('nomNormalise', 'nomNormalise', { unique: true });
-    stores.add({ id: 'leclerc', nom: 'Leclerc', nomNormalise: 'leclerc', enseigne: 'Leclerc', localisation: '', couleur: '#5B8CFF', modePrixHabituel: 'mediane', comparable: true, archive: false, ordre: 1 });
-    stores.add({ id: 'intermarche', nom: 'Intermarché', nomNormalise: 'intermarche', enseigne: 'Intermarché', localisation: '', couleur: '#FF6B5E', modePrixHabituel: 'dernier', comparable: true, archive: false, ordre: 2 });
+    stores.add({ id: 'leclerc', nom: 'Leclerc', nomNormalise: 'leclerc', enseigne: 'Leclerc', localisation: '', couleur: '#5B8CFF', modePrixHabituel: 'mediane', archive: false, ordre: 1 });
+    stores.add({ id: 'intermarche', nom: 'Intermarché', nomNormalise: 'intermarche', enseigne: 'Intermarché', localisation: '', couleur: '#FF6B5E', modePrixHabituel: 'dernier', archive: false, ordre: 2 });
     const settings = transaction.objectStore('Settings');
     for (const [cle, valeur] of [['magasinCourant', MAGASINS_INITIAUX[0].id], ['magasinReleveMensuel', MAGASINS_INITIAUX[1].id]]) {
       const rq = settings.get(cle);
@@ -55,6 +55,33 @@ const MIGRATIONS = {
       const achat = c.value;
       if (!Object.prototype.hasOwnProperty.call(achat, 'magasinComparaison')) c.update({ ...achat, magasinComparaison: '' });
       c.continue();
+    };
+  },
+  3(db, transaction) {
+    const stores = transaction.objectStore('Store');
+    const settings = transaction.objectStore('Settings');
+    const magasins = [];
+    const cursor = stores.openCursor();
+    cursor.onsuccess = () => {
+      const c = cursor.result;
+      if (c) {
+        const magasin = c.value;
+        if (Object.prototype.hasOwnProperty.call(magasin, 'comparable')) {
+          delete magasin.comparable;
+          c.update(magasin);
+        }
+        magasins.push(magasin);
+        c.continue();
+        return;
+      }
+      const demande = settings.get('magasinReference');
+      demande.onsuccess = () => {
+        const actifs = magasins.filter(m => !m.archive).sort((a,b) => (a.ordre || 0) - (b.ordre || 0) || a.nom.localeCompare(b.nom, 'fr'));
+        const reference = actifs.find(m => m.id === demande.result?.valeur)
+          || actifs.find(m => m.id === 'leclerc')
+          || actifs[0];
+        if (reference) settings.put({ cle: 'magasinReference', valeur: reference.id });
+      };
     };
   }
 };
@@ -111,6 +138,12 @@ async function reglagesParDefaut() {
   if ((await lire('Settings', 'seuilIndifference')) === undefined) await ecrireReglage('seuilIndifference', 5);
   if ((await lire('Settings', 'magasinCourant')) === undefined) await ecrireReglage('magasinCourant', MAGASINS_INITIAUX[0].id);
   if ((await lire('Settings', 'magasinReleveMensuel')) === undefined) await ecrireReglage('magasinReleveMensuel', MAGASINS_INITIAUX[1].id);
+  const actifs = await listerMagasins({ inclureArchives: false });
+  const referenceActuelle = await lireReglage('magasinReference');
+  if (!actifs.some(m => m.id === referenceActuelle)) {
+    const reference = actifs.find(m => m.id === 'leclerc') || actifs[0];
+    if (reference) await ecrireReglage('magasinReference', reference.id);
+  }
 }
 
 // Demande le stockage persistant (NFR5) ; le résultat est conservé dans Settings.
@@ -138,8 +171,8 @@ export async function initDb() {
 
 // ---- Magasins configurables (E9) --------------------------------------------------------------
 const MAGASINS_INITIAUX = [
-  { id: 'leclerc', nom: 'Leclerc', nomNormalise: 'leclerc', enseigne: 'Leclerc', localisation: '', couleur: '#5B8CFF', modePrixHabituel: 'mediane', comparable: true, archive: false, ordre: 1 },
-  { id: 'intermarche', nom: 'Intermarché', nomNormalise: 'intermarche', enseigne: 'Intermarché', localisation: '', couleur: '#FF6B5E', modePrixHabituel: 'dernier', comparable: true, archive: false, ordre: 2 }
+  { id: 'leclerc', nom: 'Leclerc', nomNormalise: 'leclerc', enseigne: 'Leclerc', localisation: '', couleur: '#5B8CFF', modePrixHabituel: 'mediane', archive: false, ordre: 1 },
+  { id: 'intermarche', nom: 'Intermarché', nomNormalise: 'intermarche', enseigne: 'Intermarché', localisation: '', couleur: '#FF6B5E', modePrixHabituel: 'dernier', archive: false, ordre: 2 }
 ];
 export const magasinsParDefaut = () => MAGASINS_INITIAUX.map(m => ({ ...m }));
 
@@ -168,7 +201,6 @@ function validerChampsMagasin(champs, existants, id = null) {
   if (existants.some(m => m.id !== id && normaliserNomMagasin(m.nom) === normaliserNomMagasin(nom))) throw new Error('Un magasin porte déjà ce nom.');
   if (champs.couleur != null && !/^#[0-9a-f]{6}$/i.test(champs.couleur)) throw new Error('Couleur invalide.');
   if (champs.modePrixHabituel != null && !['mediane', 'dernier'].includes(champs.modePrixHabituel)) throw new Error('Mode de prix habituel invalide.');
-  if (champs.comparable != null && typeof champs.comparable !== 'boolean') throw new Error('Le réglage de comparaison est invalide.');
   return { nom, nomNormalise: normaliserNomMagasin(nom), enseigne: String(champs.enseigne ?? '').trim(), localisation: String(champs.localisation ?? '').trim() };
 }
 export async function listerMagasins({ inclureArchives = true } = {}) {
@@ -176,13 +208,19 @@ export async function listerMagasins({ inclureArchives = true } = {}) {
   return magasins.filter(m => inclureArchives || !m.archive).sort((a,b) => (a.ordre || 0) - (b.ordre || 0) || a.nom.localeCompare(b.nom, 'fr'));
 }
 export const lireMagasin = (id) => lire('Store', id);
+export async function changerMagasinReference(id) {
+  const magasin = await lireMagasin(id);
+  if (!magasin || magasin.archive) throw new Error('Choisis un magasin actif comme référence.');
+  await ecrireReglage('magasinReference', id);
+  return magasin;
+}
 export async function creerMagasin(champs = {}) {
   const existants = await listerMagasins();
   const champsValides = validerChampsMagasin(champs, existants);
   const couleurs = ['#5B8CFF','#FF6B5E','#3DDC97','#B07CFF','#2EC4D6','#FF8FC7','#D9A066','#8FA3C7'];
   const couleur = champs.couleur || couleurs.find(c => !existants.some(m => m.couleur === c)) || couleurs[0];
   const magasin = { ...champsValides, id: idMagasinDepuisNom(champsValides.nom, existants), couleur,
-    modePrixHabituel: champs.modePrixHabituel || 'dernier', comparable: champs.comparable !== false,
+    modePrixHabituel: champs.modePrixHabituel || 'dernier',
     archive: false, ordre: existants.reduce((max,m) => Math.max(max, Number(m.ordre) || 0), 0) + 1 };
   await ajouter('Store', magasin);
   return magasin;
@@ -195,7 +233,6 @@ export async function modifierMagasin(id, champs = {}) {
   const prochain = { ...actuel, ...champsValides };
   if (champs.couleur !== undefined) prochain.couleur = champs.couleur;
   if (champs.modePrixHabituel !== undefined) prochain.modePrixHabituel = champs.modePrixHabituel;
-  if (champs.comparable !== undefined) prochain.comparable = champs.comparable;
   await mettre('Store', prochain);
   return prochain;
 }
@@ -203,6 +240,7 @@ export async function archiverMagasin(id) {
   const magasin = await lireMagasin(id);
   if (!magasin) throw new Error('Magasin introuvable.');
   if (magasin.archive) return magasin;
+  if (await lireReglage('magasinReference') === id) throw new Error("C'est ton magasin de référence : choisis-en un autre d'abord");
   const actifs = await listerMagasins({ inclureArchives: false });
   if (actifs.length <= 1) throw new Error('Impossible d’archiver le dernier magasin actif.');
   const prochain = actifs.find(m => m.id !== id);
@@ -222,6 +260,7 @@ export async function restaurerMagasin(id) {
 export async function supprimerMagasin(id) {
   const magasin = await lireMagasin(id);
   if (!magasin) throw new Error('Magasin introuvable.');
+  if (await lireReglage('magasinReference') === id) throw new Error("C'est ton magasin de référence : choisis-en un autre d'abord");
   const [releves, achats, actifs] = await Promise.all([toutLire('Observation'), toutLire('Purchase'), listerMagasins({ inclureArchives: false })]);
   const aDesDonnees = releves.some(o => o.magasin === id) || achats.some(a => a.magasin === id);
   if (!magasin.archive && actifs.length <= 1) {
@@ -550,22 +589,29 @@ export function supprimerReleve(id) {
 }
 
 // FR23 / E7.1 — achat associé au relevé enregistré, sans dépendance réseau.
-export async function enregistrerAchat({ type, observation, magasin, date, achete, quantite = 1, prixPayeCentimes, format, prixComparaisonCentimes = null, prixHabituelMemeMagasinCentimes = null, magasinComparaison = '' }) {
+export async function enregistrerAchat({ type, observation, magasin, date, achete, quantite = 1, prixPayeCentimes, format, prixHabituelMemeMagasinCentimes = null }) {
   if (!Number.isInteger(type) || type <= 0 || !Number.isInteger(observation) || observation <= 0) {
     throw new Error('Type ou relevé invalide pour cet achat.');
   }
   if (typeof magasin !== 'string' || !(await lireMagasin(magasin))) throw new Error('Magasin invalide.');
-  if (magasinComparaison && !(await lireMagasin(magasinComparaison))) throw new Error('Magasin de comparaison invalide.');
   if (!dateValide(date)) throw new Error('Date invalide.');
   if (!Number.isInteger(prixPayeCentimes) || prixPayeCentimes <= 0) throw new Error('Prix payé invalide.');
   if (!Number.isInteger(format) || format <= 0) throw new Error('Format invalide.');
   if (!Number.isInteger(quantite) || quantite < 1 || quantite > 999) throw new Error('Quantité invalide.');
-  for (const valeur of [prixComparaisonCentimes, prixHabituelMemeMagasinCentimes]) {
-    if (valeur !== null && (!Number.isInteger(valeur) || valeur <= 0)) throw new Error('Prix de comparaison invalide.');
-  }
+  if (prixHabituelMemeMagasinCentimes !== null && (!Number.isInteger(prixHabituelMemeMagasinCentimes) || prixHabituelMemeMagasinCentimes <= 0)) throw new Error('Prix habituel invalide.');
+  const referenceId = await lireReglage('magasinReference', MAGASINS_INITIAUX[0].id);
+  const [reference, produit, toutesObservations] = await Promise.all([
+    lireMagasin(referenceId), lire('ProductType', type), toutLire('Observation')
+  ]);
+  const observations = toutesObservations.filter(o => o.type === type && o.id !== observation);
+  const habituelReference = reference && !reference.archive && produit
+    ? prixHabituelMagasin(observations, reference, produit.unite, date)
+    : { ok: false };
+  const prixComparaisonCentimes = habituelReference.ok ? Math.round(habituelReference.valeur) : null;
+  const magasinComparaison = habituelReference.ok ? reference.id : '';
   return ajouter('Purchase', {
     type, observation, magasin, date, achete: achete ? 1 : 0, quantite,
-    prixPayeCentimes, format, prixComparaisonCentimes, prixHabituelMemeMagasinCentimes, magasinComparaison: magasinComparaison || ''
+    prixPayeCentimes, format, prixComparaisonCentimes, prixHabituelMemeMagasinCentimes, magasinComparaison
   });
 }
 

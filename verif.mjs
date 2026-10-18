@@ -186,6 +186,44 @@ if (playwright) {
       await ancienCtx.close();
     }
 
+
+    // Story 11-2 : migration réelle depuis la base v2, sans toucher aux relevés ni aux achats.
+    {
+      const migrationCtx = await navigateur.newContext({ viewport: { width: 390, height: 844 } });
+      const migrationPage = await migrationCtx.newPage();
+      await migrationPage.goto(base + 'tests.html');
+      const avant = await migrationPage.evaluate(() => new Promise((resolve, reject) => {
+        const req = indexedDB.open('appli-courses', 2);
+        req.onupgradeneeded = () => {
+          const db = req.result;
+          const types = db.createObjectStore('ProductType', { keyPath: 'id', autoIncrement: true }); types.createIndex('nomNormalise','nomNormalise',{unique:true});
+          const articles = db.createObjectStore('Article', { keyPath: 'codeBarres' }); articles.createIndex('type','type');
+          const obs = db.createObjectStore('Observation', { keyPath: 'id', autoIncrement: true }); obs.createIndex('type','type'); obs.createIndex('cleJour',['type','magasin','date','promo']);
+          const achats = db.createObjectStore('Purchase', { keyPath: 'id', autoIncrement: true }); achats.createIndex('type','type'); achats.createIndex('observation','observation');
+          const settings = db.createObjectStore('Settings', { keyPath: 'cle' });
+          settings.add({cle:'magasinCourant',valeur:'intermarche'}); settings.add({cle:'magasinReleveMensuel',valeur:'intermarche'});
+          const stores = db.createObjectStore('Store',{keyPath:'id'}); stores.createIndex('nomNormalise','nomNormalise',{unique:true});
+          stores.add({id:'leclerc',nom:'Leclerc',nomNormalise:'leclerc',enseigne:'Leclerc',localisation:'',couleur:'#5B8CFF',modePrixHabituel:'mediane',comparable:true,archive:false,ordre:1});
+          stores.add({id:'intermarche',nom:'Intermarché',nomNormalise:'intermarche',enseigne:'Intermarché',localisation:'',couleur:'#FF6B5E',modePrixHabituel:'dernier',comparable:false,archive:false,ordre:2});
+          types.add({id:142,nom:'Migration test',nomNormalise:'migration test',unite:'kg',archive:0});
+          obs.add({id:177,type:142,magasin:'leclerc',date:'2026-10-01',prixCentimes:250,format:250,promo:0});
+          achats.add({id:181,type:142,observation:177,magasin:'leclerc',date:'2026-10-01',achete:1,quantite:2,prixPayeCentimes:250,format:250,prixComparaisonCentimes:300,prixHabituelMemeMagasinCentimes:250,magasinComparaison:'intermarche'});
+        };
+        req.onsuccess=()=>{const db=req.result,tx=db.transaction(['Observation','Purchase'],'readonly'),o=tx.objectStore('Observation').get(177),a=tx.objectStore('Purchase').get(181);tx.oncomplete=()=>{resolve({observation:o.result,achat:a.result});db.close();};};
+        req.onerror=()=>reject(req.error);
+      }));
+      await migrationPage.goto(base);
+      await migrationPage.waitForFunction(()=>document.querySelector('#titre-ecran')?.textContent==='Magasin',null,{timeout:10000});
+      const apres=await migrationPage.evaluate(()=>new Promise((resolve,reject)=>{
+        const req=indexedDB.open('appli-courses');
+        req.onsuccess=()=>{const db=req.result,tx=db.transaction(['Observation','Purchase','Store','Settings'],'readonly'),o=tx.objectStore('Observation').get(177),a=tx.objectStore('Purchase').get(181),s=tx.objectStore('Store').getAll(),r=tx.objectStore('Settings').get('magasinReference');tx.oncomplete=()=>{resolve({observation:o.result,achat:a.result,magasins:s,reference:r.result?.valeur});db.close();};};
+        req.onerror=()=>reject(req.error);
+      }));
+      if(apres.reference!=='leclerc'||apres.magasins.some(m=>Object.prototype.hasOwnProperty.call(m,'comparable'))||JSON.stringify(apres.observation)!==JSON.stringify(avant.observation)||JSON.stringify(apres.achat)!==JSON.stringify(avant.achat)) throw new Error('migration v2 : référence, suppression du champ ou intégrité relevé/achat incorrecte');
+      ok('FR20 / Story 11-2 migration v2 : référence Leclerc, champ ancien supprimé, relevé et achat strictement intacts');
+      await migrationCtx.close();
+    }
+
     // 4. Tests du domaine (tests.html expose window.__resultats = { reussis, echecs, details })
     if (existsSync(join(racine, 'tests.html'))) {
       const ctx = await navigateur.newContext();
@@ -848,7 +886,7 @@ if (playwright) {
       const cheminSauvegarde = await telechargement.path();
       if (!cheminSauvegarde) throw new Error('fichier de sauvegarde non disponible');
       const sauvegardeJson = JSON.parse(readFileSync(cheminSauvegarde,'utf8'));
-      if (sauvegardeJson.schemaVersion !== 2 || !['types','articles','releves','achats','reglages','magasins'].every(k=>Array.isArray(sauvegardeJson[k]))) throw new Error('structure de sauvegarde incorrecte');
+      if (sauvegardeJson.schemaVersion !== 3 || !['types','articles','releves','achats','reglages','magasins'].every(k=>Array.isArray(sauvegardeJson[k])) || sauvegardeJson.magasinReference !== 'leclerc') throw new Error('structure de sauvegarde incorrecte');
       ok('E8.1 export JSON téléchargé et collections présentes');
       for (const cle of ['types','articles','releves','achats','reglages','magasins']) {
         if (JSON.stringify(sauvegardeJson[cle])!==JSON.stringify(snapshotAvantExport[cle])) throw new Error('aller-retour export différent pour '+cle);

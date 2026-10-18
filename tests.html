@@ -203,14 +203,14 @@ test('FR20 / E9 story 9-6','sauvegarde validée : les six collections restent id
   achats:[{id:1,type:1,observation:2,magasin:LE,date:'2026-10-13',achete:1,quantite:2,prixPayeCentimes:290,format:250,prixComparaisonCentimes:320,prixHabituelMemeMagasinCentimes:300,magasinComparaison:''}],
   reglages:[{cle:'seuilIndifference',valeur:8}],
   magasins:[
-   {id:LE,nom:'Leclerc',nomNormalise:'leclerc',enseigne:'Leclerc',localisation:'',couleur:'#5B8CFF',modePrixHabituel:'mediane',comparable:true,archive:false,ordre:1},
-   {id:IM,nom:'Intermarché',nomNormalise:'intermarche',enseigne:'Intermarché',localisation:'',couleur:'#FF6B5E',modePrixHabituel:'dernier',comparable:true,archive:false,ordre:2}
+   {id:LE,nom:'Leclerc',nomNormalise:'leclerc',enseigne:'Leclerc',localisation:'',couleur:'#5B8CFF',modePrixHabituel:'mediane',archive:false,ordre:1},
+   {id:IM,nom:'Intermarché',nomNormalise:'intermarche',enseigne:'Intermarché',localisation:'',couleur:'#FF6B5E',modePrixHabituel:'dernier',archive:false,ordre:2}
   ]
  };
  const payload=creerSauvegarde({schemaVersion:1,...collections,dateExport:'2026-10-13'});
  const validation=validerSauvegarde(payload,1);
  egal(validation.ok,true);
- for(const cle of ['types','articles','releves','achats','reglages','magasins'])egal(validation.valeur[cle],collections[cle],cle);
+ for(const cle of ['types','articles','releves','achats','magasins'])egal(validation.valeur[cle],collections[cle],cle);egal(validation.valeur.reglages.filter(r=>r.cle!=='magasinReference'),collections.reglages);egal(validation.valeur.magasinReference,'leclerc');
  egal(payload.dateExport,'2026-10-13');
 });
 
@@ -244,9 +244,9 @@ test('FR12 / Story 9-1','fréquence promo accepte un identifiant de magasin conf
 
 
 /* FR20 / E9 story 9-2 et 9-6 — migration et sauvegardes avec magasins. */
-test('FR20 / E9 story 9-6','export inclut les magasins et conserve leurs paramètres',()=>{const m=[{id:'leclerc-vannes',nom:'Leclerc Vannes',nomNormalise:'leclerc vannes',enseigne:'Leclerc',localisation:'Vannes',couleur:'#5B8CFF',modePrixHabituel:'mediane',comparable:true,archive:false,ordre:3},{id:'leclerc-rennes',nom:'Leclerc Rennes',nomNormalise:'leclerc rennes',enseigne:'Leclerc',localisation:'Rennes',couleur:'#FF6B5E',modePrixHabituel:'dernier',comparable:true,archive:false,ordre:4}];const p=creerSauvegarde({schemaVersion:2,types:[],articles:[],releves:[],achats:[],reglages:[],magasins:m,dateExport:'2026-10-18'});egal(p.magasins,m);});
-test('FR20 / E9 story 9-6','import ancien sans magasins recrée les deux magasins initiaux et normalise la version',()=>{const p={schemaVersion:1,dateExport:'2026-10-18',types:[],articles:[],releves:[],achats:[],reglages:[]};const r=validerSauvegarde(p,2);egal(r.ok,true);egal(r.valeur.schemaVersion,2);egal(r.valeur.magasins.map(m=>m.id),['leclerc','intermarche']);});
-test('FR20 / E9 story 9-6','import ancien conserve les relevés et ajoute un identifiant de comparaison vide aux achats',()=>{const p={schemaVersion:1,dateExport:'2026-10-18',types:[{id:1,nom:'Café',nomNormalise:'cafe',unite:'kg',archive:0}],articles:[],releves:[{id:1,type:1,magasin:'leclerc',date:'2026-10-10',prixCentimes:100,format:1000,promo:0}],achats:[{id:1,type:1,observation:1,magasin:'leclerc',date:'2026-10-10',achete:1,quantite:1,prixPayeCentimes:100,format:1000,prixComparaisonCentimes:120,prixHabituelMemeMagasinCentimes:120}],reglages:[]};const r=validerSauvegarde(p,2);egal(r.ok,true);egal(r.valeur.releves.length,1);egal(r.valeur.achats[0].magasinComparaison,'');});
+test('FR20 / E9 story 9-6','export inclut les magasins et conserve leurs paramètres',()=>{const m=[{id:'leclerc-vannes',nom:'Leclerc Vannes',nomNormalise:'leclerc vannes',enseigne:'Leclerc',localisation:'Vannes',couleur:'#5B8CFF',modePrixHabituel:'mediane',archive:false,ordre:3},{id:'leclerc-rennes',nom:'Leclerc Rennes',nomNormalise:'leclerc rennes',enseigne:'Leclerc',localisation:'Rennes',couleur:'#FF6B5E',modePrixHabituel:'dernier',archive:false,ordre:4}];const p=creerSauvegarde({schemaVersion:3,types:[],articles:[],releves:[],achats:[],reglages:[{cle:'magasinReference',valeur:'leclerc-rennes'}],magasins:m,magasinReference:'leclerc-rennes',dateExport:'2026-10-18'});egal(p.magasins,m);egal(p.magasinReference,'leclerc-rennes');});
+test('FR20 / E9 story 9-6','import ancien sans magasins recrée les deux magasins initiaux et normalise la version',()=>{const p={schemaVersion:1,dateExport:'2026-10-18',types:[],articles:[],releves:[],achats:[],reglages:[]};const r=validerSauvegarde(p,3);egal(r.ok,true);egal(r.valeur.schemaVersion,3);egal(r.valeur.magasins.map(m=>m.id),['leclerc','intermarche']);egal(r.valeur.magasinReference,'leclerc');});
+test('FR20 / E9 story 9-6','import ancien conserve les relevés et ajoute un identifiant de comparaison vide aux achats',()=>{const p={schemaVersion:1,dateExport:'2026-10-18',types:[{id:1,nom:'Café',nomNormalise:'cafe',unite:'kg',archive:0}],articles:[],releves:[{id:1,type:1,magasin:'leclerc',date:'2026-10-10',prixCentimes:100,format:1000,promo:0}],achats:[{id:1,type:1,observation:1,magasin:'leclerc',date:'2026-10-10',achete:1,quantite:1,prixPayeCentimes:100,format:1000,prixComparaisonCentimes:120,prixHabituelMemeMagasinCentimes:120}],reglages:[]};const r=validerSauvegarde(p,3);egal(r.ok,true);egal(r.valeur.releves.length,1);egal(r.valeur.achats[0].magasinComparaison,'');egal(r.valeur.magasinReference,'leclerc');});
 test('FR20 / E9 story 9-6','refuse une sauvegarde avec un relevé rattaché à un magasin absent',()=>{const p={schemaVersion:2,dateExport:'2026-10-18',types:[],articles:[],releves:[{id:1,type:1,magasin:'absent',date:'2026-10-10',prixCentimes:100,format:1000,promo:0}],achats:[],reglages:[],magasins:[{id:'leclerc',nom:'Leclerc',nomNormalise:'leclerc',enseigne:'Leclerc',localisation:'',couleur:'#5B8CFF',modePrixHabituel:'mediane',comparable:true,archive:false,ordre:1}]};egal(validerSauvegarde(p,2).ok,false);});
 
 test('FR26 / E9 story 9-1','achat migré sans magasin de comparaison exclu du cumul',()=>{const r=calculerEconomieRealisee({achete:1,quantite:1,prixPayeCentimes:100,format:1000,prixComparaisonCentimes:200,prixHabituelMemeMagasinCentimes:150,magasinComparaison:''},'kg');egal(r.ok,true);egal(r.compte,false);egal(r.exclu,true);egal(r.raison,'comparaison-indisponible');});
@@ -280,6 +280,28 @@ test('FR26 / Story 11-1','les achats non réalisés sont ignorés et les anciens
  const a={id:1,type:1,achete:1,quantite:1,prixPayeCentimes:100,format:1000,prixComparaisonCentimes:250,prixHabituelMemeMagasinCentimes:150,magasinComparaison:'ref',date:'2024-01-01'};
  const r=calculerEconomieDepuisDebut([a,{...a,id:2,achete:0}], [{id:1,unite:'kg'}], '2026-10-04','ref');
  egal(r.economieCentimes,150);egal(r.achatsComptes,1);
+});
+
+
+test('FR20 / Story 11-2','export et import conservent quatre magasins et une référence autre que Leclerc',()=>{
+ const magasins=[
+  {id:'leclerc',nom:'Leclerc',nomNormalise:'leclerc',enseigne:'Leclerc',localisation:'',couleur:'#5B8CFF',modePrixHabituel:'mediane',archive:false,ordre:1},
+  {id:'intermarche',nom:'Intermarché',nomNormalise:'intermarche',enseigne:'Intermarché',localisation:'',couleur:'#FF6B5E',modePrixHabituel:'dernier',archive:false,ordre:2},
+  {id:'marche-c',nom:'Marché C',nomNormalise:'marche c',enseigne:'',localisation:'C',couleur:'#3DDC97',modePrixHabituel:'dernier',archive:false,ordre:3},
+  {id:'marche-d',nom:'Marché D',nomNormalise:'marche d',enseigne:'',localisation:'D',couleur:'#B07CFF',modePrixHabituel:'dernier',archive:false,ordre:4}
+ ];
+ const collections={types:[],articles:[],releves:[],achats:[],reglages:[{cle:'magasinReference',valeur:'marche-d'}],magasins};
+ const p=creerSauvegarde({schemaVersion:3,...collections,magasinReference:'marche-d',dateExport:'2026-10-18'});
+ const r=validerSauvegarde(JSON.parse(JSON.stringify(p)),3);
+ egal(r.ok,true);egal(r.valeur.magasinReference,'marche-d');egal(r.valeur.magasins,magasins);egal(r.valeur.reglages.find(x=>x.cle==='magasinReference').valeur,'marche-d');
+});
+test('FR20 / Story 11-2','import ancien ignore le champ comparable et choisit la référence par défaut',()=>{
+ const p={schemaVersion:2,dateExport:'2026-10-18',types:[],articles:[],releves:[],achats:[],reglages:[],magasins:[
+  {id:'leclerc',nom:'Leclerc',nomNormalise:'leclerc',enseigne:'Leclerc',localisation:'',couleur:'#5B8CFF',modePrixHabituel:'mediane',comparable:false,archive:false,ordre:1},
+  {id:'intermarche',nom:'Intermarché',nomNormalise:'intermarche',enseigne:'Intermarché',localisation:'',couleur:'#FF6B5E',modePrixHabituel:'dernier',comparable:true,archive:false,ordre:2}
+ ]};
+ const r=validerSauvegarde(p,3);egal(r.ok,true);egal(r.valeur.magasinReference,'leclerc');
+ egal(Object.prototype.hasOwnProperty.call(r.valeur.magasins[0],'comparable'),false);
 });
 
 const ko=lignes.filter(r=>!r.ok), bilanTexte=ko.length?ko.length+' échec(s) sur '+lignes.length:'Tous les tests passent ('+lignes.length+')';

@@ -180,7 +180,7 @@ async function vueReglages() {
     try {
       const collections = await exporterCollections();
       const dateExport = aujourdHui();
-      const payload = creerSauvegarde({ schemaVersion: VERSION_SCHEMA, ...collections, dateExport });
+      const payload = creerSauvegarde({ schemaVersion: VERSION_SCHEMA, ...collections, magasinReference: await lireReglage('magasinReference'), dateExport });
       const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8' });
       const url = URL.createObjectURL(blob);
       const lien = document.createElement('a');
