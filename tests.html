@@ -191,7 +191,7 @@ test('FR22 / FR11','listeAvantCourses signale Intermarché sans relevé hors pro
 
 
  // FR20 / Story 8.2 — aller-retour en mémoire, sans IndexedDB.
-test('FR20','sauvegarde validée : les cinq collections restent identiques hors dateExport',()=>{
+test('FR20 / E9 story 9-6','sauvegarde validée : les six collections restent identiques hors dateExport',()=>{
  const collections={
   types:[{id:1,nom:'Café',nomNormalise:'cafe',unite:'kg',archive:0},{id:2,nom:'Lait',nomNormalise:'lait',unite:'l',archive:0}],
   articles:[{codeBarres:'9990001112223',type:1,marque:'Test',nom:'Café moulu',format:250}],
@@ -201,12 +201,16 @@ test('FR20','sauvegarde validée : les cinq collections restent identiques hors 
    {id:3,type:2,magasin:IM,date:'2026-10-13',prixCentimes:180,format:1000,promo:0}
   ],
   achats:[{id:1,type:1,observation:2,magasin:LE,date:'2026-10-13',achete:1,quantite:2,prixPayeCentimes:290,format:250,prixComparaisonCentimes:320,prixHabituelMemeMagasinCentimes:300,magasinComparaison:''}],
-  reglages:[{cle:'seuilIndifference',valeur:8}]
+  reglages:[{cle:'seuilIndifference',valeur:8}],
+  magasins:[
+   {id:LE,nom:'Leclerc',nomNormalise:'leclerc',enseigne:'Leclerc',localisation:'',couleur:'#5B8CFF',modePrixHabituel:'mediane',comparable:true,archive:false,ordre:1},
+   {id:IM,nom:'Intermarché',nomNormalise:'intermarche',enseigne:'Intermarché',localisation:'',couleur:'#FF6B5E',modePrixHabituel:'dernier',comparable:true,archive:false,ordre:2}
+  ]
  };
  const payload=creerSauvegarde({schemaVersion:1,...collections,dateExport:'2026-10-13'});
  const validation=validerSauvegarde(payload,1);
  egal(validation.ok,true);
- for(const cle of ['types','articles','releves','achats','reglages'])egal(validation.valeur[cle],collections[cle],cle);
+ for(const cle of ['types','articles','releves','achats','reglages','magasins'])egal(validation.valeur[cle],collections[cle],cle);
  egal(payload.dateExport,'2026-10-13');
 });
 
