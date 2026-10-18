@@ -270,9 +270,7 @@ export function calculerEconomieRealisee(achat, typeUnit) {
 // FR12 / E4.1 — fréquence des relevés promo par type et par magasin.
 export function frequencePromos(observations, magasin) {
   if (!Array.isArray(observations)) return { ok: false, raison: 'donnees-invalides', nbPromos: 0, nbReleves: 0, pourcentage: null };
-  if (magasin !== MAGASIN.LECLERC && magasin !== MAGASIN.INTERMARCHE) {
-    return { ok: false, raison: 'magasin-inconnu', nbPromos: 0, nbReleves: 0, pourcentage: null };
-  }
+  
   const retenus = observations.filter(o => o && o.magasin === magasin);
   if (!retenus.length) return { ok: false, raison: 'aucun-releve', nbPromos: 0, nbReleves: 0, pourcentage: null };
   const nbPromos = retenus.filter(o => o.promo === true || o.promo === 1).length;
@@ -311,5 +309,73 @@ export function listeAvantCourses(types, observations, seuil, dateCourante) {
       economiePourcent: plusCher > 0 ? Math.round(((plusCher - moinsCher) / plusCher) * 10000) / 100 : null,
       dateDernierPrix: null
     };
+  });
+}
+
+
+// FR10 / FR11 / FR14 / FR18 — prix habituels et comparaison pour des magasins configurables.
+// Cette API reçoit les magasins depuis l'appelant ; aucun identifiant de magasin n'y est codé en dur.
+export function prixHabituelMagasin(observations, magasin, typeUnit, aujourdhui) {
+  if (!magasin || typeof magasin.id !== 'string' || !['mediane', 'dernier'].includes(magasin.modePrixHabituel)) {
+    return { ok: false, raison: 'magasin-invalide', nbReleves: 0, dernierConnu: null };
+  }
+  const tous = normaliserTous(observations, typeUnit, magasin.id);
+  const horsPromo = tous.filter(o => !o.promo);
+  if (magasin.modePrixHabituel === 'dernier') {
+    const d = [...horsPromo].sort((a,b) => a.date !== b.date ? (a.date < b.date ? 1 : -1) : (b.id || 0) - (a.id || 0))[0];
+    if (!d) return { ok: false, raison: 'aucun-releve-hors-promo', nbReleves: 0, dernierConnu: dernierConnu(tous) };
+    return { ok: true, magasin: magasin.id, type: 'dernier', valeur: d.valeur, date: d.date, nbReleves: horsPromo.length, dernierConnu: dernierConnu(tous) };
+  }
+  const retenus = horsPromo.filter(o => { const j = joursEntre(o.date, aujourdhui); return j >= 0 && j <= FENETRE_JOURS; });
+  if (retenus.length < MIN_RELEVES_REFERENCE) return { ok: false, raison: 'releves-insuffisants', nbReleves: retenus.length, dernierConnu: dernierConnu(tous) };
+  return { ok: true, magasin: magasin.id, type: 'mediane', valeur: mediane(retenus.map(o => o.valeur)), nbReleves: retenus.length, fenetreJours: FENETRE_JOURS, dernierConnu: dernierConnu(tous) };
+}
+
+export function trouverMagasinComparaison({ observations, magasins, magasinCourant, typeUnit, aujourdhui }) {
+  const candidats = (Array.isArray(magasins) ? magasins : [])
+    .filter(m => m && !m.archive && m.comparable && m.id !== magasinCourant)
+    .map(m => ({ magasin: m, habituel: prixHabituelMagasin(observations, m, typeUnit, aujourdhui) }))
+    .filter(x => x.habituel.ok && x.habituel.valeur > 0)
+    .sort((a,b) => a.habituel.valeur - b.habituel.valeur || (a.magasin.ordre || 0) - (b.magasin.ordre || 0));
+  return candidats.length ? { ok: true, magasin: candidats[0].magasin, habituel: candidats[0].habituel, candidats } : { ok: false, raison: 'aucun-magasin-comparable', magasin: null, habituel: null, candidats: [] };
+}
+
+export function calculerVerdictMagasins({ prixCentimes, formatBase, typeUnit, magasinCourant, magasins, observations, aujourdhui, seuilPct, promo = false }) {
+  const jour = prixNormalise(prixCentimes, formatBase, typeUnit);
+  const base = { magasin: magasinCourant, magasinComparaison: null, promo: Boolean(promo) };
+  if (!jour.ok) return { ...base, resultat: VERDICT.INSUFFISANT, raison: 'saisie-invalide', erreur: jour.erreur, dernierConnu: null };
+  const comparaison = trouverMagasinComparaison({ observations, magasins, magasinCourant, typeUnit, aujourdhui });
+  if (!comparaison.ok) {
+    const connus = (Array.isArray(observations) ? observations : [])
+      .filter(o => o && magasins?.some(m => m.id === o.magasin))
+      .map(o => ({ date: o.date, magasin: o.magasin }))
+      .filter(o => typeof o.date === 'string').sort((a,b) => a.date !== b.date ? (a.date < b.date ? 1 : -1) : 0);
+    return { ...base, resultat: VERDICT.INSUFFISANT, raison: 'aucun-magasin-comparable', dernierConnu: connus[0] || null };
+  }
+  const habituel = comparaison.habituel;
+  const seuil = seuilFraction(seuilPct), ecart = (jour.centimesParUnite - habituel.valeur) / habituel.valeur;
+  let resultat = VERDICT.INDIFFERENT;
+  if (ecart <= -seuil + EPSILON) resultat = VERDICT.ACHETER_ICI;
+  else if (ecart >= seuil - EPSILON) resultat = VERDICT.ATTENDRE;
+  const diffUnite = jour.centimesParUnite - habituel.valeur;
+  const diffFormat = (diffUnite * formatBase) / DIVISEUR[typeUnit];
+  return { ...base, magasinComparaison: comparaison.magasin.id, resultat, ecart, seuil, prixJourNormalise: jour.centimesParUnite, habituelComparaison: habituel, differenceUniteCentimes: arrondirCentimes(diffUnite), differenceFormatCentimes: arrondirCentimes(diffFormat) };
+}
+
+export function listeAvantCoursesMagasins(types, observations, magasins, seuil, dateCourante) {
+  const actifs = (Array.isArray(types) ? types : []).filter(type => type && !type.archive);
+  const releves = Array.isArray(observations) ? observations : [];
+  const comparables = (Array.isArray(magasins) ? magasins : []).filter(m => m && !m.archive && m.comparable);
+  return actifs.map(type => {
+    const parMagasin = comparables.map(m => ({ magasin: m, habituel: prixHabituelMagasin(releves.filter(o => o && o.type === type.id), m, type.unite, dateCourante) }))
+      .filter(x => x.habituel.ok && x.habituel.valeur > 0)
+      .sort((a,b) => a.habituel.valeur - b.habituel.valeur || (a.magasin.ordre || 0) - (b.magasin.ordre || 0));
+    const tousType = releves.filter(o => o && o.type === type.id);
+    const dates = tousType.map(o => o.date).filter(Boolean).sort();
+    const dateDernierPrix = dates.length ? dates[dates.length - 1] : null;
+    if (parMagasin.length < 2) return { typeId: type.id, resultat: 'donnees-insuffisantes', magasin: null, prixNormaliseCentimes: parMagasin[0] ? arrondirCentimes(parMagasin[0].habituel.valeur) : null, economiePourcent: null, dateDernierPrix };
+    const moinsCher = parMagasin[0], deuxieme = parMagasin[1], ecart = (moinsCher.habituel.valeur - deuxieme.habituel.valeur) / deuxieme.habituel.valeur;
+    const resultat = ecart <= -seuilFraction(seuil) + EPSILON ? moinsCher.magasin.id : 'indifferent';
+    return { typeId: type.id, resultat, magasin: resultat === 'indifferent' ? null : moinsCher.magasin.id, prixNormaliseCentimes: arrondirCentimes(moinsCher.habituel.valeur), economiePourcent: deuxieme.habituel.valeur > 0 ? Math.round(((deuxieme.habituel.valeur - moinsCher.habituel.valeur) / deuxieme.habituel.valeur) * 10000) / 100 : null, dateDernierPrix: null, magasinsDisponibles: parMagasin.map(x => ({ id: x.magasin.id, valeur: x.habituel.valeur, date: x.habituel.date || null, nbReleves: x.habituel.nbReleves })) };
   });
 }
