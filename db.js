@@ -11,7 +11,7 @@
 //                   prixHabituelMemeMagasinCentimes|null (prix habituel hors promo du MÊME magasin, figé à la date) }
 //   Settings    : { cle (clé), valeur }
 
-import { normaliserNom, prixNormalise, decisionDoublon, analyserDoublon, cleDoublon, verifierFormat, MAGASIN, trierReleves } from './domain.js';
+import { normaliserNom, prixNormalise, decisionDoublon, analyserDoublon, cleDoublon, verifierFormat, trierReleves } from './domain.js';
 
 export const NOM_BASE = 'appli-courses';
 export const VERSION_SCHEMA = 2;

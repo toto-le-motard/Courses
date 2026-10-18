@@ -1,6 +1,6 @@
 // app.js — interface et navigation (stories 1.2 à 3-2).
 import { initDb, dbPrete, listerTypes, creerTypeEtArticle, annulerCreationTypeEtArticle, lireDernierReleve, lireObservations, dernierReleve, trouverDoublon, enregistrerReleves, analyserDoublons, annulerEnregistrement, listerReleves, modifierReleve, supprimerReleve, enregistrerAchat, listerAchats, modifierAchat, supprimerAchat, demanderStockagePersistant, lireReglage, ecrireReglage, compter, STORES, VERSION_SCHEMA, exporterCollections, remplacerCollections, lire, mettre, toutLire, supprimer, listerMagasins, lireMagasin, creerMagasin, modifierMagasin, archiverMagasin, restaurerMagasin, supprimerMagasin } from './db.js';
-import { MAGASIN, UNITES, LIBELLE_UNITE, VERDICT, analyserPrixSaisie, verifierFormat, prixNormalise, formaterPrixEuros, formaterPrixNormalise, calculerVerdict, prixHabituel, calculerEconomieRealisee, estPrixIncoherent, unitesCompatibles, formatAffichage, calculerPositionDock, modeSaisieActif, positionDefilement, frequencePromos, listeAvantCourses, deduireUniteComparaison, normaliserNom, calculerVerdictMagasins, prixHabituelMagasin, listeAvantCoursesMagasins } from './domain.js';
+import { UNITES, LIBELLE_UNITE, VERDICT, analyserPrixSaisie, verifierFormat, prixNormalise, formaterPrixEuros, formaterPrixNormalise, calculerEconomieRealisee, estPrixIncoherent, unitesCompatibles, formatAffichage, calculerPositionDock, modeSaisieActif, positionDefilement, frequencePromos, deduireUniteComparaison, normaliserNom, calculerVerdictMagasins, prixHabituelMagasin, listeAvantCoursesMagasins } from './domain.js';
 import { accueilVide, vueTypes, vueTypeForm } from './types-ui.js';
 import { creerSauvegarde, validerSauvegarde, etatRappelExport } from './backup.js';
 
@@ -11,7 +11,7 @@ const onglets = document.querySelectorAll('.tabs a');
 
 let versionAppli = '…';
 let diagnostic = { base: 'ouverture…', persistant: '…', lancements: '…', comptes: '' };
-let magasinCourant = MAGASIN.LECLERC;
+let magasinCourant = '';
 let magasinsTous = [];
 let magasinsDisponibles = [];
 async function actualiserMagasins() { magasinsTous = await listerMagasins(); magasinsDisponibles = magasinsTous.filter(m => !m.archive); return magasinsTous; }
@@ -141,7 +141,7 @@ function dateAffichee(s) {
   const [a,m,j] = s.split('-');
   return j + '/' + m + '/' + a;
 }
-function libelleMagasin(m) { const magasin = magasinsTous.find(s => s.id === m); return magasin?.nom || (m === MAGASIN.LECLERC ? 'Leclerc' : m === MAGASIN.INTERMARCHE ? 'Intermarché' : String(m || 'Magasin')); }
+function libelleMagasin(m) { const magasin = magasinsTous.find(s => s.id === m); return magasin?.nom || String(m || 'Magasin'); }
 function classeMagasin(m) { return 'magasin-' + String(m || 'inconnu').normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').toLowerCase().replace(/[^a-z0-9-]+/g,'-'); }
 function couleurMagasin(id) { return magasinsTous.find(s => s.id === id)?.couleur || '#8FA3C7'; }
 
@@ -277,7 +277,7 @@ async function vueReglages() {
       el('label',{class:'option-comparable'},comparable,el('span',{text:'Participe aux comparaisons'})),
       erreur,
       el('div',{class:'feuille-actions'},
-        el('button',{type:'button',class:'btn btn-primaire',text:'Enregistrer',onclick:async()=>{try{const champs={nom:nom.value,enseigne:enseigne.value,localisation:localisation.value,couleur:couleurChoisie.value,modePrixHabituel:mode.value,comparable:comparable.checked};if(magasin)await modifierMagasin(magasin.id,champs);else await creerMagasin(champs);dialogue.close();await actualiserMagasins();magasinCourant=await lireReglage('magasinCourant',magasinsDisponibles[0]?.id||'leclerc');await afficher();}catch(e){erreur.textContent=e.message||'Enregistrement impossible.';erreur.hidden=false;}}}),
+        el('button',{type:'button',class:'btn btn-primaire',text:'Enregistrer',onclick:async()=>{try{const champs={nom:nom.value,enseigne:enseigne.value,localisation:localisation.value,couleur:couleurChoisie.value,modePrixHabituel:mode.value,comparable:comparable.checked};if(magasin)await modifierMagasin(magasin.id,champs);else await creerMagasin(champs);dialogue.close();await actualiserMagasins();magasinCourant=await lireReglage('magasinCourant',magasinsDisponibles[0]?.id||'');await afficher();}catch(e){erreur.textContent=e.message||'Enregistrement impossible.';erreur.hidden=false;}}}),
         el('button',{type:'button',class:'btn btn-secondaire',text:'Annuler',onclick:()=>dialogue.close()})
       )
     );
@@ -516,7 +516,7 @@ async function vueMagasin() {
       if (statutAchat === 1) {
         const historiqueAvant = await lireObservations(typeChoisi.id);
         const seuilPct = await lireReglage('seuilIndifference', 5);
-        verdictAchat = calculerVerdict({ prixCentimes, formatBase:format.formatBase, typeUnit:typeChoisi.unite, magasin:magasinCourant, observations:historiqueAvant, aujourdhui:date, seuilPct, promo:promo.checked });
+        verdictAchat = calculerVerdictMagasins({ prixCentimes, formatBase:format.formatBase, typeUnit:typeChoisi.unite, magasinCourant, magasins:magasinsTous, observations:historiqueAvant, aujourdhui:date, seuilPct, promo:promo.checked });
       }
       const jeton = await enregistrerReleves(observations, { remplacements });
       if (statutAchat === 1) {
@@ -1093,7 +1093,7 @@ function vueHistorique(typeId, integre = false) {
   }
   function afficherEdition(o){
     const d=el('dialog',{class:'feuille feuille-edition'});
-    const magasin=el('select',{class:'champ'}); magasin.append(...[MAGASIN.LECLERC,MAGASIN.INTERMARCHE].map(m=>el('option',{value:m,text:libelleMagasin(m)})));magasin.value=o.magasin;
+    const magasin=el('select',{class:'champ'}); magasin.append(...magasinsTous.map(m=>el('option',{value:m.id,text:m.nom+(m.archive?' (archivé)':'')})));magasin.value=o.magasin;
     const prix=el('input',{class:'champ',inputmode:'decimal',value:String((o.prixCentimes/100).toFixed(2)).replace('.',',')});
     const format=el('input',{class:'champ',type:'number',inputmode:'decimal'});
     const unite=el('select',{class:'champ'}), compatibles=unitesCompatibles(type.unite);
@@ -1180,7 +1180,7 @@ async function vueReleveMensuel() {
   const boutonQuitter = el('button', { type: 'button', class: 'btn btn-secondaire', text: 'Quitter', onclick: () => { location.hash = '#/types'; } });
   actions.append(boutonPasser, boutonSuivant);
   racine.append(boutonQuitter, progression, contenu, zoneMiniVerdict, message, actions);
-  let magasinMensuel = await lireReglage('magasinReleveMensuel', MAGASIN.INTERMARCHE);
+  let magasinMensuel = await lireReglage('magasinReleveMensuel', magasinsDisponibles[0]?.id || '');
   if (!magasinsDisponibles.some(m=>m.id===magasinMensuel)) magasinMensuel=magasinsDisponibles[0]?.id || '';
   let feuilleChoixMagasin = null;
   let index = 0, saisis = 0, passes = 0, date = aujourdHui(), typeActuel = null, tokenVerdict = 0;
@@ -1523,8 +1523,8 @@ window.addEventListener('hashchange', () => { void afficher(); }); void afficher
   try {
     await initDb();
     await actualiserMagasins();
-    magasinCourant = await lireReglage('magasinCourant', magasinsDisponibles[0]?.id || MAGASIN.LECLERC);
-    if (!magasinsDisponibles.some(m => m.id === magasinCourant)) magasinCourant = magasinsDisponibles[0]?.id || MAGASIN.LECLERC;
+    magasinCourant = await lireReglage('magasinCourant', magasinsDisponibles[0]?.id || '');
+    if (!magasinsDisponibles.some(m => m.id === magasinCourant)) magasinCourant = magasinsDisponibles[0]?.id || '';
     diagnostic.base = 'ouverte (schéma v' + VERSION_SCHEMA + ')';
     const ok = await demanderStockagePersistant();
     diagnostic.persistant = ok === null ? 'non géré par ce navigateur' : (ok ? 'oui' : 'non (pensez à exporter régulièrement)');

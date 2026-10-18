@@ -711,7 +711,7 @@ if (playwright) {
       await page.evaluate(()=>new Promise((resolve,reject)=>{
         const rq=indexedDB.open('appli-courses');rq.onsuccess=()=>{const db=rq.result,tx=db.transaction(['Observation','Purchase'],'readwrite');
           tx.objectStore('Observation').put({id:9979,type:9992,magasin:'leclerc',date:'2031-03-02',prixCentimes:600,format:500,promo:0});
-          tx.objectStore('Purchase').put({id:9979,type:9992,observation:9979,magasin:'leclerc',date:'2031-03-02',achete:1,quantite:1,prixPayeCentimes:550,format:500,prixComparaisonCentimes:700,prixHabituelMemeMagasinCentimes:650,magasinComparaison:''});
+          tx.objectStore('Purchase').put({id:9979,type:9992,observation:9979,magasin:'leclerc',date:'2031-03-02',achete:1,quantite:1,prixPayeCentimes:550,format:500,prixComparaisonCentimes:700,prixHabituelMemeMagasinCentimes:650,magasinComparaison:'intermarche'});
           tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error);
         };rq.onerror=()=>reject(rq.error);
       }));
@@ -729,10 +729,10 @@ if (playwright) {
       await page.evaluate(()=>new Promise((resolve,reject)=>{
         const rq=indexedDB.open('appli-courses');rq.onsuccess=()=>{const db=rq.result,tx=db.transaction('Purchase','readwrite'),s=tx.objectStore('Purchase');
           for(const id of [9901,9902,9903,9904])s.delete(id);
-          s.put({id:9901,type:9992,observation:9921,magasin:'leclerc',date:'2031-02-01',achete:1,quantite:2,prixPayeCentimes:200,format:500,prixComparaisonCentimes:500,prixHabituelMemeMagasinCentimes:600,magasinComparaison:''});
-          s.put({id:9902,type:9992,observation:9922,magasin:'intermarche',date:'2031-02-02',achete:1,quantite:1,prixPayeCentimes:1500,format:1000,prixComparaisonCentimes:1000,prixHabituelMemeMagasinCentimes:null,magasinComparaison:''});
+          s.put({id:9901,type:9992,observation:9921,magasin:'leclerc',date:'2031-02-01',achete:1,quantite:2,prixPayeCentimes:200,format:500,prixComparaisonCentimes:500,prixHabituelMemeMagasinCentimes:600,magasinComparaison:'intermarche'});
+          s.put({id:9902,type:9992,observation:9922,magasin:'intermarche',date:'2031-02-02',achete:1,quantite:1,prixPayeCentimes:1500,format:1000,prixComparaisonCentimes:1000,prixHabituelMemeMagasinCentimes:null,magasinComparaison:'leclerc'});
           s.put({id:9903,type:9992,observation:9923,magasin:'leclerc',date:'2031-02-03',achete:1,quantite:1,prixPayeCentimes:300,format:500,prixComparaisonCentimes:null,prixHabituelMemeMagasinCentimes:500,magasinComparaison:''});
-          s.put({id:9904,type:9992,observation:9924,magasin:'leclerc',date:'2031-02-04',achete:0,quantite:5,prixPayeCentimes:100,format:1000,prixComparaisonCentimes:500,prixHabituelMemeMagasinCentimes:600,magasinComparaison:''});
+          s.put({id:9904,type:9992,observation:9924,magasin:'leclerc',date:'2031-02-04',achete:0,quantite:5,prixPayeCentimes:100,format:1000,prixComparaisonCentimes:500,prixHabituelMemeMagasinCentimes:600,magasinComparaison:'intermarche'});
           tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error);
         };rq.onerror=()=>reject(rq.error);
       }));
@@ -761,7 +761,7 @@ if (playwright) {
       ok('E7.5 Bilan : total négatif, cible 100 €, gains promo, exclusions, navigation et état vide');
       // Relecture adverse E7 : supprimer un relevé lié ne doit ni effacer ni laisser pointer l’achat vers rien.
       etapeParcours = 'E7 suppression relevé lié à achat';
-      await page.evaluate(()=>new Promise((resolve,reject)=>{const rq=indexedDB.open('appli-courses');rq.onsuccess=()=>{const db=rq.result,tx=db.transaction(['Observation','Purchase'],'readwrite');tx.objectStore('Observation').put({id:9931,type:9992,magasin:'leclerc',date:'2031-03-01',prixCentimes:250,format:500,promo:0});tx.objectStore('Purchase').put({id:9932,type:9992,observation:9931,magasin:'leclerc',date:'2031-03-01',achete:1,quantite:1,prixPayeCentimes:250,format:500,prixComparaisonCentimes:300,prixHabituelMemeMagasinCentimes:350,magasinComparaison:''});tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error)};rq.onerror=()=>reject(rq.error)}));
+      await page.evaluate(()=>new Promise((resolve,reject)=>{const rq=indexedDB.open('appli-courses');rq.onsuccess=()=>{const db=rq.result,tx=db.transaction(['Observation','Purchase'],'readwrite');tx.objectStore('Observation').put({id:9931,type:9992,magasin:'leclerc',date:'2031-03-01',prixCentimes:250,format:500,promo:0});tx.objectStore('Purchase').put({id:9932,type:9992,observation:9931,magasin:'leclerc',date:'2031-03-01',achete:1,quantite:1,prixPayeCentimes:250,format:500,prixComparaisonCentimes:300,prixHabituelMemeMagasinCentimes:350,magasinComparaison:'intermarche'});tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error)};rq.onerror=()=>reject(rq.error)}));
       await page.evaluate(async()=>{const db=await import('/db.js');await db.supprimerReleve(9931);});
       const apresSuppressionLiee=await page.evaluate(()=>new Promise((resolve,reject)=>{const rq=indexedDB.open('appli-courses');rq.onsuccess=()=>{const db=rq.result,tx=db.transaction(['Observation','Purchase'],'readonly'),obs=tx.objectStore('Observation').get(9931),achat=tx.objectStore('Purchase').get(9932);tx.oncomplete=()=>resolve({observation:obs.result,achat:achat.result});tx.onerror=()=>reject(tx.error)};rq.onerror=()=>reject(rq.error)}));
       if(apresSuppressionLiee.observation)throw new Error('E7 : relevé lié non supprimé');
@@ -779,7 +779,7 @@ if (playwright) {
           tx.objectStore('Article').put({codeBarres:'9990001112223',type:9001,marque:'Test',nom:'Produit sauvegarde',format:500});
           tx.objectStore('Observation').put({id:9001,type:9001,magasin:'leclerc',date:'2026-10-01',prixCentimes:250,format:500,promo:1});
           tx.objectStore('Observation').put({id:9002,type:9001,magasin:'intermarche',date:'2026-10-02',prixCentimes:300,format:500,promo:0});
-          tx.objectStore('Purchase').put({id:9001,type:9001,observation:9001,magasin:'leclerc',date:'2026-10-01',achete:1,quantite:2,prixPayeCentimes:250,format:500,prixComparaisonCentimes:300,prixHabituelMemeMagasinCentimes:350,magasinComparaison:''});
+          tx.objectStore('Purchase').put({id:9001,type:9001,observation:9001,magasin:'leclerc',date:'2026-10-01',achete:1,quantite:2,prixPayeCentimes:250,format:500,prixComparaisonCentimes:300,prixHabituelMemeMagasinCentimes:350,magasinComparaison:'intermarche'});
           tx.objectStore('Settings').put({cle:'e8Fixture',valeur:'conserver'});
           tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error);
         };
