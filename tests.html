@@ -23,7 +23,7 @@ const MAGASINS_PAR_DEFAUT_TEST=[
  {id:IM,nom:'Intermarché',modePrixHabituel:'dernier',comparable:true,archive:false,ordre:2}
 ];
 const referenceLeclerc=(obs,unit,date)=>prixHabituelMagasin(obs,MAGASINS_PAR_DEFAUT_TEST[0],unit,date);
-const habituelIntermarche=(obs,unit,date=AUJ)=>prixHabituelMagasin(obs,MAGASINS_PAR_DEFAUT_TEST[1],unit,date);
+const habituelIntermarche=(obs,unit,date=AUJ)=>{const r=prixHabituelMagasin(obs,MAGASINS_PAR_DEFAUT_TEST[1],unit,date);return r.ok?{ok:true,magasin:r.magasin,type:r.type,valeur:r.valeur,date:r.date}:{ok:false,raison:r.raison,nbReleves:r.nbReleves,dernierConnu:r.dernierConnu};};
 const autreMagasin=id=>id===LE?IM:id===IM?LE:null;
 const prixHabituel=(obs,id,unit,date)=>{const m=MAGASINS_PAR_DEFAUT_TEST.find(x=>x.id===id);return m?prixHabituelMagasin(obs,m,unit,date):{ok:false,raison:'magasin-inconnu',nbReleves:0,dernierConnu:null};};
 const prixHabituelAutreMagasin=(obs,id,unit,date)=>{const r=trouverMagasinComparaison({observations:obs,magasins:MAGASINS_PAR_DEFAUT_TEST,magasinCourant:id,typeUnit:unit,aujourdhui:date});return r.ok?r.habituel:{ok:false,raison:r.raison,nbReleves:0,dernierConnu:null};};
@@ -154,7 +154,7 @@ const typesListe=[{id:101,unite:'kg',archive:0},{id:102,unite:'kg',archive:0},{i
 const obsListe=[
  ...[1,2,3].map(n=>({type:101,magasin:LE,date:'2026-10-0'+n,prixCentimes:100,format:1000,promo:0})),{type:101,magasin:IM,date:'2026-10-03',prixCentimes:120,format:1000,promo:0},
  ...[1,2,3].map(n=>({type:102,magasin:LE,date:'2026-10-0'+n,prixCentimes:100,format:1000,promo:0})),{type:102,magasin:IM,date:'2026-10-03',prixCentimes:90,format:1000,promo:0},
- ...[1,2,3].map(n=>({type:103,magasin:LE,date:'2026-10-0'+n,prixCentimes:100,format:1000,promo:0})),{type:103,magasin:IM,date:'2026-10-03',prixCentimes:105,format:1000,promo:0},
+ ...[1,2,3].map(n=>({type:103,magasin:LE,date:'2026-10-0'+n,prixCentimes:100,format:1000,promo:0})),{type:103,magasin:IM,date:'2026-10-03',prixCentimes:100,format:1000,promo:0},
  {type:104,magasin:LE,date:'2026-10-03',prixCentimes:100,format:1000,promo:0},{type:104,magasin:LE,date:'2026-10-03',prixCentimes:1,format:1000,promo:1},{type:104,magasin:IM,date:'2026-10-03',prixCentimes:110,format:1000,promo:0},
  {type:105,magasin:LE,date:'2026-10-03',prixCentimes:10,format:1000,promo:0}
 ];
