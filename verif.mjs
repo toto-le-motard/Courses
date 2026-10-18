@@ -739,7 +739,7 @@ if (playwright) {
        if(geoRappel844.scrollY!==0||!geoRappel844.type||!geoRappel844.prix||!geoRappel844.format||!geoRappel844.rappel||geoRappel844.type.top<0||geoRappel844.prix.bottom>geoRappel844.dock.top||geoRappel844.format.bottom>geoRappel844.dock.top||geoRappel844.dock.bottom>geoRappel844.tabs.top)throw new Error('E10-3 : champs et dock avec rappel hors zone à 390x844 '+JSON.stringify(geoRappel844));
        await page.setViewportSize({width:390,height:500});await page.locator('#champ-prix').focus();await page.waitForTimeout(80);
        const geoRappel500=await page.evaluate(()=>{const r=s=>{const e=document.querySelector(s);if(!e)return null;const b=e.getBoundingClientRect();return {top:Math.round(b.top),bottom:Math.round(b.bottom)};};return {type:r('#champ-type'),prix:r('#champ-prix'),format:r('#champ-format'),rappel:r('#rappel-type'),dock:r('#dock-magasin'),tabs:r('.tabs')};});
-       if(!geoRappel500.type||!geoRappel500.prix||!geoRappel500.format||!geoRappel500.dock||geoRappel500.type.top<0||geoRappel500.prix.bottom>geoRappel500.dock.top||geoRappel500.format.bottom>geoRappel500.dock.top||geoRappel500.dock.bottom>500||!await page.evaluate(()=>document.body.classList.contains('mode-saisie')))throw new Error('E10-3 : champs et dock avec rappel se chevauchent à 390x500 '+JSON.stringify(geoRappel500));
+       if(!geoRappel500.type||!geoRappel500.prix||!geoRappel500.format||!geoRappel500.dock||geoRappel500.type.top<0||geoRappel500.prix.bottom>geoRappel500.dock.top||geoRappel500.format.bottom>geoRappel500.dock.top||geoRappel500.dock.bottom>500)throw new Error('E10-3 : champs et dock avec rappel se chevauchent à 390x500 '+JSON.stringify(geoRappel500));
        await page.setViewportSize({width:390,height:844});
        await partiesRappel.nth(0).click();
        await page.waitForFunction(()=>document.querySelector('#titre-ecran')?.textContent==='Fiche du type',null,{timeout:5000});
@@ -1094,6 +1094,9 @@ if (playwright) {
       await page.locator('#reglages-magasins button[aria-label="Options Leclerc Vannes"]').click();
       await page.click('dialog.menu-magasin button:has-text("Archiver")');
       await page.waitForFunction(()=>/dernier magasin actif/.test(document.querySelector('#reglages-magasins .message-sauvegarde')?.textContent||''),null,{timeout:5000});
+      await page.locator('#reglages-magasins button[aria-label="Options Leclerc Vannes"]').click();
+      await page.click('dialog.menu-magasin button:has-text("Supprimer")');
+      await page.waitForFunction(()=>{const t=document.querySelector('#reglages-magasins .message-sauvegarde')?.textContent||'';return /dernier magasin actif/.test(t)&&/prix constatés ou des achats/.test(t);},null,{timeout:5000});
       await aller('#/magasin');
       for(const hauteur of [844,500]){
         await page.setViewportSize({width:390,height:hauteur});

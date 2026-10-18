@@ -469,8 +469,8 @@ svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width:
   .ecran-magasin .formulaire-releve { gap:4px; }
   .ecran-magasin .formulaire-releve .etiquette { margin-top:2px; margin-bottom:0; }
   .ecran-magasin .formulaire-releve .champ { min-height:38px; padding-top:4px; padding-bottom:4px; }
-  .rappel-type { min-height:28px; }
-  .rappel-type-partie { height:28px; }
+  .rappel-type { min-height:32px; }
+  .rappel-type-partie { height:32px; }
 }
 @media (prefers-reduced-motion:reduce) { .ligne-releve-highlight { scroll-behavior:auto; } }
 

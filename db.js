@@ -223,8 +223,12 @@ export async function supprimerMagasin(id) {
   const magasin = await lireMagasin(id);
   if (!magasin) throw new Error('Magasin introuvable.');
   const [releves, achats, actifs] = await Promise.all([toutLire('Observation'), toutLire('Purchase'), listerMagasins({ inclureArchives: false })]);
-  if (releves.some(o => o.magasin === id) || achats.some(a => a.magasin === id)) throw new Error('Ce magasin a des prix constatés ou des achats : archivez-le pour le retirer');
-  if (!magasin.archive && actifs.length <= 1) throw new Error('Impossible de supprimer le dernier magasin actif.');
+  const aDesDonnees = releves.some(o => o.magasin === id) || achats.some(a => a.magasin === id);
+  if (!magasin.archive && actifs.length <= 1) {
+    if (aDesDonnees) throw new Error('Impossible de supprimer le dernier magasin actif. Ce magasin a des prix constatés ou des achats : archivez-le pour le retirer');
+    throw new Error('Impossible de supprimer le dernier magasin actif.');
+  }
+  if (aDesDonnees) throw new Error('Ce magasin a des prix constatés ou des achats : archivez-le pour le retirer');
   await supprimer('Store', id);
   if (!magasin.archive && await lireReglage('magasinCourant', MAGASINS_INITIAUX[0].id) === id) await ecrireReglage('magasinCourant', actifs.find(m => m.id !== id)?.id || '');
   if (!magasin.archive && await lireReglage('magasinReleveMensuel', MAGASINS_INITIAUX[1].id) === id) await ecrireReglage('magasinReleveMensuel', actifs.find(m => m.id !== id)?.id || '');
