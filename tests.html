@@ -307,6 +307,17 @@ test('FR20 / Story 11-2','import ancien ignore le champ comparable et choisit la
 
 test('FR33 / Story 11-3','les magasins actifs ne portent plus de propriété de participation',()=>{const magasins=MAGASINS_TEST.map(({comparable,...m})=>m).filter(m=>!m.archive);egal(magasins.some(m=>m.id==='d'),true);egal(magasins.every(m=>!Object.prototype.hasOwnProperty.call(m,'comparable')),true);});
 
+
+test('FR26 / Story 11-1','une économie réalisée peut être négative',()=>{
+ const r=calculerEconomieRealisee({achete:1,quantite:1,prixPayeCentimes:200,format:1000,prixComparaisonCentimes:100,prixHabituelMemeMagasinCentimes:300,magasinComparaison:'ref'},'kg');
+ egal(r.economieCentimes,-100);
+});
+test('FR26 / Story 11-1','les bornes des douze mois glissants excluent exactement douze mois et les dates futures',()=>{
+ const type=[{id:1,unite:'kg'}],base={type:1,achete:1,quantite:1,prixPayeCentimes:100,format:1000,prixComparaisonCentimes:200,prixHabituelMemeMagasinCentimes:150,magasinComparaison:'ref'};
+ const r=calculerEconomieSur12Mois([{...base,id:1,date:'2025-10-04'},{...base,id:2,date:'2025-10-05'},{...base,id:3,date:'2026-10-05'}],type,'2026-10-04','ref');
+ egal(r.achatsComptes,1);egal(r.economieCentimes,100);
+});
+
 const ko=lignes.filter(r=>!r.ok), bilanTexte=ko.length?ko.length+' échec(s) sur '+lignes.length:'Tous les tests passent ('+lignes.length+')';
 if(typeof document==='undefined'){console.log(bilanTexte);ko.forEach(r=>console.log('ÉCHEC ['+r.exigence+'] '+r.nom+' — '+r.msg));if(ko.length)process.exitCode=1;}
 else{const bilan=document.getElementById('bilan');bilan.textContent=bilanTexte;bilan.className=ko.length?'ko':'ok';const ul=document.getElementById('liste');[...ko,...lignes.filter(r=>r.ok)].forEach(r=>{const li=document.createElement('li');li.className=r.ok?'ok':'ko';const ex=document.createElement('span');ex.className='exi';ex.textContent=r.exigence;li.append(ex,document.createTextNode((r.ok?'✓':'✗')+' '+r.nom));if(!r.ok){const m=document.createElement('span');m.className='msg';m.textContent=r.msg;li.append(m);}ul.append(li);});}

@@ -1,6 +1,6 @@
 // app.js — interface et navigation (stories 1.2 à 3-2).
 import { initDb, dbPrete, listerTypes, creerTypeEtArticle, annulerCreationTypeEtArticle, lireDernierReleve, lireObservations, dernierReleve, trouverDoublon, enregistrerReleves, analyserDoublons, annulerEnregistrement, listerReleves, modifierReleve, supprimerReleve, enregistrerAchat, listerAchats, modifierAchat, supprimerAchat, demanderStockagePersistant, lireReglage, ecrireReglage, compter, STORES, VERSION_SCHEMA, exporterCollections, remplacerCollections, lire, mettre, toutLire, supprimer, listerMagasins, lireMagasin, creerMagasin, modifierMagasin, archiverMagasin, restaurerMagasin, supprimerMagasin, changerMagasinReference } from './db.js';
-import { UNITES, LIBELLE_UNITE, VERDICT, analyserPrixSaisie, verifierFormat, prixNormalise, formaterPrixEuros, formaterPrixNormalise, calculerEconomieRealisee, estPrixIncoherent, unitesCompatibles, formatAffichage, calculerPositionDock, modeSaisieActif, positionDefilement, frequencePromos, deduireUniteComparaison, normaliserNom, calculerVerdictMagasins, prixHabituelMagasin, listeAvantCoursesMagasins } from './domain.js';
+import { UNITES, LIBELLE_UNITE, VERDICT, analyserPrixSaisie, verifierFormat, prixNormalise, formaterPrixEuros, formaterPrixNormalise, calculerEconomieSur12Mois, calculerEconomieDepuisDebut, estPrixIncoherent, unitesCompatibles, formatAffichage, calculerPositionDock, modeSaisieActif, positionDefilement, frequencePromos, deduireUniteComparaison, normaliserNom, calculerVerdictMagasins, prixHabituelMagasin, listeAvantCoursesMagasins } from './domain.js';
 import { accueilVide, vueTypes, vueTypeForm } from './types-ui.js';
 import { creerSauvegarde, validerSauvegarde, etatRappelExport } from './backup.js';
 
@@ -1434,38 +1434,36 @@ async function vueFicheType(typeId, ongletInitial = null, observationInitiale = 
 async function vueBilan() {
   await dbPrete;
   const [achats,types] = await Promise.all([toutLire('Purchase'),toutLire('ProductType')]);
-  const parType = new Map();
-  let totalCentimes = 0, gainsPromoCentimes = 0, achatsExclus = 0, achatsComptes = 0;
-  for (const achat of achats) {
-    if (achat.achete !== 1 && achat.achete !== true) continue;
-    const type = types.find(t => t.id === achat.type);
-    if (!type) continue;
-    const calcul = calculerEconomieRealisee(achat,type.unite);
-    if (!calcul.ok) { console.error('Achat ignoré : données invalides',achat.id); continue; }
-    if (calcul.exclu) { achatsExclus++; continue; }
-    if (!calcul.compte) continue;
-    totalCentimes += calcul.economieCentimes;
-    if (calcul.gainPromoCentimes !== null) gainsPromoCentimes += calcul.gainPromoCentimes;
-    achatsComptes++;
-    const entree = parType.get(type.id) || {type,cumul:0,nombre:0};
-    entree.cumul += calcul.economieCentimes;
-    entree.nombre++;
-    parType.set(type.id,entree);
-  }
+  const dateCourante = aujourdHui();
+  const magasinReferenceId = await lireReglage('magasinReference', magasinsDisponibles[0]?.id || 'leclerc');
+  const magasinReference = await lireMagasin(magasinReferenceId);
+  const cumul12 = calculerEconomieSur12Mois(achats,types,dateCourante,magasinReferenceId);
+  const cumulDepuisDebut = calculerEconomieDepuisDebut(achats,types,dateCourante,magasinReferenceId);
+  const totalCentimes = cumul12.economieCentimes;
+  const gainsPromoCentimes = cumul12.gainPromoCentimes;
+  const achatsExclus = cumul12.achatsExclus;
+  const achatsComptes = cumul12.achatsComptes;
+  const achatsAutreReference = cumul12.achatsAutreMagasinReference;
+  const parType = new Map(cumul12.parType.map(e => [e.typeId,{type:e.type,cumul:e.economieCentimes,nombre:e.nombreAchats}]));
   const progression = Math.max(0,Math.min(100,Math.round(totalCentimes/10000*100)));
   const racine = el('div',{class:'bilan-economies'});
-  racine.append(el('section',{class:'carte carte-bilan-total'},
-    el('h2',{text:'Économies réalisées'}),
+  const carteTotal = el('section',{class:'carte carte-bilan-total'},
+    el('h2',{text:'Économies réalisées sur 12 mois'}),
     el('p',{class:'bilan-total',text:formaterPrixEuros(totalCentimes)}),
+    el('p',{class:'bilan-reference',text:'Par rapport à '+(magasinReference?.nom || 'ton magasin de référence')}),
+    el('p',{class:'bilan-depuis-debut',text:'Depuis le début : '+formaterPrixEuros(cumulDepuisDebut.economieCentimes)}),
     el('div',{class:'anneau-progression',role:'img','aria-label':'Progression vers la cible de 100 € : '+progression+' %','style':'--progression:'+progression+'%'},
       el('div',{class:'anneau-interieur'},el('strong',{text:progression+' %'}),el('span',{text:'de la cible'}))),
     el('p',{class:'aide',text:'Objectif : 100 € sur 12 mois.'}),
     el('p',{class:'bilan-gains-promo',text:'Dont gains liés aux promos : '+formaterPrixEuros(gainsPromoCentimes)}),
     el('p',{class:'bilan-achats-exclus',text:achatsExclus+' achat'+(achatsExclus===1?'':'s')+' exclu'+(achatsExclus===1?'':'s')+' (données insuffisantes à l’époque).'})
-  ));
+  );
+  if(achatsAutreReference>0) carteTotal.append(el('p',{class:'bilan-achats-autre-reference',text:achatsAutreReference+' achat'+(achatsAutreReference===1?'':'s')+' calculé'+(achatsAutreReference===1?'':'s')+' avec un autre magasin de référence.'}));
+  racine.append(carteTotal);
   racine.append(el('a',{href:'#/tous-achats',class:'btn btn-secondaire btn-bloc',text:'Tous mes achats'}));
   if (!achatsComptes) {
-    racine.append(el('p',{class:'aide',text:achatsExclus ? 'Aucun achat avec comparaison disponible pour le moment.' : 'Aucun achat enregistré. En magasin, utilisez « J’achète » pour commencer.'}),
+    const achatsRealises = achats.some(a => a.achete === 1 || a.achete === true);
+    racine.append(el('p',{class:'aide',text:achatsExclus ? 'Aucun achat avec comparaison disponible pour le moment.' : achatsRealises ? 'Aucun achat calculable sur les 12 derniers mois.' : 'Aucun achat enregistré. En magasin, utilisez « J’achète » pour commencer.'}),
       el('a',{href:'#/magasin',class:'btn btn-primaire btn-bloc',text:'Aller en magasin'}));
     return racine;
   }

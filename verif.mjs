@@ -244,7 +244,7 @@ if (playwright) {
     const erreurs = [];
     const requetesExternes = [];
     page.on('request', req => { const u=new URL(req.url()); if(u.origin!==new URL(base).origin && !['data:','blob:'].includes(u.protocol)) requetesExternes.push(req.url()); });
-    const verifierEcran = async (nom) => { const texte=await page.locator('body').innerText(); if(texte.includes('[object Promise]')) throw new Error(nom+' : [object Promise] présent'); if(texte.includes('Erreur d’affichage')) throw new Error(nom+' : Erreur d’affichage présente'); if(/\bundefined\b/.test(texte)) throw new Error(nom+' : texte undefined visible'); if(erreurs.length) throw new Error(nom+' : erreur console/pageerror : '+erreurs[0]); };
+    const verifierEcran = async (nom) => { const texte=await page.locator('body').innerText(); if(/\bhistorique\b/i.test(texte)) throw new Error(nom+' : vocabulaire interdit visible'); if(texte.includes('[object Promise]')) throw new Error(nom+' : [object Promise] présent'); if(texte.includes('Erreur d’affichage')) throw new Error(nom+' : Erreur d’affichage présente'); if(/\bundefined\b/.test(texte)) throw new Error(nom+' : texte undefined visible'); if(erreurs.length) throw new Error(nom+' : erreur console/pageerror : '+erreurs[0]); };
     const verifierOptionsNonVides = async (nom) => { const v=await page.locator('select option').evaluateAll(es=>es.map(e=>({value:e.value,text:e.textContent.trim()})).filter(e=>!e.text)); if(v.length) throw new Error(nom+' : option sans texte '+JSON.stringify(v)); };
     page.on('pageerror', (e) => erreurs.push('exception : ' + e.message));
     page.on('console', (m) => { if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) erreurs.push('console : ' + m.text()); });
@@ -819,16 +819,18 @@ if (playwright) {
       
       // ---- E7.5 : bilan total, gains promo, exclusions, navigation et état vide ----
       etapeParcours = 'E7.5 écran Bilan';
-      await page.evaluate(()=>new Promise((resolve,reject)=>{
+      const dateBilanE75 = await page.evaluate(()=>{const d=new Date();return [d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-');});
+      const dateBilanE75Affichee = dateBilanE75.split('-').reverse().join('/');
+      await page.evaluate((dateBilanE75)=>new Promise((resolve,reject)=>{
         const rq=indexedDB.open('appli-courses');rq.onsuccess=()=>{const db=rq.result,tx=db.transaction('Purchase','readwrite'),s=tx.objectStore('Purchase');
           for(const id of [9901,9902,9903,9904])s.delete(id);
-          s.put({id:9901,type:9992,observation:9921,magasin:'leclerc',date:'2031-02-01',achete:1,quantite:2,prixPayeCentimes:200,format:500,prixComparaisonCentimes:500,prixHabituelMemeMagasinCentimes:600,magasinComparaison:'intermarche'});
-          s.put({id:9902,type:9992,observation:9922,magasin:'intermarche',date:'2031-02-02',achete:1,quantite:1,prixPayeCentimes:1500,format:1000,prixComparaisonCentimes:1000,prixHabituelMemeMagasinCentimes:null,magasinComparaison:'leclerc'});
-          s.put({id:9903,type:9992,observation:9923,magasin:'leclerc',date:'2031-02-03',achete:1,quantite:1,prixPayeCentimes:300,format:500,prixComparaisonCentimes:null,prixHabituelMemeMagasinCentimes:500,magasinComparaison:''});
-          s.put({id:9904,type:9992,observation:9924,magasin:'leclerc',date:'2031-02-04',achete:0,quantite:5,prixPayeCentimes:100,format:1000,prixComparaisonCentimes:500,prixHabituelMemeMagasinCentimes:600,magasinComparaison:'intermarche'});
+          s.put({id:9901,type:9992,observation:9921,magasin:'leclerc',date:dateBilanE75,achete:1,quantite:2,prixPayeCentimes:200,format:500,prixComparaisonCentimes:500,prixHabituelMemeMagasinCentimes:600,magasinComparaison:'intermarche'});
+          s.put({id:9902,type:9992,observation:9922,magasin:'intermarche',date:dateBilanE75,achete:1,quantite:1,prixPayeCentimes:1500,format:1000,prixComparaisonCentimes:1000,prixHabituelMemeMagasinCentimes:null,magasinComparaison:'leclerc'});
+          s.put({id:9903,type:9992,observation:9923,magasin:'leclerc',date:dateBilanE75,achete:1,quantite:1,prixPayeCentimes:300,format:500,prixComparaisonCentimes:null,prixHabituelMemeMagasinCentimes:500,magasinComparaison:''});
+          s.put({id:9904,type:9992,observation:9924,magasin:'leclerc',date:dateBilanE75,achete:0,quantite:5,prixPayeCentimes:100,format:1000,prixComparaisonCentimes:500,prixHabituelMemeMagasinCentimes:600,magasinComparaison:'intermarche'});
           tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error);
         };rq.onerror=()=>reject(rq.error);
-      }));
+      }),dateBilanE75);
       await aller('#/bilan');
       await page.waitForFunction(()=>document.querySelector('#vue')?.textContent.includes('Économies réalisées'),null,{timeout:5000});
       const bilanE75=page.locator('.bilan-economies');
@@ -842,7 +844,7 @@ if (playwright) {
       await lienTypeBilan.click();
       await page.waitForFunction(()=>document.querySelector('#titre-ecran')?.textContent==='Fiche du type',null,{timeout:5000});
       const ongletAchatsBilan=page.getByRole('tab',{name:/Achats \(/});if(await ongletAchatsBilan.getAttribute('aria-selected')!=='true')throw new Error('Bilan : le type ne s’ouvre pas sur l’onglet Achats');
-      if(!(await page.locator('.historique-achats').getByText('01/02/2031').count()))throw new Error('Bilan : touche sur le type n’ouvre pas son historique');
+      if(!(await page.locator('.historique-achats').getByText(dateBilanE75Affichee).count()))throw new Error('Bilan : touche sur le type n’ouvre pas son historique');
       await page.evaluate(()=>new Promise((resolve,reject)=>{const rq=indexedDB.open('appli-courses');rq.onsuccess=()=>{const db=rq.result,tx=db.transaction('Purchase','readwrite'),s=tx.objectStore('Purchase');for(const id of [9901,9902,9903,9904])s.delete(id);tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error)};rq.onerror=()=>reject(rq.error)}));
       await aller('#/bilan');
       await page.waitForFunction(()=>document.querySelector('.bilan-economies')?.textContent.includes('Aucun achat'),null,{timeout:5000});
@@ -1122,6 +1124,31 @@ if (playwright) {
       await page.locator('dialog.feuille-reference-magasin button').filter({hasText:'Leclerc Vannes'}).click();
       await page.waitForFunction(()=>document.querySelector('#reglages-magasins .reference-magasin-reglage button')?.textContent.includes('Leclerc Vannes'),null,{timeout:5000});
       if((await page.locator('body').innerText()).includes('Participe aux comparaisons'))throw new Error('11-3 : texte de participation encore visible dans les réglages');
+
+      // Story 11-4 : le Bilan utilise la référence actuelle et signale les achats figés avec l’ancienne référence.
+      const dateBilanReference = await page.evaluate(()=>{const d=new Date();return [d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-');});
+      const veilleBilanReference = await page.evaluate(()=>{const d=new Date();d.setDate(d.getDate()-1);return [d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-');});
+      await page.evaluate(async({dateBilanReference})=>{
+        const db=await import('/db.js');
+        await db.changerMagasinReference('leclerc');
+        await new Promise((resolve,reject)=>{const rq=indexedDB.open('appli-courses');rq.onsuccess=()=>{const d=rq.result,tx=d.transaction('Purchase','readwrite');tx.objectStore('Purchase').put({id:9910,type:9992,observation:null,magasin:'leclerc',date:dateBilanReference,achete:1,quantite:1,prixPayeCentimes:250,format:500,prixComparaisonCentimes:600,prixHabituelMemeMagasinCentimes:600,magasinComparaison:'leclerc'});tx.oncomplete=()=>{d.close();resolve();};tx.onerror=()=>reject(tx.error);};rq.onerror=()=>reject(rq.error);});
+      },{dateBilanReference});
+      await page.evaluate(async({dateBilanReference,veilleBilanReference})=>{const db=await import('/db.js');await db.enregistrerReleves([{type:9992,magasin:'leclerc-vannes',date:veilleBilanReference,prixCentimes:600,format:500,promo:0},{type:9992,magasin:'leclerc-vannes',date:dateBilanReference,prixCentimes:550,format:500,promo:0}]);},{dateBilanReference,veilleBilanReference});
+      await page.locator('#reglages-magasins .reference-magasin-reglage button').click();
+      await page.waitForSelector('dialog.feuille-reference-magasin[open]',{timeout:5000});
+      await page.locator('dialog.feuille-reference-magasin button').filter({hasText:'Leclerc Vannes'}).click();
+      await page.waitForFunction(()=>document.querySelector('#reglages-magasins .reference-magasin-reglage button')?.textContent.includes('Leclerc Vannes'),null,{timeout:5000});
+      const nouvelAchatReference = await page.evaluate(async({dateBilanReference})=>{
+        const db=await import('/db.js'),observations=await db.lireObservations(9992),observation=observations.find(o=>o.magasin==='leclerc-vannes'&&o.date===dateBilanReference);
+        if(!observation)throw new Error('observation du nouvel achat introuvable');
+        return await db.enregistrerAchat({type:9992,observation:observation.id,magasin:'leclerc-vannes',date:dateBilanReference,achete:1,quantite:1,prixPayeCentimes:250,format:500,prixHabituelMemeMagasinCentimes:600});
+      },{dateBilanReference});
+      await aller('#/bilan');
+      await page.waitForFunction(()=>document.querySelector('.bilan-economies')?.textContent.includes('autre magasin de référence'),null,{timeout:5000});
+      const bilanReferenceTexte=await page.locator('.bilan-economies').innerText();
+      if(!bilanReferenceTexte.includes('Par rapport à Leclerc Vannes')||!bilanReferenceTexte.includes('Depuis le début :')||!bilanReferenceTexte.includes('Dont gains liés aux promos')||!bilanReferenceTexte.includes('100 € sur 12 mois'))throw new Error('11-4 : mention de référence, cumul depuis le début ou cible annuelle absente : '+bilanReferenceTexte);
+      if(!/\d+ achat(s)? calculé(s)? avec un autre magasin de référence/.test(bilanReferenceTexte))throw new Error('11-4 : achats calculés avec une ancienne référence non signalés');
+      await page.evaluate(async({achatId,dateBilanReference,veilleBilanReference})=>{const db=await import('/db.js');await db.supprimerAchat(achatId);const observations=await db.lireObservations(9992);for(const o of observations.filter(o=>o.magasin==='leclerc-vannes'&&(o.date===dateBilanReference||o.date===veilleBilanReference)))await db.supprimerReleve(o.id);const rq=indexedDB.open('appli-courses');await new Promise((resolve,reject)=>{rq.onsuccess=()=>{const d=rq.result,tx=d.transaction('Purchase','readwrite');tx.objectStore('Purchase').delete(9910);tx.oncomplete=()=>{d.close();resolve();};tx.onerror=()=>reject(tx.error);};rq.onerror=()=>reject(rq.error);});}, {achatId:nouvelAchatReference,dateBilanReference,veilleBilanReference});
       await aller('#/magasin');
       await page.click('.selecteur-magasin-bouton');
       await page.waitForSelector('.feuille-magasins[open]',{timeout:5000});
