@@ -44,7 +44,7 @@ if (!principaux) {
 const appTexte = readFileSync(join(racine, 'app.js'), 'utf8');
 const stylesTexte = readFileSync(join(racine, 'styles.css'), 'utf8');
 const contratHistorique = [
-  ['quantité affichée dans son propre champ', /class:'achat-valeur achat-quantite',text:'Quantité : '\+achat\.quantite/],
+  ['quantité affichée au format demandé × n', /class:'achat-valeur achat-quantite',text:'× '\+achat\.quantite/],
   ['prix payé affiché avec son libellé', /class:'achat-valeur achat-prix',text:'Prix payé : '\+formaterPrixEuros\(achat\.prixPayeCentimes\)/],
   ['format unitaire explicitement libellé', /class:'achat-valeur achat-format',text:'Format unitaire : '\+achat\.format/],
   ['valeurs séparées par une grille responsive', /\.achat-resume-valeurs\s*\{\s*display:\s*grid/]
@@ -59,7 +59,7 @@ for (const [nom, motif] of contratHistorique) {
 const contratParcoursAchat = [
   ['bouton de correction absent du dock magasin', !/Prix ou format payé différent\s*\?/.test(appTexte)],
   ['création d’achat réservée au clic « J’achète »', /if \(statutAchat === 1\) \{\s*const observationId = jeton\.ajoutes\[0\]/.test(appTexte)],
-  ['historique limité aux achats réellement effectués', /listerAchats\(typeId\)\)\.filter\(achat => achat\.achete === 1 \|\| achat\.achete === true\)/.test(appTexte)],
+  ['liste des achats filtrée sur les achats réellement effectués', /filter\(achat => \(typeId==null\|\|Number\(achat\.type\)===Number\(typeId\)\)&&\(achat\.achete === 1 \|\| achat\.achete === true\)\)/.test(appTexte)],
   ['action d’historique dédiée à la correction de l’achat', /Corriger l’achat/.test(appTexte) && /Corriger le prix, la quantité ou le format/.test(appTexte)],
   ['le refus d’achat ne crée pas de Purchase', /if \(statutAchat === 1\) \{\s*const observationId/.test(appTexte)]
 ];
@@ -70,7 +70,7 @@ for (const [nom, conforme] of contratParcoursAchat) {
 
 // ---- 1d. Historique des achats : exclure les relevés « non acheté » -------------------------
 const historiqueSource = appTexte.slice(appTexte.indexOf('async function vueHistoriqueAchats'));
-const filtreAchatsReels = /listerAchats\(typeId\)\)\.filter\(achat\s*=>\s*achat\.achete\s*===\s*1\s*\|\|\s*achat\.achete\s*===\s*true\)/;
+const filtreAchatsReels = /filter\(achat\s*=>\s*\(typeId==null\|\|Number\(achat\.type\)===Number\(typeId\)\)&&\(achat\.achete\s*===\s*1\s*\|\|\s*achat\.achete\s*===\s*true\)\)/;
 if (historiqueSource.includes('async function vueHistoriqueAchats') && filtreAchatsReels.test(historiqueSource)) {
   ok('historique achats : seuls les achats réellement effectués sont affichés');
 } else {

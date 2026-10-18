@@ -1444,7 +1444,7 @@ async function vueHistoriqueAchats(typeId, integre = false) {
   const type = typeId==null?null:await lireTypeSafe(typeId);
   if (typeId!=null&&!type) return carte('Achats', 'Type introuvable.');
   const racine = el('div', { class:'historique-achats' });
-  if(!integre)racine.append(el('a',{href:typeId==null?'#/bilan':'#/fiche/'+typeId,class:'btn btn-secondaire btn-bloc',text:typeId==null?'← Retour au bilan':'← Retour à la fiche'},),...(type?[el('h2',{text:type.nom})]:[]));
+  if(!integre)racine.append(el('a',{href:typeId==null?'#/bilan':'#/fiche/'+typeId,class:'btn btn-secondaire btn-bloc',text:typeId==null?'← Retour au bilan':'← Retour à la fiche'}),...(type?[el('h2',{text:type.nom})]:[]));
   const achats = (await toutLire('Purchase')).filter(achat => (typeId==null||Number(achat.type)===Number(typeId))&&(achat.achete === 1 || achat.achete === true)).sort((a,b)=>a.date!==b.date?(a.date<b.date?1:-1):(b.id||0)-(a.id||0));
   if (!achats.length) {
     racine.append(el('p',{class:'aide',text:typeId==null?'Aucun achat enregistré. En magasin, utilisez « J’achète » pour commencer.':'Aucun achat enregistré pour ce type.'}));
