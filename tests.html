@@ -189,7 +189,7 @@ test('FR20','sauvegarde validée : les cinq collections restent identiques hors 
    {id:2,type:1,magasin:LE,date:'2026-10-13',prixCentimes:300,format:250,promo:0},
    {id:3,type:2,magasin:IM,date:'2026-10-13',prixCentimes:180,format:1000,promo:0}
   ],
-  achats:[{id:1,type:1,observation:2,magasin:LE,date:'2026-10-13',achete:1,quantite:2,prixPayeCentimes:290,format:250,prixComparaisonCentimes:320,prixHabituelMemeMagasinCentimes:300}],
+  achats:[{id:1,type:1,observation:2,magasin:LE,date:'2026-10-13',achete:1,quantite:2,prixPayeCentimes:290,format:250,prixComparaisonCentimes:320,prixHabituelMemeMagasinCentimes:300,magasinComparaison:''}],
   reglages:[{cle:'seuilIndifference',valeur:8}]
  };
  const payload=creerSauvegarde({schemaVersion:1,...collections,dateExport:'2026-10-13'});
