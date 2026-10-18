@@ -1,6 +1,6 @@
 // types-ui.js — écrans du catalogue de types de produits (épic E2 : FR1, FR2).
-import { dbPrete, listerTypes, lireType, ajouterType, modifierType, archiverType, supprimerType, compterReleves } from './db.js';
-import { normaliserNom, nomTypeValide, UNITES, LIBELLE_UNITE, MAGASIN, VERDICT, prixHabituel, calculerVerdict, formaterPrixNormalise } from './domain.js';
+import { dbPrete, listerTypes, lireType, ajouterType, modifierType, archiverType, supprimerType, compterReleves, listerMagasins } from './db.js';
+import { normaliserNom, nomTypeValide, UNITES, LIBELLE_UNITE, listeAvantCoursesMagasins, prixHabituelMagasin, formaterPrixNormalise } from './domain.js';
 import { lireObservations, lireReglage } from './db.js';
 
 export function el(tag, attrs = {}, ...enfants) {
@@ -56,10 +56,11 @@ export function vueTypes() {
     el('a', { href: '#/type-nouveau', class: 'btn btn-primaire btn-bloc' }, '+ Nouveau type'),
     recherche, liste, archives);
   let types = [];
+  let magasins = [];
 
   function ligne(t) {
     return el('div', { class: 'ligne' },
-      el('div', { class: 'ligne-texte' }, el('strong', { text: t.nom }), el('span', { class: 'puce', text: LIBELLE_UNITE[t.unite] }), el('a', { href: '#/historique/' + t.id, class: 'btn btn-secondaire', text: 'Historique' })),
+      el('div', { class: 'ligne-texte' }, el('strong', { text: t.nom }), el('span', { class: 'puce', text: LIBELLE_UNITE[t.unite] }), el('a', { href: '#/historique/' + t.id, class: 'btn btn-secondaire', text: 'Prix constatés' })),
       t.archive ? el('button', { type: 'button', class: 'btn btn-secondaire', onclick: () => basculerArchive(t, false) }, 'Restaurer') : null,
       el('button', { type: 'button', class: 'btn-icone', 'aria-label': 'Actions pour ' + t.nom, onclick: () => menu(t) }, '\u22EF'));
   }
@@ -68,30 +69,25 @@ export function vueTypes() {
     const observations = await lireObservations(t.id);
     const maintenant = new Date();
     const aujourdhui = maintenant.getFullYear() + '-' + String(maintenant.getMonth()+1).padStart(2,'0') + '-' + String(maintenant.getDate()).padStart(2,'0');
-    const leclerc = prixHabituel(observations, MAGASIN.LECLERC, t.unite, aujourdhui);
-    const inter = prixHabituel(observations, MAGASIN.INTERMARCHE, t.unite, aujourdhui);
+    const habitudes = await Promise.all(magasins.filter(m=>!m.archive).map(async m=>({magasin:m,habituel:prixHabituelMagasin(observations,m,t.unite,aujourdhui)})));
     const seuil = Number(await lireReglage('seuilIndifference', 5));
-    let verdict = VERDICT.INSUFFISANT;
-    if (leclerc.ok && inter.ok) {
-      const formatBase = t.unite === 'unit' ? 1 : 1000;
-      verdict = calculerVerdict({ prixCentimes: Math.round(leclerc.valeur), formatBase, typeUnit: t.unite, magasin: MAGASIN.LECLERC, observations, aujourdhui, seuilPct: seuil }).resultat;
-    }
-    const labelVerdict = verdict === VERDICT.ACHETER_ICI ? 'Leclerc moins cher' : verdict === VERDICT.ATTENDRE ? 'Intermarché moins cher' : verdict === VERDICT.INDIFFERENT ? 'Indifférent' : 'Données insuffisantes';
-    const max = Math.max(0, ...[leclerc, inter].filter(r => r.ok).map(r => r.valeur));
-    const barre = (nom, resultat, magasin) => {
-      const valeur = resultat.ok ? resultat.valeur : null;
-      const largeur = valeur != null && max > 0 ? Math.max(0, Math.min(100, valeur / max * 100)) : 0;
-      return el('div', { class: 'barre-comparaison' }, el('span', { text: nom }),
-        el('div', { class: 'barre-fond', role: 'img', 'aria-label': nom + ' : ' + (valeur == null ? 'données insuffisantes' : formaterPrixNormalise(valeur, t.unite)) },
-          el('div', { class: 'barre-remplissage ' + (magasin === MAGASIN.LECLERC ? 'barre-leclerc' : 'barre-intermarche'), style: 'width:' + largeur + '%' })),
-        el('strong', { text: valeur == null ? '—' : formaterPrixNormalise(valeur, t.unite) }));
-    };
+    const comparaison = listeAvantCoursesMagasins([t],observations,magasins,seuil,aujourdhui)[0];
+    const magasinMoinsCher = magasins.find(m=>m.id===comparaison?.resultat);
+    const labelVerdict = magasinMoinsCher ? magasinMoinsCher.nom+' moins cher' : comparaison?.resultat==='indifferent' ? 'Indifférent' : 'Données insuffisantes';
+    const valeurs = habitudes.filter(x=>x.habituel.ok).map(x=>x.habituel.valeur), max = Math.max(0,...valeurs);
+    const barres = habitudes.map(({magasin,habituel})=>{
+      const valeur=habituel.ok?habituel.valeur:null, largeur=valeur!=null&&max>0?Math.max(0,Math.min(100,valeur/max*100)):0;
+      return el('div',{class:'barre-comparaison'},el('span',{text:magasin.nom}),
+        el('div',{class:'barre-fond',role:'img','aria-label':magasin.nom+' : '+(valeur==null?'données insuffisantes':formaterPrixNormalise(valeur,t.unite))},
+          el('div',{class:'barre-remplissage',style:'width:'+largeur+'%;background:'+magasin.couleur})),
+        el('strong',{text:valeur==null?'—':formaterPrixNormalise(valeur,t.unite)}));
+    });
     return el('div', { class: 'ligne ligne-type-analyse' },
       el('div', { class: 'ligne-texte' }, el('strong', { text: t.nom }), el('span', { class: 'puce', text: LIBELLE_UNITE[t.unite] }),
         el('a', { href: '#/fiche/' + t.id, class: 'btn btn-secondaire', text: 'Fiche' }),
-        el('a', { href: '#/historique/' + t.id, class: 'btn btn-secondaire', text: 'Historique' })),
-      el('span', { class: 'verdict-liste', 'data-verdict': verdict, text: labelVerdict }),
-      el('div', { class: 'barres-comparaison' }, barre('Leclerc', leclerc, MAGASIN.LECLERC), barre('Intermarché', inter, MAGASIN.INTERMARCHE)),
+        el('a', { href: '#/historique/' + t.id, class: 'btn btn-secondaire', text: 'Prix constatés' })),
+      el('span', { class: 'verdict-liste', 'data-verdict': comparaison?.resultat || 'donnees-insuffisantes', text: labelVerdict }),
+      el('div', { class: 'barres-comparaison' }, ...barres),
       el('button', { type: 'button', class: 'btn-icone', 'aria-label': 'Actions pour ' + t.nom, onclick: () => menu(t) }, '\u22EF'));
   }
 
@@ -117,7 +113,7 @@ export function vueTypes() {
 
   async function charger() {
     await dbPrete;
-    types = await listerTypes();
+    [types, magasins] = await Promise.all([listerTypes(), listerMagasins()]);
     if (racine.isConnected) await dessiner();
   }
 
@@ -139,7 +135,7 @@ export function vueTypes() {
     const n = await compterReleves(t.id);
     feuille({
       titre: 'Supprimer « ' + t.nom + ' » ?',
-      texte: n ? 'Son historique (' + n + ' relevé' + (n > 1 ? 's' : '') + ') sera supprimé définitivement.' : 'Cette action est définitive.',
+      texte: n ? 'Ses prix constatés (' + n + ' relevé' + (n > 1 ? 's' : '') + ') seront supprimés définitivement.' : 'Cette action est définitive.',
       actions: [
         { libelle: 'Supprimer', classe: 'btn-danger', action: async () => { await supprimerType(t.id); await charger(); } },
         { libelle: 'Annuler' }
