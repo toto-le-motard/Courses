@@ -46,7 +46,7 @@ const stylesTexte = readFileSync(join(racine, 'styles.css'), 'utf8');
 const domainTexte = readFileSync(join(racine, 'domain.js'), 'utf8');
 const typesUiTexte = readFileSync(join(racine, 'types-ui.js'), 'utf8');
 const codeMagasinsGenerique = [['app.js', appTexte], ['domain.js', domainTexte], ['types-ui.js', typesUiTexte], ['styles.css', stylesTexte]];
-const magasinsEnDur = codeMagasinsGenerique.filter(([, source]) => /\\b(?:leclerc|intermarche|intermarché)\\b/i.test(source)).map(([f]) => f);
+const magasinsEnDur = codeMagasinsGenerique.filter(([, source]) => /\b(?:leclerc|intermarche|intermarché)\b/i.test(source)).map(([f]) => f);
 if (magasinsEnDur.length) ko('noms/identifiants de magasins en dur hors amorçage : ' + magasinsEnDur.join(', '));
 else ok('E9 : aucun nom ou identifiant de magasin en dur dans le code générique');
 const contratHistorique = [
