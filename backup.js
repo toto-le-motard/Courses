@@ -62,7 +62,7 @@ export function validerSauvegarde(payload, schemaVersionAttendu) {
       && (v.localisation === undefined || typeof v.localisation === 'string')
       && typeof v.couleur === 'string' && /^#[0-9a-f]{6}$/i.test(v.couleur)
       && ['mediane','dernier'].includes(v.modePrixHabituel)
-      && typeof v.archive === 'boolean && Number.isInteger(v.ordre) && v.ordre > 0
+      && typeof v.archive === 'boolean' && Number.isInteger(v.ordre) && v.ordre > 0
   };
   if (ancienneSansMagasins) {
     payload.magasins = [
