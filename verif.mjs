@@ -1161,15 +1161,16 @@ if (playwright) {
       await page.click('dialog.menu-magasin button:has-text("Supprimer")');
       await page.waitForFunction(()=>/prix constatés ou des achats/.test(document.querySelector('#reglages-magasins .message-sauvegarde')?.textContent||''),null,{timeout:5000});
       ok('E9 : archivage/masquage, restauration et refus de suppression avec prix constatés');
+      await page.evaluate(async()=>{const db=await import('/db.js');await db.changerMagasinReference('leclerc-vannes');});
       await archiverViaUI('Leclerc');
       await archiverViaUI('Intermarché');
       await archiverViaUI('Leclerc Rennes');
       await page.locator('#reglages-magasins button[aria-label="Options Leclerc Vannes"]').click();
       await page.click('dialog.menu-magasin button:has-text("Archiver")');
-      await page.waitForFunction(()=>/dernier magasin actif/.test(document.querySelector('#reglages-magasins .message-sauvegarde')?.textContent||''),null,{timeout:5000});
+      await page.waitForFunction(()=>/C'est ton magasin de référence : choisis-en un autre d'abord/.test(document.querySelector('#reglages-magasins .message-sauvegarde')?.textContent||''),null,{timeout:5000});
       await page.locator('#reglages-magasins button[aria-label="Options Leclerc Vannes"]').click();
       await page.click('dialog.menu-magasin button:has-text("Supprimer")');
-      await page.waitForFunction(()=>{const t=document.querySelector('#reglages-magasins .message-sauvegarde')?.textContent||'';return /dernier magasin actif/.test(t)&&/prix constatés ou des achats/.test(t);},null,{timeout:5000});
+      await page.waitForFunction(()=>{const t=document.querySelector('#reglages-magasins .message-sauvegarde')?.textContent||'';return /C'est ton magasin de référence : choisis-en un autre d'abord/.test(t);},null,{timeout:5000});
       await aller('#/magasin');
       for(const hauteur of [844,500]){
         await page.setViewportSize({width:390,height:hauteur});

@@ -11,7 +11,7 @@ function dateIsoValide(date) {
 export function creerSauvegarde({ schemaVersion, types, articles, releves, achats, reglages, magasins = null, magasinReference = null, dateExport }) {
   const magasinsPropres = (Array.isArray(magasins) ? magasins : []).map(m => { const copie = { ...m }; delete copie.comparable; return copie; });
   const reference = magasinReference || reglages.find(r => r.cle === 'magasinReference')?.valeur || null;
-  return { schemaVersion, dateExport, types, articles, releves, achats, reglages, magasins: magasinsPropres, magasinReference: reference };
+  return { schemaVersion, dateExport, types, articles, releves, achats, reglages: (Array.isArray(reglages) ? reglages : []).map(r => ({ ...r })), magasins: magasinsPropres, magasinReference: reference };
 }
 
 export function validerSauvegarde(payload, schemaVersionAttendu) {
@@ -82,7 +82,7 @@ export function validerSauvegarde(payload, schemaVersionAttendu) {
   const magasinsIds = new Set(payload.magasins.map(m => m.id));
   if (payload.magasins.some(m => !m || typeof m.id !== 'string') || payload.magasins.some((m,i) => payload.magasins.some((n,j) => j < i && n.id === m.id))) return { ok: false, erreur: 'La sauvegarde contient des identifiants de magasin en double ou invalides.' };
   const nomsMagasins = new Set();
-  for (const m of payload.magasins) { const n = String(m.nom).normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').toLocaleLowerCase('fr').trim().replace(/\\s+/g,' '); if (nomsMagasins.has(n)) return { ok:false, erreur:'La sauvegarde contient des noms de magasin en double.' }; nomsMagasins.add(n); }
+  for (const m of payload.magasins) { const n = String(m.nom).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLocaleLowerCase('fr').trim().replace(/\s+/g,' '); if (nomsMagasins.has(n)) return { ok:false, erreur:'La sauvegarde contient des noms de magasin en double.' }; nomsMagasins.add(n); }
   if (payload.releves.some(o => !magasinsIds.has(o.magasin)) || payload.achats.some(a => !magasinsIds.has(a.magasin))) return { ok:false, erreur:'La sauvegarde contient un relevé ou un achat rattaché à un magasin absent.' };
   payload.achats = payload.achats.map(a => ({ ...a, magasinComparaison: a.magasinComparaison ?? '' }));
   const actifs = payload.magasins.filter(m => !m.archive).sort((a,b) => (a.ordre || 0) - (b.ordre || 0) || a.nom.localeCompare(b.nom, 'fr'));
