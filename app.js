@@ -1185,7 +1185,7 @@ async function vueListeCourses() {
     });
     contenu.replaceChildren();
     const groupes=[
-      ...magasinsDisponibles.filter(m=>m.comparable).map(m=>({id:m.id,titre:m.nom,couleur:m.couleur})),
+      ...magasinsDisponibles.map(m=>({id:m.id,titre:m.nom,couleur:m.couleur})),
       {id:'indifferent',titre:'Indifférent'},
       {id:'donnees-insuffisantes',titre:'Données insuffisantes'}
     ];
@@ -1355,14 +1355,14 @@ async function vueFicheType(typeId, ongletInitial = null, observationInitiale = 
   const actives=magasinsDisponibles, cartes=await Promise.all(actives.map(carteMagasin));
   const archives=magasinsTous.filter(m=>m.archive&&observations.some(o=>o.magasin===m.id));
   const cartesArchive=await Promise.all(archives.map(carteMagasin));
-  const valeurs=cartes.filter(x=>x.magasin.comparable&&x.habituel.ok).map(x=>x.habituel.valeur), max=valeurs.length?Math.max(...valeurs):0;
+  const valeurs=cartes.filter(x=>x.habituel.ok).map(x=>x.habituel.valeur), max=valeurs.length?Math.max(...valeurs):0;
   const barres=el('section',{class:'carte'},el('h3',{text:'Comparaison des prix habituels'}));
   const zoneBarres=el('div',{class:'barres-comparaison'});
-  for(const x of cartes.filter(x=>x.magasin.comparable)){
+  for(const x of cartes){
     const valeur=x.habituel.ok?x.habituel.valeur:null, largeur=valeur!=null&&max>0?Math.max(0,Math.min(100,valeur/max*100)):0;
     zoneBarres.append(el('div',{class:'barre-comparaison'},el('span',{text:x.magasin.nom}),el('div',{class:'barre-fond',role:'img','aria-label':x.magasin.nom+' : '+(valeur==null?'données insuffisantes':formaterPrixNormalise(valeur,type.unite))},el('div',{class:'barre-remplissage',style:'width:'+largeur+'%;background:'+x.magasin.couleur})),el('strong',{text:valeur==null?'—':formaterPrixNormalise(valeur,type.unite)})));
   }
-  if(!zoneBarres.childElementCount)zoneBarres.append(el('p',{class:'aide',text:'Aucun magasin comparable avec un prix habituel disponible.'}));
+  if(!zoneBarres.childElementCount)zoneBarres.append(el('p',{class:'aide',text:'Aucun prix habituel disponible pour les magasins actifs.'}));
   barres.append(zoneBarres);
   const sectionCodes = el('section',{class:'carte codes-barres'},el('h3',{text:'Codes-barres rattachés'}));
   const listeCodes = el('div',{class:'liste-codes-barres'});

@@ -229,6 +229,72 @@ export function calculerEconomieRealisee(achat, typeUnit) {
   return { ok: true, compte: true, exclu: false, raison: null, economieCentimes, gainPromoCentimes };
 }
 
+
+function dateMoinsDouzeMois(date) {
+  if (Number.isNaN(parserDate(date))) return null;
+  const [annee, mois, jour] = date.split('-').map(Number);
+  const cibleMoisIndex = annee * 12 + (mois - 1) - 12;
+  const cibleAnnee = Math.floor(cibleMoisIndex / 12);
+  const cibleMois = cibleMoisIndex - cibleAnnee * 12;
+  const dernierJour = new Date(Date.UTC(cibleAnnee, cibleMois + 1, 0)).getUTCDate();
+  return String(cibleAnnee).padStart(4, '0') + '-' + String(cibleMois + 1).padStart(2, '0') + '-' + String(Math.min(jour, dernierJour)).padStart(2, '0');
+}
+
+// FR26 / FR33 — cumul fondé uniquement sur les valeurs figées dans chaque achat.
+export function calculerCumulEconomieAchats(achats, types, {
+  dateDebut = null, dateFin = null, debutStrict = false, magasinReference = null, typeId = null
+} = {}) {
+  const typesParId = new Map((Array.isArray(types) ? types : []).map(t => [t.id, t]));
+  const resultat = { economieCentimes: 0, gainPromoCentimes: 0, achatsExclus: 0, achatsComptes: 0, achatsAutreMagasinReference: 0, parType: [] };
+  const parType = new Map();
+  for (const achat of Array.isArray(achats) ? achats : []) {
+    if (!achat || !(achat.achete === 1 || achat.achete === true)) continue;
+    if (typeId != null && Number(achat.type) !== Number(typeId)) continue;
+    if (Number.isNaN(parserDate(achat.date))) continue;
+    if (dateDebut && (debutStrict ? achat.date <= dateDebut : achat.date < dateDebut)) continue;
+    if (dateFin && achat.date > dateFin) continue;
+    const type = typesParId.get(achat.type) || typesParId.get(Number(achat.type));
+    if (!type || !(type.unite in DIVISEUR)) continue;
+    const calcul = calculerEconomieRealisee(achat, type.unite);
+    if (!calcul.ok) continue;
+    if (calcul.exclu) { resultat.achatsExclus++; continue; }
+    if (!calcul.compte) continue;
+    resultat.economieCentimes += calcul.economieCentimes;
+    if (calcul.gainPromoCentimes !== null) resultat.gainPromoCentimes += calcul.gainPromoCentimes;
+    resultat.achatsComptes++;
+    if (magasinReference && achat.magasinComparaison && achat.magasinComparaison !== magasinReference) resultat.achatsAutreMagasinReference++;
+    const entree = parType.get(type.id) || { typeId: type.id, type, economieCentimes: 0, gainPromoCentimes: 0, nombreAchats: 0, achatsExclus: 0 };
+    entree.economieCentimes += calcul.economieCentimes;
+    if (calcul.gainPromoCentimes !== null) entree.gainPromoCentimes += calcul.gainPromoCentimes;
+    entree.nombreAchats++;
+    parType.set(type.id, entree);
+  }
+  resultat.parType = [...parType.values()];
+  return resultat;
+}
+
+export function calculerEconomieSur12Mois(achats, types, dateCourante, magasinReference = null) {
+  const debut = dateMoinsDouzeMois(dateCourante);
+  if (!debut) return { economieCentimes: 0, gainPromoCentimes: 0, achatsExclus: 0, achatsComptes: 0, achatsAutreMagasinReference: 0, parType: [] };
+  return calculerCumulEconomieAchats(achats, types, { dateDebut: debut, debutStrict: true, dateFin: dateCourante, magasinReference });
+}
+
+export function calculerEconomieDepuisDebut(achats, types, dateCourante, magasinReference = null) {
+  return calculerCumulEconomieAchats(achats, types, { dateFin: dateCourante || null, magasinReference });
+}
+
+export function calculerEconomieParType(achats, types, typeId, dateDebut = null, dateFin = null, magasinReference = null) {
+  return calculerCumulEconomieAchats(achats, types, { typeId, dateDebut, dateFin, magasinReference });
+}
+
+export function compterAchatsExclus(achats, types, options = {}) {
+  return calculerCumulEconomieAchats(achats, types, options).achatsExclus;
+}
+
+export function compterAchatsAutreMagasinReference(achats, types, magasinReference, options = {}) {
+  return calculerCumulEconomieAchats(achats, types, { ...options, magasinReference }).achatsAutreMagasinReference;
+}
+
 // FR12 / E4.1 — fréquence des relevés promo par type et par magasin.
 export function frequencePromos(observations, magasin) {
   if (!Array.isArray(observations)) return { ok: false, raison: 'donnees-invalides', nbPromos: 0, nbReleves: 0, pourcentage: null };
@@ -261,11 +327,11 @@ export function prixHabituelMagasin(observations, magasin, typeUnit, aujourdhui)
 
 export function trouverMagasinComparaison({ observations, magasins, magasinCourant, typeUnit, aujourdhui }) {
   const candidats = (Array.isArray(magasins) ? magasins : [])
-    .filter(m => m && !m.archive && m.comparable && m.id !== magasinCourant)
+    .filter(m => m && !m.archive && m.id !== magasinCourant)
     .map(m => ({ magasin: m, habituel: prixHabituelMagasin(observations, m, typeUnit, aujourdhui) }))
     .filter(x => x.habituel.ok && x.habituel.valeur > 0)
     .sort((a,b) => a.habituel.valeur - b.habituel.valeur || (a.magasin.ordre || 0) - (b.magasin.ordre || 0));
-  return candidats.length ? { ok: true, magasin: candidats[0].magasin, habituel: candidats[0].habituel, candidats } : { ok: false, raison: 'aucun-magasin-comparable', magasin: null, habituel: null, candidats: [] };
+  return candidats.length ? { ok: true, magasin: candidats[0].magasin, habituel: candidats[0].habituel, candidats } : { ok: false, raison: 'aucun-magasin-de-comparaison', magasin: null, habituel: null, candidats: [] };
 }
 
 export function calculerVerdictMagasins({ prixCentimes, formatBase, typeUnit, magasinCourant, magasins, observations, aujourdhui, seuilPct, promo = false }) {
@@ -278,7 +344,7 @@ export function calculerVerdictMagasins({ prixCentimes, formatBase, typeUnit, ma
       .filter(o => o && magasins?.some(m => m.id === o.magasin))
       .map(o => ({ date: o.date, magasin: o.magasin }))
       .filter(o => typeof o.date === 'string').sort((a,b) => a.date !== b.date ? (a.date < b.date ? 1 : -1) : 0);
-    return { ...base, resultat: VERDICT.INSUFFISANT, raison: 'aucun-magasin-comparable', dernierConnu: connus[0] || null };
+    return { ...base, resultat: VERDICT.INSUFFISANT, raison: 'aucun-magasin-de-comparaison', dernierConnu: connus[0] || null };
   }
   const habituel = comparaison.habituel;
   const seuil = seuilFraction(seuilPct), ecart = (jour.centimesParUnite - habituel.valeur) / habituel.valeur;
@@ -293,9 +359,9 @@ export function calculerVerdictMagasins({ prixCentimes, formatBase, typeUnit, ma
 export function listeAvantCoursesMagasins(types, observations, magasins, seuil, dateCourante) {
   const actifs = (Array.isArray(types) ? types : []).filter(type => type && !type.archive);
   const releves = Array.isArray(observations) ? observations : [];
-  const comparables = (Array.isArray(magasins) ? magasins : []).filter(m => m && !m.archive && m.comparable);
+  const magasinsActifs = (Array.isArray(magasins) ? magasins : []).filter(m => m && !m.archive);
   return actifs.map(type => {
-    const parMagasin = comparables.map(m => ({ magasin: m, habituel: prixHabituelMagasin(releves.filter(o => o && o.type === type.id), m, type.unite, dateCourante) }))
+    const parMagasin = magasinsActifs.map(m => ({ magasin: m, habituel: prixHabituelMagasin(releves.filter(o => o && o.type === type.id), m, type.unite, dateCourante) }))
       .filter(x => x.habituel.ok && x.habituel.valeur > 0)
       .sort((a,b) => a.habituel.valeur - b.habituel.valeur || (a.magasin.ordre || 0) - (b.magasin.ordre || 0));
     const tousType = releves.filter(o => o && o.type === type.id);

@@ -13,7 +13,7 @@ const calculerPositionDock = await import('./domain.js').then(m => m.calculerPos
 import { creerSauvegarde, validerSauvegarde, etatRappelExport } from './backup.js';
 import { frequencePromos } from './domain.js';
 import { modeSaisieActif, positionDefilement, VERDICT, UNITES, LIBELLE_UNITE, normaliserNom, nomTypeValide, deduireUniteComparaison, unitesCompatibles, estCompatible, versUniteDeBase, convertir, verifierFormat, arrondirCentimes, analyserPrixSaisie, formaterPrixEuros, formaterPrixNormalise, prixNormalise, joursEntre, mediane,  estPrixIncoherent, decisionDoublon, analyserDoublon, cleDoublon, formatAffichage, trierReleves, prixHabituelMagasin, trouverMagasinComparaison, calculerVerdictMagasins, listeAvantCoursesMagasins } from './domain.js';
-const calculerEconomieRealisee = (await import('./domain.js')).calculerEconomieRealisee;
+const { calculerEconomieRealisee, calculerEconomieSur12Mois, calculerEconomieDepuisDebut, calculerEconomieParType, compterAchatsExclus, compterAchatsAutreMagasinReference } = await import('./domain.js');
 const resultats={reussis:0,echecs:0,details:[]},lignes=[]; function test(exigence,nom,fn){let msg=null;try{fn()}catch(e){msg=e.message}if(msg){resultats.echecs++;resultats.details.push(exigence+' '+nom+' : '+msg)}else resultats.reussis++;lignes.push({ok:!msg,exigence,nom,msg});}
 function egal(a,b,msg=''){if(JSON.stringify(a)!==JSON.stringify(b))throw new Error(msg+' attendu '+JSON.stringify(b)+', obtenu '+JSON.stringify(a));}
 function proche(a,b,eps=1e-6){if(typeof a!=='number'||Math.abs(a-b)>eps)throw new Error('attendu ≈ '+b+', obtenu '+a);}
@@ -217,11 +217,11 @@ test('FR20 / E9 story 9-6','sauvegarde validée : les six collections restent id
 
 /* FR10 / FR11 / FR14 / FR18 / Story 9-1 — règles génériques pour magasins configurables. */
 const MAGASINS_TEST = [
- {id:'a',nom:'Marché A',modePrixHabituel:'mediane',comparable:true,archive:false,ordre:1},
- {id:'b',nom:'Marché B',modePrixHabituel:'dernier',comparable:true,archive:false,ordre:2},
- {id:'c',nom:'Marché C',modePrixHabituel:'dernier',comparable:true,archive:false,ordre:3},
- {id:'d',nom:'Marché D',modePrixHabituel:'dernier',comparable:false,archive:false,ordre:4},
- {id:'e',nom:'Marché E',modePrixHabituel:'dernier',comparable:true,archive:true,ordre:5}
+ {id:'a',nom:'Marché A',modePrixHabituel:'mediane',archive:false,ordre:1},
+ {id:'b',nom:'Marché B',modePrixHabituel:'dernier',archive:false,ordre:2},
+ {id:'c',nom:'Marché C',modePrixHabituel:'dernier',archive:false,ordre:3},
+ {id:'d',nom:'Marché D',modePrixHabituel:'dernier',archive:false,ordre:4},
+ {id:'e',nom:'Marché E',modePrixHabituel:'dernier',archive:true,ordre:5}
 ];
 const OBS_MAGASINS = [
  ...[1,2,3].map((n)=>({id:n,type:1,magasin:'a',date:'2026-10-0'+n,prixCentimes:1000,format:1000,promo:0})),
@@ -233,13 +233,13 @@ const OBS_MAGASINS = [
 ];
 test('FR10 / FR11 / Story 9-1','prix habituel médian générique : trois relevés hors promo et fenêtre de huit semaines',()=>{const r=prixHabituelMagasin(OBS_MAGASINS,MAGASINS_TEST[0],'kg',AUJ);egal(r.ok,true);egal(r.type,'mediane');egal(r.valeur,1000);egal(r.nbReleves,3);});
 test('FR11 / Story 9-1','prix habituel dernier relevé exclut une promotion',()=>{const r=prixHabituelMagasin(OBS_MAGASINS,MAGASINS_TEST[1],'kg',AUJ);egal(r.ok,true);egal(r.type,'dernier');egal(r.valeur,900);egal(r.date,'2026-10-03');});
-test('FR14 / Story 9-1','comparaison choisit le moins cher parmi quatre magasins et ignore archivé/non comparable',()=>{const r=trouverMagasinComparaison({observations:OBS_MAGASINS,magasins:MAGASINS_TEST,magasinCourant:'a',typeUnit:'kg',aujourdhui:AUJ});egal(r.ok,true);egal(r.magasin.id,'c');});
+test('FR14 / Story 9-1','comparaison choisit le moins cher parmi quatre magasins sans champ de participation et ignore l’archivé',()=>{const r=trouverMagasinComparaison({observations:OBS_MAGASINS,magasins:MAGASINS_TEST,magasinCourant:'a',typeUnit:'kg',aujourdhui:AUJ});egal(r.ok,true);egal(r.magasin.id,'d');});
 test('FR14 / Story 9-1','un seul magasin comparable avec un prix donne données insuffisantes',()=>{const r=trouverMagasinComparaison({observations:OBS_MAGASINS,magasins:[MAGASINS_TEST[0]],magasinCourant:'a',typeUnit:'kg',aujourdhui:AUJ});egal(r.ok,false);});
 test('FR14 / Story 9-1','comparaison générique fonctionne avec deux puis trois magasins',()=>{const deux=trouverMagasinComparaison({observations:OBS_MAGASINS,magasins:MAGASINS_TEST.slice(0,2),magasinCourant:'a',typeUnit:'kg',aujourdhui:AUJ});egal(deux.ok,true);egal(deux.magasin.id,'b');const trois=trouverMagasinComparaison({observations:OBS_MAGASINS,magasins:MAGASINS_TEST.slice(0,3),magasinCourant:'a',typeUnit:'kg',aujourdhui:AUJ});egal(trois.ok,true);egal(trois.magasin.id,'c');});
 test('FR10 / Story 9-1','médiane indisponible avec moins de trois relevés hors promo',()=>{const r=prixHabituelMagasin(OBS_MAGASINS.filter(o=>o.magasin==='a').slice(0,2),MAGASINS_TEST[0],'kg',AUJ);egal(r.ok,false);egal(r.raison,'releves-insuffisants');});
 test('FR18 / Story 9-1','verdict sans comparaison conserve la date du dernier prix connu tous magasins confondus',()=>{const magasins=[{id:'courant',modePrixHabituel:'mediane',comparable:true,archive:false,ordre:1},{id:'inactif',modePrixHabituel:'dernier',comparable:false,archive:false,ordre:2}];const observations=[{id:1,magasin:'courant',date:'2026-10-01',prixCentimes:1000,format:1000,promo:0},{id:2,magasin:'inactif',date:'2026-10-12',prixCentimes:900,format:1000,promo:0}];const r=calculerVerdictMagasins({prixCentimes:800,formatBase:1000,typeUnit:'kg',magasinCourant:'courant',magasins,observations,aujourdhui:AUJ,seuilPct:5});egal(r.resultat,VERDICT.INSUFFISANT);egal(r.dernierConnu,{date:'2026-10-12',magasin:'inactif'});});
-test('FR14 / FR16 / Story 9-1','verdict applique le seuil exact contre le moins cher des autres magasins',()=>{const r=calculerVerdictMagasins({prixCentimes:760,formatBase:1000,typeUnit:'kg',magasinCourant:'a',magasins:MAGASINS_TEST,observations:OBS_MAGASINS,aujourdhui:AUJ,seuilPct:5});egal(r.magasinComparaison,'c');egal(r.resultat,VERDICT.ACHETER_ICI);});
-test('FR22 / Story 9-1','liste avant courses retient le magasin le moins cher parmi quatre',()=>{const r=listeAvantCoursesMagasins([{id:1,unite:'kg',archive:0}],OBS_MAGASINS,MAGASINS_TEST,5,AUJ)[0];egal(r.resultat,'c');egal(r.magasin,'c');});
+test('FR14 / FR16 / Story 9-1','verdict applique le seuil exact contre le moins cher des autres magasins',()=>{const r=calculerVerdictMagasins({prixCentimes:760,formatBase:1000,typeUnit:'kg',magasinCourant:'a',magasins:MAGASINS_TEST,observations:OBS_MAGASINS,aujourdhui:AUJ,seuilPct:5});egal(r.magasinComparaison,'d');egal(r.resultat,VERDICT.ACHETER_ICI);});
+test('FR22 / Story 9-1','liste avant courses retient le magasin le moins cher parmi quatre',()=>{const r=listeAvantCoursesMagasins([{id:1,unite:'kg',archive:0}],OBS_MAGASINS,MAGASINS_TEST,5,AUJ)[0];egal(r.resultat,'d');egal(r.magasin,'d');});
 test('FR12 / Story 9-1','fréquence promo accepte un identifiant de magasin configuré',()=>{const r=frequencePromos([{magasin:'nouveau-magasin',promo:1},{magasin:'nouveau-magasin',promo:0}],'nouveau-magasin');egal(r.ok,true);egal(r.nbReleves,2);egal(r.pourcentage,50);});
 
 
@@ -250,6 +250,38 @@ test('FR20 / E9 story 9-6','import ancien conserve les relevés et ajoute un ide
 test('FR20 / E9 story 9-6','refuse une sauvegarde avec un relevé rattaché à un magasin absent',()=>{const p={schemaVersion:2,dateExport:'2026-10-18',types:[],articles:[],releves:[{id:1,type:1,magasin:'absent',date:'2026-10-10',prixCentimes:100,format:1000,promo:0}],achats:[],reglages:[],magasins:[{id:'leclerc',nom:'Leclerc',nomNormalise:'leclerc',enseigne:'Leclerc',localisation:'',couleur:'#5B8CFF',modePrixHabituel:'mediane',comparable:true,archive:false,ordre:1}]};egal(validerSauvegarde(p,2).ok,false);});
 
 test('FR26 / E9 story 9-1','achat migré sans magasin de comparaison exclu du cumul',()=>{const r=calculerEconomieRealisee({achete:1,quantite:1,prixPayeCentimes:100,format:1000,prixComparaisonCentimes:200,prixHabituelMemeMagasinCentimes:150,magasinComparaison:''},'kg');egal(r.ok,true);egal(r.compte,false);egal(r.exclu,true);egal(r.raison,'comparaison-indisponible');});
+
+test('FR14 / Story 11-1','verdict et liste utilisent quatre magasins sans champ comparable et ignorent seulement l’archivé',()=>{
+ const magasins=MAGASINS_TEST.map(({comparable,...m})=>m);
+ const observations=OBS_MAGASONS.filter(o=>magasins.some(m=>m.id===o.magasin));
+ const v=trouverMagasinComparaison({observations,magasins,magasinCourant:'a',typeUnit:'kg',aujourdhui:AUJ});
+ egal(v.ok,true);egal(v.magasin.id,'d');
+ const liste=listeAvantCoursesMagasins([{id:1,unite:'kg',archive:0}],observations,magasins,5,AUJ)[0];
+ egal(liste.resultat,'d');
+});
+test('FR26 / Story 11-1','économie au magasin de référence égale au gain promo quand le prix habituel est figé',()=>{
+ const a={achete:1,quantite:1,prixPayeCentimes:150,format:1000,prixComparaisonCentimes:200,prixHabituelMemeMagasinCentimes:200,magasinComparaison:'ref'};
+ const r=calculerEconomieRealisee(a,'kg');egal(r.economieCentimes,50);egal(r.gainPromoCentimes,50);
+});
+test('FR26 / Story 11-1','cumul glissant inclut un achat à 11 mois mais exclut celui à 13 mois',()=>{
+ const type=[{id:1,unite:'kg'}], base={type:1,achete:1,quantite:1,prixPayeCentimes:100,format:1000,prixComparaisonCentimes:200,prixHabituelMemeMagasinCentimes:150,magasinComparaison:'ref'};
+ const r=calculerEconomieSur12Mois([{...base,id:1,date:'2025-11-04'},{...base,id:2,date:'2025-09-04'}],type,'2026-10-04','ref');
+ egal(r.achatsComptes,1);egal(r.economieCentimes,100);egal(r.gainPromoCentimes,50);
+});
+test('FR26 / FR33 / Story 11-1','cumul signale les achats exclus et ceux figés avec une autre référence',()=>{
+ const types=[{id:1,unite:'kg'}], achat={type:1,achete:1,quantite:1,prixPayeCentimes:100,format:1000,prixComparaisonCentimes:200,prixHabituelMemeMagasinCentimes:150,magasinComparaison:'ancienne',date:'2026-10-01'};
+ const r=calculerEconomieDepuisDebut([achat,{...achat,id:2,magasinComparaison:'',prixComparaisonCentimes:null}],types,'2026-10-04','actuelle');
+ egal(r.achatsComptes,1);egal(r.achatsExclus,1);egal(r.achatsAutreMagasinReference,1);
+ egal(compterAchatsExclus([achat,{...achat,id:2,magasinComparaison:'',prixComparaisonCentimes:null}],types),1);
+ egal(compterAchatsAutreMagasinReference([achat],types,'actuelle'),1);
+ const parType=calculerEconomieParType([achat],types,1,'2026-10-01','2026-10-04','actuelle');egal(parType.economieCentimes,100);
+});
+test('FR26 / Story 11-1','les achats non réalisés sont ignorés et les anciens prix figés restent utilisés',()=>{
+ const a={id:1,type:1,achete:1,quantite:1,prixPayeCentimes:100,format:1000,prixComparaisonCentimes:250,prixHabituelMemeMagasinCentimes:150,magasinComparaison:'ref',date:'2024-01-01'};
+ const r=calculerEconomieDepuisDebut([a,{...a,id:2,achete:0}], [{id:1,unite:'kg'}], '2026-10-04','ref');
+ egal(r.economieCentimes,150);egal(r.achatsComptes,1);
+});
+
 const ko=lignes.filter(r=>!r.ok), bilanTexte=ko.length?ko.length+' échec(s) sur '+lignes.length:'Tous les tests passent ('+lignes.length+')';
 if(typeof document==='undefined'){console.log(bilanTexte);ko.forEach(r=>console.log('ÉCHEC ['+r.exigence+'] '+r.nom+' — '+r.msg));if(ko.length)process.exitCode=1;}
 else{const bilan=document.getElementById('bilan');bilan.textContent=bilanTexte;bilan.className=ko.length?'ko':'ok';const ul=document.getElementById('liste');[...ko,...lignes.filter(r=>r.ok)].forEach(r=>{const li=document.createElement('li');li.className=r.ok?'ok':'ko';const ex=document.createElement('span');ex.className='exi';ex.textContent=r.exigence;li.append(ex,document.createTextNode((r.ok?'✓':'✗')+' '+r.nom));if(!r.ok){const m=document.createElement('span');m.className='msg';m.textContent=r.msg;li.append(m);}ul.append(li);});}
