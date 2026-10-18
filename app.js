@@ -1,5 +1,5 @@
 // app.js — interface et navigation (stories 1.2 à 3-2).
-import { initDb, dbPrete, listerTypes, creerTypeEtArticle, annulerCreationTypeEtArticle, lireDernierReleve, lireObservations, dernierReleve, trouverDoublon, enregistrerReleves, analyserDoublons, annulerEnregistrement, listerReleves, modifierReleve, supprimerReleve, enregistrerAchat, listerAchats, modifierAchat, supprimerAchat, demanderStockagePersistant, lireReglage, ecrireReglage, compter, STORES, VERSION_SCHEMA, exporterCollections, remplacerCollections, lire, mettre, toutLire, supprimer, listerMagasins, lireMagasin, creerMagasin, modifierMagasin, archiverMagasin, restaurerMagasin, supprimerMagasin } from './db.js';
+import { initDb, dbPrete, listerTypes, creerTypeEtArticle, annulerCreationTypeEtArticle, lireDernierReleve, lireObservations, dernierReleve, trouverDoublon, enregistrerReleves, analyserDoublons, annulerEnregistrement, listerReleves, modifierReleve, supprimerReleve, enregistrerAchat, listerAchats, modifierAchat, supprimerAchat, demanderStockagePersistant, lireReglage, ecrireReglage, compter, STORES, VERSION_SCHEMA, exporterCollections, remplacerCollections, lire, mettre, toutLire, supprimer, listerMagasins, lireMagasin, creerMagasin, modifierMagasin, archiverMagasin, restaurerMagasin, supprimerMagasin, changerMagasinReference } from './db.js';
 import { UNITES, LIBELLE_UNITE, VERDICT, analyserPrixSaisie, verifierFormat, prixNormalise, formaterPrixEuros, formaterPrixNormalise, calculerEconomieRealisee, estPrixIncoherent, unitesCompatibles, formatAffichage, calculerPositionDock, modeSaisieActif, positionDefilement, frequencePromos, deduireUniteComparaison, normaliserNom, calculerVerdictMagasins, prixHabituelMagasin, listeAvantCoursesMagasins } from './domain.js';
 import { accueilVide, vueTypes, vueTypeForm } from './types-ui.js';
 import { creerSauvegarde, validerSauvegarde, etatRappelExport } from './backup.js';
@@ -273,6 +273,33 @@ async function vueReglages() {
   const messageMagasins = el('p',{class:'message-sauvegarde',role:'status',hidden:true});
   function afficherMessageMagasins(texte) { messageMagasins.textContent=texte; messageMagasins.hidden=!texte; }
   function boutonCouleur(m, petit=false) { return el('span',{class:'pastille-magasin'+(petit?' petite':''),style:'background:'+m.couleur,'aria-label':'Couleur '+m.nom}); }
+  const referenceMagasinId = await lireReglage('magasinReference', magasinsDisponibles[0]?.id || '');
+  function confirmerReferenceDansVue() {
+    const message = vue.querySelector('#reglages-magasins .message-sauvegarde');
+    if (message) { message.textContent = 'Référence modifiée. S\'applique aux prochains achats ; les gains déjà calculés ne changent pas.'; message.hidden = false; }
+  }
+  async function choisirReference(m) {
+    await changerMagasinReference(m.id);
+    await actualiserMagasins();
+    await afficher();
+    confirmerReferenceDansVue();
+  }
+  function ouvrirFeuilleReference() {
+    function ligneChoixReference(m) {
+      return el('button',{type:'button',class:'ligne-choix-reference','aria-pressed':String(m.id===referenceMagasinId),onclick:async()=>{try{await choisirReference(m);feuille.close();}catch(e){afficherMessageMagasins(e.message||'Impossible de changer le magasin de référence.');}}},boutonCouleur(m,true),el('div',{class:'magasin-details'},el('strong',{text:m.nom}),el('span',{text:[m.localisation,m.enseigne].filter(Boolean).join(' · ')})));
+    }
+    const feuille = el('dialog',{class:'feuille feuille-reference-magasin'},
+      el('h2',{text:'Magasin de référence'}),
+      el('p',{class:'aide-magasin',text:'Choisis un magasin actif. Il servira pour les prochains achats.'}),
+      el('div',{class:'liste-choix-reference'},...magasinsDisponibles.map(ligneChoixReference)),
+      el('button',{type:'button',class:'btn btn-secondaire btn-bloc',text:'Annuler',onclick:()=>feuille.close()}));
+    feuille.addEventListener('close',()=>feuille.remove());document.body.append(feuille);feuille.showModal();
+  }
+  const referenceMagasin = magasinsDisponibles.find(m=>m.id===referenceMagasinId) || magasinsDisponibles[0];
+  carteMagasins.append(el('div',{class:'reference-magasin-reglage'},
+    el('button',{type:'button',class:'btn btn-secondaire btn-bloc',text:'Magasin de référence : '+(referenceMagasin?.nom||'À choisir')+' ▾',onclick:ouvrirFeuilleReference}),
+    el('p',{class:'aide-magasin',text:'Sert à calculer tes gains : ce que tu aurais payé à ce magasin. S\'applique aux prochains achats ; les gains déjà calculés ne changent pas.'})
+  ));
   function ouvrirFormulaireMagasin(magasin=null) {
     const existants=magasinsTous.filter(m=>m.id!==magasin?.id);
     const couleurs=['#5B8CFF','#FF6B5E','#3DDC97','#B07CFF','#2EC4D6','#FF8FC7','#D9A066','#8FA3C7'];
@@ -286,17 +313,15 @@ async function vueReglages() {
     const modeMediane=el('button',{type:'button',class:'btn btn-secondaire','aria-pressed':modeChoisi.value==='mediane',text:'Médiane 8 semaines',onclick:()=>{modeChoisi.value='mediane';actualiserMode();}});
     const mode=el('div',{class:'choix-mode-prix'},modeDernier,modeMediane);
     function actualiserMode(){modeDernier.setAttribute('aria-pressed',String(modeChoisi.value==='dernier'));modeMediane.setAttribute('aria-pressed',String(modeChoisi.value==='mediane'));aide.textContent=modeChoisi.value==='mediane'?'Médiane des relevés hors promo des 8 dernières semaines (3 minimum).':'Dernier relevé hors promo, avec sa date.';}
-    const comparable=el('input',{type:'checkbox',checked:magasin?magasin.comparable:true,'aria-label':'Participe aux comparaisons'});
     const palette=el('div',{class:'palette-couleurs'},...couleurs.map(c=>el('button',{type:'button',class:'choix-couleur','aria-label':'Choisir '+c,'aria-pressed':c===couleurChoisie.value,style:'background:'+c,onclick:()=>{couleurChoisie.value=c;palette.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(b.getAttribute('aria-label')==='Choisir '+c)));}})));
     const erreur=el('p',{class:'erreur',role:'alert',hidden:true});
     const dialogue=el('dialog',{class:'feuille formulaire-magasin'},
       el('h2',{text:magasin?'Modifier le magasin':'Nouveau magasin'}),
       el('label',{text:'Nom *'},nom),el('label',{text:'Enseigne'},enseigne),el('label',{text:'Localisation'},localisation),
       el('label',{text:'Couleur'}),palette,el('label',{text:'Prix habituel'}),mode,aide,
-      el('label',{class:'option-comparable'},comparable,el('span',{text:'Participe aux comparaisons'})),
       erreur,
       el('div',{class:'feuille-actions'},
-        el('button',{type:'button',class:'btn btn-primaire',text:'Enregistrer',onclick:async()=>{try{const champs={nom:nom.value,enseigne:enseigne.value,localisation:localisation.value,couleur:couleurChoisie.value,modePrixHabituel:modeChoisi.value,comparable:comparable.checked};if(magasin)await modifierMagasin(magasin.id,champs);else await creerMagasin(champs);dialogue.close();await actualiserMagasins();magasinCourant=await lireReglage('magasinCourant',magasinsDisponibles[0]?.id||'');await afficher();}catch(e){erreur.textContent=e.message||'Enregistrement impossible.';erreur.hidden=false;}}}),
+        el('button',{type:'button',class:'btn btn-primaire',text:'Enregistrer',onclick:async()=>{try{const champs={nom:nom.value,enseigne:enseigne.value,localisation:localisation.value,couleur:couleurChoisie.value,modePrixHabituel:modeChoisi.value};if(magasin)await modifierMagasin(magasin.id,champs);else await creerMagasin(champs);dialogue.close();await actualiserMagasins();magasinCourant=await lireReglage('magasinCourant',magasinsDisponibles[0]?.id||'');await afficher();}catch(e){erreur.textContent=e.message||'Enregistrement impossible.';erreur.hidden=false;}}}),
         el('button',{type:'button',class:'btn btn-secondaire',text:'Annuler',onclick:()=>dialogue.close()})
       )
     );
@@ -305,6 +330,7 @@ async function vueReglages() {
   async function actionMagasin(magasin,action) {
     try {
       if(action==='modifier'){ouvrirFormulaireMagasin(magasin);return;}
+      if(action==='reference'){await choisirReference(magasin);return;}
       if(action==='archiver') await archiverMagasin(magasin.id);
       if(action==='restaurer') await restaurerMagasin(magasin.id);
       if(action==='supprimer') await supprimerMagasin(magasin.id);
@@ -316,8 +342,9 @@ async function vueReglages() {
   function ligneMagasin(m,archive=false) {
     const texte=el('div',{class:'magasin-details'},el('strong',{text:m.nom}),el('span',{text:[m.enseigne,m.localisation].filter(Boolean).join(' · ')}));
     const ligne=el('div',{class:'ligne-magasin'},boutonCouleur(m),texte);
+    if(!archive && m.id===referenceMagasinId) ligne.append(el('span',{class:'badge-reference',text:'Référence'}));
     if(archive) ligne.append(el('button',{type:'button',class:'btn btn-secondaire',text:'Restaurer',onclick:()=>actionMagasin(m,'restaurer')}));
-    else ligne.append(el('button',{type:'button',class:'btn btn-secondaire bouton-menu-magasin','aria-label':'Options '+m.nom,text:'⋯',onclick:()=>{const menu=el('dialog',{class:'feuille menu-magasin'},el('h2',{text:m.nom}),el('button',{type:'button',class:'btn btn-secondaire btn-bloc',text:'Modifier',onclick:()=>{menu.close();actionMagasin(m,'modifier');}}),el('button',{type:'button',class:'btn btn-secondaire btn-bloc',text:'Archiver',onclick:()=>{menu.close();actionMagasin(m,'archiver');}}),el('button',{type:'button',class:'btn btn-secondaire btn-bloc',text:'Supprimer',onclick:()=>{menu.close();actionMagasin(m,'supprimer');}}),el('button',{type:'button',class:'btn btn-secondaire btn-bloc',text:'Fermer',onclick:()=>menu.close()}));menu.addEventListener('close',()=>menu.remove());document.body.append(menu);menu.showModal();}}));
+    else ligne.append(el('button',{type:'button',class:'btn btn-secondaire bouton-menu-magasin','aria-label':'Options '+m.nom,text:'⋯',onclick:()=>{const menu=el('dialog',{class:'feuille menu-magasin'},el('h2',{text:m.nom}),el('button',{type:'button',class:'btn btn-secondaire btn-bloc',text:'Modifier',onclick:()=>{menu.close();actionMagasin(m,'modifier');}}),el('button',{type:'button',class:'btn btn-secondaire btn-bloc',text:'Définir comme référence',onclick:()=>{menu.close();actionMagasin(m,'reference');}}),el('button',{type:'button',class:'btn btn-secondaire btn-bloc',text:'Archiver',onclick:()=>{menu.close();actionMagasin(m,'archiver');}}),el('button',{type:'button',class:'btn btn-secondaire btn-bloc',text:'Supprimer',onclick:()=>{menu.close();actionMagasin(m,'supprimer');}}),el('button',{type:'button',class:'btn btn-secondaire btn-bloc',text:'Fermer',onclick:()=>menu.close()}));menu.addEventListener('close',()=>menu.remove());document.body.append(menu);menu.showModal();}}));
     return ligne;
   }
   const actifsStores=magasinsTous.filter(m=>!m.archive);

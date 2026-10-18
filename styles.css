@@ -429,6 +429,13 @@ svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width:
 .carte-magasins { scroll-margin-top:16px; }
 .liste-magasins { display:grid; gap:8px; margin:12px 0; }
 .ligne-magasin { display:flex; align-items:center; gap:12px; min-height:56px; padding:8px; border:1px solid rgba(255,255,255,.12); border-radius:12px; }
+.reference-magasin-reglage { display:grid; gap:6px; margin:12px 0; }
+.reference-magasin-reglage > button { min-height:48px; text-align:left; }
+.badge-reference { display:inline-flex; align-items:center; justify-content:center; min-height:28px; padding:4px 8px; border-radius:999px; background:var(--surface-secondaire,#273248); color:var(--texte,#fff); font-size:12px; font-weight:700; white-space:nowrap; }
+.liste-choix-reference { display:grid; gap:8px; margin:12px 0; }
+.ligne-choix-reference { display:flex; align-items:center; gap:12px; width:100%; min-height:56px; padding:8px; text-align:left; border:1px solid var(--bordure,#39445b); border-radius:12px; background:var(--surface,#182033); color:var(--texte,#fff); }
+.ligne-choix-reference[aria-pressed="true"] { outline:2px solid var(--accent,#5B8CFF); }
+.ligne-choix-reference .magasin-details { flex:1; }
 .pastille-magasin { width:14px; height:14px; border-radius:50%; flex:0 0 14px; display:inline-block; }
 .magasin-details { min-width:0; flex:1; display:grid; gap:3px; }
 .magasin-details span { color:var(--texte-secondaire,#A4ACBD); font-size:13px; overflow-wrap:anywhere; }
@@ -439,8 +446,7 @@ svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width:
 .choix-couleur { width:100%; min-height:40px; border:2px solid transparent; border-radius:10px; }
 .choix-couleur[aria-pressed="true"] { outline:3px solid var(--texte,#F4F6FA); outline-offset:2px; }
 .aide-magasin { color:var(--texte-secondaire,#A4ACBD); font-size:13px; }
-.option-comparable { display:flex!important; align-items:center; gap:10px!important; min-height:48px; }
-.option-comparable input { width:24px; height:24px; }
+
 .magasins-archives { margin-top:14px; }
 .magasins-archives summary { min-height:48px; display:flex; align-items:center; cursor:pointer; font-weight:600; }
 @media (prefers-reduced-motion:reduce) { .selecteur-magasin-bouton,.magasin-btn { transition:none!important; } }

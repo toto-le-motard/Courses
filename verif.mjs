@@ -1098,6 +1098,30 @@ if (playwright) {
       await page.click('dialog.formulaire-magasin button:has-text("Annuler")');
       const storesApresCreation = await page.evaluate(async()=>{const db=await import('/db.js');return db.listerMagasins();});
       if(storesApresCreation.length!==4 || storesApresCreation.filter(m=>m.enseigne==='Leclerc').length<2 || !storesApresCreation.some(m=>m.id==='leclerc-vannes') || !storesApresCreation.some(m=>m.id==='leclerc-rennes')) throw new Error('E9 : création des quatre magasins ou identifiants générés incorrects');
+
+      // Story 11-3 : choix unique de référence, aide, badge, absence du réglage de participation et garde-fous.
+      const aideReference = await page.locator('#reglages-magasins .reference-magasin-reglage').innerText();
+      if(!aideReference.includes('Sert à calculer tes gains : ce que tu aurais payé à ce magasin.')||!aideReference.includes('les gains déjà calculés ne changent pas'))throw new Error('11-3 : aide du magasin de référence absente ou incorrecte');
+      await page.click('#reglages-magasins button:has-text("+ Nouveau magasin")');
+      if((await page.locator('dialog.formulaire-magasin').innerText()).includes('Participe aux comparaisons'))throw new Error('11-3 : réglage de participation encore visible dans le formulaire');
+      await page.click('dialog.formulaire-magasin button:has-text("Annuler")');
+      await page.locator('#reglages-magasins .reference-magasin-reglage button').click();
+      await page.waitForSelector('dialog.feuille-reference-magasin[open]',{timeout:5000});
+      await page.locator('dialog.feuille-reference-magasin button').filter({hasText:'Leclerc Rennes'}).click();
+      await page.waitForFunction(()=>document.querySelector('#reglages-magasins .reference-magasin-reglage button')?.textContent.includes('Leclerc Rennes')&&document.querySelector('#reglages-magasins .message-sauvegarde')?.textContent.includes('les gains déjà calculés ne changent pas'),null,{timeout:5000});
+      if(await page.locator('#reglages-magasins .ligne-magasin').filter({hasText:'Leclerc Rennes'}).locator('.badge-reference').count()!==1||await page.locator('#reglages-magasins .ligne-magasin').filter({hasText:'Leclerc'}).first().locator('.badge-reference').count()!==0)throw new Error('11-3 : badge Référence non déplacé correctement');
+      await page.locator('#reglages-magasins button[aria-label="Options Leclerc Rennes"]').click();
+      await page.click('dialog.menu-magasin button:has-text("Archiver")');
+      const messageReference="C'est ton magasin de référence : choisis-en un autre d'abord";
+      await page.waitForFunction(m=>document.querySelector('#reglages-magasins .message-sauvegarde')?.textContent===m,messageReference,{timeout:5000});
+      await page.locator('#reglages-magasins button[aria-label="Options Leclerc Rennes"]').click();
+      await page.click('dialog.menu-magasin button:has-text("Supprimer")');
+      await page.waitForFunction(m=>document.querySelector('#reglages-magasins .message-sauvegarde')?.textContent===m,messageReference,{timeout:5000});
+      await page.locator('#reglages-magasins .reference-magasin-reglage button').click();
+      await page.waitForSelector('dialog.feuille-reference-magasin[open]',{timeout:5000});
+      await page.locator('dialog.feuille-reference-magasin button').filter({hasText:'Leclerc Vannes'}).click();
+      await page.waitForFunction(()=>document.querySelector('#reglages-magasins .reference-magasin-reglage button')?.textContent.includes('Leclerc Vannes'),null,{timeout:5000});
+      if((await page.locator('body').innerText()).includes('Participe aux comparaisons'))throw new Error('11-3 : texte de participation encore visible dans les réglages');
       await aller('#/magasin');
       await page.click('.selecteur-magasin-bouton');
       await page.waitForSelector('.feuille-magasins[open]',{timeout:5000});
