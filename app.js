@@ -1435,7 +1435,7 @@ async function vueBilan() {
   await dbPrete;
   const [achats,types] = await Promise.all([toutLire('Purchase'),toutLire('ProductType')]);
   const dateCourante = aujourdHui();
-  const magasinReferenceId = await lireReglage('magasinReference', magasinsDisponibles[0]?.id || 'leclerc');
+  const magasinReferenceId = await lireReglage('magasinReference', magasinsDisponibles[0]?.id || '');
   const magasinReference = await lireMagasin(magasinReferenceId);
   const cumul12 = calculerEconomieSur12Mois(achats,types,dateCourante,magasinReferenceId);
   const cumulDepuisDebut = calculerEconomieDepuisDebut(achats,types,dateCourante,magasinReferenceId);
