@@ -991,7 +991,7 @@ if (playwright) {
         if(differences.length)throw new Error('aller-retour sauvegarde magasins différent : '+differences.join(','));
         return {typeId:type.id,magasinComparaison:verdict.magasinComparaison,resultat:verdict.resultat,magasins:apres.magasins.length};
       });
-      if(verdictMultiMagasins.magasinComparaison!=='leclerc-rennes' || verdictMultiMagasins.resultat!=='acheter-ici' || verdictMultiMagasins.magasins!==4) throw new Error('E9 : le verdict ne retient pas le moins cher ou sauvegarde non fidèle : '+JSON.stringify(verdictMultiMagasins));
+      if(verdictMultiMagasins.magasinComparaison!=='leclerc-rennes' || verdictMultiMagasins.resultat!=='acheter ici' || verdictMultiMagasins.magasins!==4) throw new Error('E9 : le verdict ne retient pas le moins cher ou sauvegarde non fidèle : '+JSON.stringify(verdictMultiMagasins));
       ok('E9 : quatre magasins, deux magasins de même enseigne, verdict contre le moins cher et export/import fidèles');
       const archiverViaUI = async nom => {
         await page.locator('#reglages-magasins button[aria-label="Options '+nom+'"]').click();
