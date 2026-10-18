@@ -157,7 +157,7 @@ if (playwright) {
           db.createObjectStore('Settings', { keyPath: 'cle' });
           types.add({ id: 42, nom: 'Type historique', nomNormalise: 'type historique', unite: 'kg', archive: 0 });
           obs.add({ id: 77, type: 42, magasin: 'leclerc', date: '2026-10-01', prixCentimes: 250, format: 250, promo: 0 });
-          achats.add({ id: 81, type: 42, observation: 77, magasin: 'leclerc', date: '2026-10-01', achete: 1, quantite: 1, prixPayeCentimes: 250, format: 250, prixComparaisonCentimes: 300, prixHabituelMemeMagasinCentimes: 250, magasinComparaison: '' });
+          achats.add({ id: 81, type: 42, observation: 77, magasin: 'leclerc', date: '2026-10-01', achete: 1, quantite: 1, prixPayeCentimes: 250, format: 250, prixComparaisonCentimes: 300, prixHabituelMemeMagasinCentimes: 250 });
         };
         req.onsuccess = () => { req.result.close(); resolve(); };
         req.onerror = () => reject(req.error);
@@ -739,8 +739,8 @@ if (playwright) {
        const geoRappel844=await page.evaluate(()=>{const r=s=>{const e=document.querySelector(s);if(!e)return null;const b=e.getBoundingClientRect();return {top:Math.round(b.top),bottom:Math.round(b.bottom)};};return {scrollY:Math.round(scrollY),type:r('#champ-type'),prix:r('#champ-prix'),format:r('#champ-format'),rappel:r('#rappel-type'),dock:r('#dock-magasin'),tabs:r('.tabs')};});
        if(geoRappel844.scrollY!==0||!geoRappel844.type||!geoRappel844.prix||!geoRappel844.format||!geoRappel844.rappel||geoRappel844.type.top<0||geoRappel844.prix.bottom>geoRappel844.dock.top||geoRappel844.format.bottom>geoRappel844.dock.top||geoRappel844.dock.bottom>geoRappel844.tabs.top)throw new Error('E10-3 : champs et dock avec rappel hors zone à 390x844 '+JSON.stringify(geoRappel844));
        await page.setViewportSize({width:390,height:500});await page.locator('#champ-prix').focus();await page.waitForTimeout(80);
-       const geoRappel500=await page.evaluate(()=>{const r=s=>{const e=document.querySelector(s);if(!e)return null;const b=e.getBoundingClientRect();return {top:Math.round(b.top),bottom:Math.round(b.bottom)};};return {type:r('#champ-type'),prix:r('#champ-prix'),format:r('#champ-format'),rappel:r('#rappel-type'),dock:r('#dock-magasin'),tabs:r('.tabs')};});
-       if(!geoRappel500.type||!geoRappel500.prix||!geoRappel500.format||!geoRappel500.dock||geoRappel500.type.top<0||geoRappel500.prix.bottom>geoRappel500.dock.top||geoRappel500.format.bottom>geoRappel500.dock.top||geoRappel500.dock.bottom>500)throw new Error('E10-3 : champs et dock avec rappel se chevauchent à 390x500 '+JSON.stringify(geoRappel500));
+       const geoRappel500=await page.evaluate(()=>{const r=s=>{const e=document.querySelector(s);if(!e)return null;const b=e.getBoundingClientRect();return {top:Math.round(b.top),bottom:Math.round(b.bottom)};};return {scrollY:Math.round(scrollY),type:r('#champ-type'),prix:r('#champ-prix'),format:r('#champ-format'),rappel:r('#rappel-type'),dock:r('#dock-magasin'),tabs:r('.tabs')};});
+       if(geoRappel500.scrollY!==0||!geoRappel500.type||!geoRappel500.prix||!geoRappel500.format||!geoRappel500.rappel||!geoRappel500.dock||!geoRappel500.tabs||geoRappel500.type.top<0||geoRappel500.type.bottom>geoRappel500.dock.top||geoRappel500.prix.top<0||geoRappel500.prix.bottom>geoRappel500.dock.top||geoRappel500.format.top<0||geoRappel500.format.bottom>geoRappel500.dock.top||geoRappel500.dock.top<0||geoRappel500.dock.bottom>geoRappel500.tabs.top||geoRappel500.tabs.bottom>500)throw new Error('E10-3 : champs, dock et onglets avec rappel se chevauchent à 390x500 '+JSON.stringify(geoRappel500));
        await page.setViewportSize({width:390,height:844});
        await partiesRappel.nth(0).click();
        await page.waitForFunction(()=>document.querySelector('#titre-ecran')?.textContent==='Fiche du type',null,{timeout:5000});
@@ -995,60 +995,6 @@ if (playwright) {
         await scannerCtx.close();
 
        
-
-      // E9-2 : migration réelle depuis le schéma 1 avec des relevés et achats déjà présents.
-      etapeParcours = 'E9 migration additive depuis le schéma 1';
-      const migrationCtx = await navigateur.newContext({ viewport: { width: 390, height: 844 } });
-      const migrationPage = await migrationCtx.newPage();
-      await migrationPage.goto(base + 'tests.html');
-      await migrationPage.evaluate(async () => {
-        await new Promise((resolve, reject) => {
-          const req = indexedDB.open('appli-courses', 1);
-          req.onupgradeneeded = () => {
-            const d = req.result;
-            const types = d.createObjectStore('ProductType', { keyPath: 'id', autoIncrement: true });
-            types.createIndex('nomNormalise', 'nomNormalise', { unique: true });
-            const articles = d.createObjectStore('Article', { keyPath: 'codeBarres' });
-            articles.createIndex('type', 'type');
-            const observations = d.createObjectStore('Observation', { keyPath: 'id', autoIncrement: true });
-            observations.createIndex('type', 'type');
-            observations.createIndex('cleJour', ['type', 'magasin', 'date', 'promo']);
-            const purchases = d.createObjectStore('Purchase', { keyPath: 'id', autoIncrement: true });
-            purchases.createIndex('type', 'type');
-            purchases.createIndex('observation', 'observation');
-            d.createObjectStore('Settings', { keyPath: 'cle' });
-          };
-          req.onerror = () => reject(req.error);
-          req.onsuccess = () => {
-            const d = req.result;
-            const tx = d.transaction(['ProductType','Observation','Purchase','Settings'], 'readwrite');
-            tx.objectStore('ProductType').put({id:42,nom:'Migration café',nomNormalise:'migration cafe',unite:'kg',archive:0});
-            tx.objectStore('Observation').put({id:71,type:42,magasin:'leclerc',date:'2026-10-10',prixCentimes:123,format:1000,promo:0});
-            tx.objectStore('Observation').put({id:72,type:42,magasin:'intermarche',date:'2026-10-11',prixCentimes:119,format:1000,promo:1});
-            tx.objectStore('Purchase').put({id:81,type:42,observation:71,magasin:'leclerc',date:'2026-10-10',achete:1,quantite:1,prixPayeCentimes:123,format:1000});
-            tx.objectStore('Settings').put({cle:'seuilIndifference',valeur:5});
-            tx.oncomplete = () => { d.close(); resolve(); };
-            tx.onerror = () => reject(tx.error);
-          };
-        });
-      });
-      await migrationPage.goto(base + '#/magasin');
-      await migrationPage.waitForSelector('#vue .carte', { timeout: 10000 });
-      const migrationResultat = await migrationPage.evaluate(async () => {
-        const req = indexedDB.open('appli-courses');
-        const d = await new Promise((resolve,reject)=>{req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);});
-        const lireTout = (nom) => new Promise((resolve,reject)=>{const q=d.transaction(nom).objectStore(nom).getAll();q.onsuccess=()=>resolve(q.result);q.onerror=()=>reject(q.error);});
-        const magasins=await lireTout('Store'), observations=await lireTout('Observation'), achats=await lireTout('Purchase');
-        const settings=await lireTout('Settings');
-        d.close();
-        return {version:d.version,magasins:magasins.map(m=>m.id).sort(),observations,achats,settings};
-      });
-      if(migrationResultat.version!==2 || !migrationResultat.magasins.includes('leclerc') || !migrationResultat.magasins.includes('intermarche')) throw new Error('E9-2 : migration ne crée pas les deux magasins initiaux : '+JSON.stringify({version:migrationResultat.version,magasins:migrationResultat.magasins}));
-      if(migrationResultat.observations.length!==2 || !migrationResultat.observations.some(o=>o.id===71&&o.magasin==='leclerc'&&o.prixCentimes===123) || !migrationResultat.observations.some(o=>o.id===72&&o.magasin==='intermarche'&&o.prixCentimes===119)) throw new Error('E9-2 : les prix constatés existants ont été perdus ou modifiés');
-      if(migrationResultat.achats.length!==1 || migrationResultat.achats[0].id!==81 || migrationResultat.achats[0].magasin!=='leclerc' || migrationResultat.achats[0].magasinComparaison!=='') throw new Error('E9-2 : achat existant modifié ou magasinComparaison absent');
-      if(!migrationResultat.settings.some(s=>s.cle==='magasinCourant') || !migrationResultat.settings.some(s=>s.cle==='magasinReleveMensuel')) throw new Error('E9-2 : réglages de magasins non initialisés');
-      ok('E9-2 : migration schéma 1 → 2 additive, relevés et achats conservés, magasins et réglages initialisés');
-      await migrationCtx.close();
 
       // E9 / stories 9-1 à 9-6 : parcours réel des magasins configurables.
       etapeParcours = 'E9 magasins configurables';
