@@ -71,7 +71,7 @@ for (const [nom, conforme] of contratParcoursAchat) {
 // ---- 1d. Historique des achats : exclure les relevés « non acheté » -------------------------
 const historiqueSource = appTexte.slice(appTexte.indexOf('async function vueTousAchats'));
 const filtreAchatsReels = /filter\(a=>\(a\.achete===1\|\|a\.achete===true\)&&\(!choix\|\|Number\(a\.type\)===Number\(choix\)\)\)/;
-if (historiqueSource.includes('async function vueHistoriqueAchats') && filtreAchatsReels.test(historiqueSource)) {
+if (historiqueSource.includes('async function vueTousAchats') && filtreAchatsReels.test(historiqueSource)) {
   ok('historique achats : seuls les achats réellement effectués sont affichés');
 } else {
   ko('historique achats : les relevés « non acheté » ne sont pas exclus');
