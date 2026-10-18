@@ -59,7 +59,7 @@ for (const [nom, motif] of contratHistorique) {
 const contratParcoursAchat = [
   ['bouton de correction absent du dock magasin', !/Prix ou format payé différent\s*\?/.test(appTexte)],
   ['création d’achat réservée au clic « J’achète »', /if \(statutAchat === 1\) \{\s*const observationId = jeton\.ajoutes\[0\]/.test(appTexte)],
-  ['liste des achats filtrée sur les achats réellement effectués', /filter\(achat => \(typeId==null\|\|Number\(achat\.type\)===Number\(typeId\)\)&&\(achat\.achete === 1 \|\| achat\.achete === true\)\)/.test(appTexte)],
+  ['liste des achats filtrée sur les achats réellement effectués', /filter\(a=>\(a\.achete===1\|\|a\.achete===true\)&&\(!choix\|\|Number\(a\.type\)===Number\(choix\)\)\)/.test(appTexte)],
   ['action d’historique dédiée à la correction de l’achat', /Corriger l’achat/.test(appTexte) && /Corriger le prix, la quantité ou le format/.test(appTexte)],
   ['le refus d’achat ne crée pas de Purchase', /if \(statutAchat === 1\) \{\s*const observationId/.test(appTexte)]
 ];
@@ -69,8 +69,8 @@ for (const [nom, conforme] of contratParcoursAchat) {
 }
 
 // ---- 1d. Historique des achats : exclure les relevés « non acheté » -------------------------
-const historiqueSource = appTexte.slice(appTexte.indexOf('async function vueHistoriqueAchats'));
-const filtreAchatsReels = /filter\(achat\s*=>\s*\(typeId==null\|\|Number\(achat\.type\)===Number\(typeId\)\)&&\(achat\.achete\s*===\s*1\s*\|\|\s*achat\.achete\s*===\s*true\)\)/;
+const historiqueSource = appTexte.slice(appTexte.indexOf('async function vueTousAchats'));
+const filtreAchatsReels = /filter\(a=>\(a\.achete===1\|\|a\.achete===true\)&&\(!choix\|\|Number\(a\.type\)===Number\(choix\)\)\)/;
 if (historiqueSource.includes('async function vueHistoriqueAchats') && filtreAchatsReels.test(historiqueSource)) {
   ok('historique achats : seuls les achats réellement effectués sont affichés');
 } else {
