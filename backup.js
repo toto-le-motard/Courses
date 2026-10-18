@@ -9,10 +9,7 @@ function dateIsoValide(date) {
 }
 
 export function creerSauvegarde({ schemaVersion, types, articles, releves, achats, reglages, magasins = null, dateExport }) {
-  return { schemaVersion, dateExport, types, articles, releves, achats, reglages, magasins: magasins || [
-    { id: 'leclerc', nom: 'Leclerc', nomNormalise: 'leclerc', enseigne: 'Leclerc', localisation: '', couleur: '#5B8CFF', modePrixHabituel: 'mediane', comparable: true, archive: false, ordre: 1 },
-    { id: 'intermarche', nom: 'Intermarché', nomNormalise: 'intermarche', enseigne: 'Intermarché', localisation: '', couleur: '#FF6B5E', modePrixHabituel: 'dernier', comparable: true, archive: false, ordre: 2 }
-  ] };
+  return { schemaVersion, dateExport, types, articles, releves, achats, reglages, magasins: Array.isArray(magasins) ? magasins : [] };
 }
 
 export function validerSauvegarde(payload, schemaVersionAttendu) {
