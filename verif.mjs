@@ -1053,6 +1053,8 @@ if (playwright) {
         ];
         await db.enregistrerReleves(releves);
         const observations=await db.lireObservations(type.id),magasins=await db.listerMagasins();
+        const releveRennes=observations.find(o=>o.magasin==='leclerc-rennes');
+        await db.mettre('Purchase',{id:9910,type:type.id,observation:releveRennes.id,magasin:'leclerc-rennes',date:'2031-03-20',achete:1,quantite:1,prixPayeCentimes:700,format,prixComparaisonCentimes:1000,prixHabituelMemeMagasinCentimes:700,magasinComparaison:'intermarche'});
         const verdict=d.calculerVerdictMagasins({prixCentimes:650,formatBase:format,typeUnit:type.unite,magasinCourant:'leclerc-vannes',magasins,observations,aujourdhui:'2031-04-01',seuilPct:5});
         const snapshot0=await db.exporterCollections();
         for(const a of snapshot0.achats)if(!Object.prototype.hasOwnProperty.call(a,'magasinComparaison'))await db.mettre('Purchase',{...a,magasinComparaison:''});
@@ -1082,6 +1084,11 @@ if (playwright) {
       const choixActifs = await page.locator('.feuille-magasins .magasin-btn').allTextContents();
       if(choixActifs.some(t=>t.includes('Leclerc Rennes')))throw new Error('E9 : magasin archivé encore présent dans le sélecteur');
       await page.click('.feuille-magasins button:has-text("Leclerc Vannes")');
+      await aller('#/historique/'+verdictMultiMagasins.typeId);
+      await page.waitForFunction(()=>[...document.querySelectorAll('.ligne-releve')].some(e=>e.textContent.includes('Leclerc Rennes (archivé)')),null,{timeout:5000});
+      await aller('#/tous-achats');
+      await page.waitForFunction(()=>[...document.querySelectorAll('.ligne-achat')].some(e=>e.textContent.includes('Leclerc Rennes (archivé)')),null,{timeout:5000});
+      ok('E9 : prix constatés et achats d’un magasin archivé restent consultables avec la mention (archivé)');
       await aller('#/reglages/magasins');
       await page.locator('#reglages-magasins .magasins-archives summary').click();
       await page.click('#reglages-magasins .magasins-archives button:has-text("Restaurer")');
