@@ -5,7 +5,7 @@
 // (g, ml, unités), dates AAAA-MM-JJ, booléens stockés en 0/1 (un booléen n'est pas une clé valide).
 //   ProductType : { id, nom, nomNormalise, unite: 'kg'|'l'|'unit', marque?, nomArticle?, archive: 0|1 }
 //   Article     : { codeBarres (clé), type, marque?, nom?, format }
-//   Observation : { id, type, magasin: 'leclerc'|'intermarche', date, prixCentimes, format, promo: 0|1 }
+//   Observation : { id, type, magasin: Store.id, date, prixCentimes, format, promo: 0|1 }
 //   Purchase    : { id, type, observation, magasin, date, achete: 0|1, quantite, prixPayeCentimes, format,
 //                   prixComparaisonCentimes|null  (prix habituel hors promo de l'AUTRE magasin, figé à la date),
 //                   prixHabituelMemeMagasinCentimes|null (prix habituel hors promo du MÊME magasin, figé à la date) }
@@ -43,7 +43,7 @@ const MIGRATIONS = {
     stores.add({ id: 'leclerc', nom: 'Leclerc', nomNormalise: 'leclerc', enseigne: 'Leclerc', localisation: '', couleur: '#5B8CFF', modePrixHabituel: 'mediane', comparable: true, archive: false, ordre: 1 });
     stores.add({ id: 'intermarche', nom: 'Intermarché', nomNormalise: 'intermarche', enseigne: 'Intermarché', localisation: '', couleur: '#FF6B5E', modePrixHabituel: 'dernier', comparable: true, archive: false, ordre: 2 });
     const settings = transaction.objectStore('Settings');
-    for (const [cle, valeur] of [['magasinCourant', 'leclerc'], ['magasinReleveMensuel', 'intermarche']]) {
+    for (const [cle, valeur] of [['magasinCourant', MAGASINS_INITIAUX[0].id], ['magasinReleveMensuel', MAGASINS_INITIAUX[1].id]]) {
       const rq = settings.get(cle);
       rq.onsuccess = () => { if (!rq.result) settings.put({ cle, valeur }); };
     }
@@ -109,8 +109,8 @@ export const ecrireReglage = (cle, valeur) => mettre('Settings', { cle, valeur }
 // Réglages par défaut (seuil « indifférent » : 5 %, FR16).
 async function reglagesParDefaut() {
   if ((await lire('Settings', 'seuilIndifference')) === undefined) await ecrireReglage('seuilIndifference', 5);
-  if ((await lire('Settings', 'magasinCourant')) === undefined) await ecrireReglage('magasinCourant', 'leclerc');
-  if ((await lire('Settings', 'magasinReleveMensuel')) === undefined) await ecrireReglage('magasinReleveMensuel', 'intermarche');
+  if ((await lire('Settings', 'magasinCourant')) === undefined) await ecrireReglage('magasinCourant', MAGASINS_INITIAUX[0].id);
+  if ((await lire('Settings', 'magasinReleveMensuel')) === undefined) await ecrireReglage('magasinReleveMensuel', MAGASINS_INITIAUX[1].id);
 }
 
 // Demande le stockage persistant (NFR5) ; le résultat est conservé dans Settings.

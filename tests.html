@@ -12,12 +12,23 @@ li { padding:6px 0; border-bottom:1px solid rgba(255,255,255,.1); } .exi { color
 const calculerPositionDock = await import('./domain.js').then(m => m.calculerPositionDock);
 import { creerSauvegarde, validerSauvegarde, etatRappelExport } from './backup.js';
 import { frequencePromos } from './domain.js';
-import { modeSaisieActif, positionDefilement, MAGASIN, VERDICT, UNITES, LIBELLE_UNITE, normaliserNom, nomTypeValide, deduireUniteComparaison, unitesCompatibles, estCompatible, versUniteDeBase, convertir, verifierFormat, arrondirCentimes, analyserPrixSaisie, formaterPrixEuros, formaterPrixNormalise, prixNormalise, joursEntre, mediane, referenceLeclerc, habituelIntermarche, prixHabituel, prixHabituelAutreMagasin, autreMagasin, calculerVerdict, estPrixIncoherent, decisionDoublon, analyserDoublon, cleDoublon, formatAffichage, trierReleves, listeAvantCourses, prixHabituelMagasin, trouverMagasinComparaison, calculerVerdictMagasins, listeAvantCoursesMagasins } from './domain.js';
+import { modeSaisieActif, positionDefilement, VERDICT, UNITES, LIBELLE_UNITE, normaliserNom, nomTypeValide, deduireUniteComparaison, unitesCompatibles, estCompatible, versUniteDeBase, convertir, verifierFormat, arrondirCentimes, analyserPrixSaisie, formaterPrixEuros, formaterPrixNormalise, prixNormalise, joursEntre, mediane,  estPrixIncoherent, decisionDoublon, analyserDoublon, cleDoublon, formatAffichage, trierReleves, prixHabituelMagasin, trouverMagasinComparaison, calculerVerdictMagasins, listeAvantCoursesMagasins } from './domain.js';
 const calculerEconomieRealisee = (await import('./domain.js')).calculerEconomieRealisee;
 const resultats={reussis:0,echecs:0,details:[]},lignes=[]; function test(exigence,nom,fn){let msg=null;try{fn()}catch(e){msg=e.message}if(msg){resultats.echecs++;resultats.details.push(exigence+' '+nom+' : '+msg)}else resultats.reussis++;lignes.push({ok:!msg,exigence,nom,msg});}
 function egal(a,b,msg=''){if(JSON.stringify(a)!==JSON.stringify(b))throw new Error(msg+' attendu '+JSON.stringify(b)+', obtenu '+JSON.stringify(a));}
 function proche(a,b,eps=1e-6){if(typeof a!=='number'||Math.abs(a-b)>eps)throw new Error('attendu ≈ '+b+', obtenu '+a);}
-const LE=MAGASIN.LECLERC, IM=MAGASIN.INTERMARCHE, AUJ='2026-10-04';
+const LE='leclerc', IM='intermarche', AUJ='2026-10-04';
+const MAGASINS_PAR_DEFAUT_TEST=[
+ {id:LE,nom:'Leclerc',modePrixHabituel:'mediane',comparable:true,archive:false,ordre:1},
+ {id:IM,nom:'Intermarché',modePrixHabituel:'dernier',comparable:true,archive:false,ordre:2}
+];
+const referenceLeclerc=(obs,unit,date)=>prixHabituelMagasin(obs,MAGASINS_PAR_DEFAUT_TEST[0],unit,date);
+const habituelIntermarche=(obs,unit,date=AUJ)=>prixHabituelMagasin(obs,MAGASINS_PAR_DEFAUT_TEST[1],unit,date);
+const autreMagasin=id=>id===LE?IM:id===IM?LE:null;
+const prixHabituel=(obs,id,unit,date)=>{const m=MAGASINS_PAR_DEFAUT_TEST.find(x=>x.id===id);return m?prixHabituelMagasin(obs,m,unit,date):{ok:false,raison:'magasin-inconnu',nbReleves:0,dernierConnu:null};};
+const prixHabituelAutreMagasin=(obs,id,unit,date)=>{const r=trouverMagasinComparaison({observations:obs,magasins:MAGASINS_PAR_DEFAUT_TEST,magasinCourant:id,typeUnit:unit,aujourdhui:date});return r.ok?r.habituel:{ok:false,raison:r.raison,nbReleves:0,dernierConnu:null};};
+const calculerVerdict=args=>{const r=calculerVerdictMagasins({...args,magasinCourant:args.magasin,magasins:MAGASINS_PAR_DEFAUT_TEST});return {...r,autreMagasin:r.magasinComparaison,habituelAutre:r.habituelComparaison};};
+const listeAvantCourses=(types,obs,seuil,date)=>listeAvantCoursesMagasins(types,obs,MAGASINS_PAR_DEFAUT_TEST,seuil,date);
 test('UX 5 / story 3.6','prix incohérent sans relevé antérieur',()=>egal(estPrixIncoherent(100, null),false));
 test('UX 5 / story 3.6','écart exactement 50% sans alerte',()=>{egal(estPrixIncoherent(150,100),false);egal(estPrixIncoherent(50,100),false);});
 test('UX 5 / story 3.6','écart 50,01% avec alerte',()=>egal(estPrixIncoherent(150.01,100),true));
@@ -60,7 +71,7 @@ test('FR11','habituel Intermarché',()=>{egal(habituelIntermarche([obs(IM,'2026-
 test('FR6','hors promo issu d’une promo Leclerc',()=>{const o=[obs(LE,'2026-09-01',600,1000,true),obs(LE,'2026-09-01',800,1000,false),obs(LE,'2026-09-10',900),obs(LE,'2026-09-20',700),obs(IM,'2026-09-12',1000)];const r=referenceLeclerc(o,'kg',AUJ);egal(r.ok,true);egal(r.valeur,800);});
 test('FR6','hors promo issu d’une promo Intermarché',()=>{const o=[obs(IM,'2026-09-12',900,1000,true),obs(IM,'2026-09-12',1100,1000,false)];const r=habituelIntermarche(o,'kg');egal(r.ok,true);egal(r.valeur,1100);});
 test('FR14','verdict',()=>{const o=[obs(IM,'2026-09-12',1000)];const v=calculerVerdict({prixCentimes:950,formatBase:1000,typeUnit:'kg',magasin:LE,observations:o,aujourdhui:AUJ,seuilPct:5});egal(v.resultat,VERDICT.ACHETER_ICI);proche(v.ecart,-.05);});
-test('FR14','magasin de comparaison opposé',()=>{egal(autreMagasin(MAGASIN.LECLERC),MAGASIN.INTERMARCHE);egal(autreMagasin(MAGASIN.INTERMARCHE),MAGASIN.LECLERC);egal(autreMagasin('inconnu'),null);});
+test('FR14','magasin de comparaison opposé',()=>{egal(autreMagasin(LE),IM);egal(autreMagasin(IM),LE);egal(autreMagasin('inconnu'),null);});
 test('FR14','seuil +5%',()=>{const v=calculerVerdict({prixCentimes:1050,formatBase:1000,typeUnit:'kg',magasin:LE,observations:[obs(IM,'2026-09-12',1000)],aujourdhui:AUJ,seuilPct:5});egal(v.resultat,VERDICT.ATTENDRE);});
 test('FR15','différences',()=>{const v=calculerVerdict({prixCentimes:400,formatBase:500,typeUnit:'kg',magasin:LE,observations:[obs(IM,'2026-09-12',1000)],aujourdhui:AUJ,seuilPct:5});egal(v.differenceUniteCentimes,-200);egal(v.differenceFormatCentimes,-100);});
 test('FR16','seuil réglable',()=>{const o=[obs(IM,'2026-09-12',1000)];egal(calculerVerdict({prixCentimes:950,formatBase:1000,typeUnit:'kg',magasin:LE,observations:o,aujourdhui:AUJ,seuilPct:10}).resultat,VERDICT.INDIFFERENT);});

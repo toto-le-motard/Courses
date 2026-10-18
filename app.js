@@ -95,7 +95,7 @@ function afficherAnnulation(jeton, magasin, options = {}) {
   if (annulationTimer) clearTimeout(annulationTimer);
   document.getElementById('bandeau-annulation')?.remove();
   const b = el('div', { id: 'bandeau-annulation', class: 'bandeau-annulation', role: 'status' },
-    el('span', { text: options.message || ('Enregistré chez ' + libelleMagasin(magasin)) }),
+    el('span', { text: options.message || ('Enregistré chez ' + libelleMagasin(magasin)), style:'color:'+couleurMagasin(magasin) }),
     el('button', { type: 'button', class: 'btn-annuler-enregistrement', text: 'Annuler', onclick: async () => {
       if (!annulationActive) return;
       const a = annulationActive; annulationActive = null; clearTimeout(annulationTimer); b.remove();
@@ -141,7 +141,7 @@ function dateAffichee(s) {
   const [a,m,j] = s.split('-');
   return j + '/' + m + '/' + a;
 }
-function libelleMagasin(m) { const magasin = magasinsTous.find(s => s.id === m); return magasin?.nom || String(m || 'Magasin'); }
+function libelleMagasin(m) { const magasin = magasinsTous.find(s => s.id === m); return magasin ? magasin.nom + (magasin.archive ? ' (archivé)' : '') : String(m || 'Magasin'); }
 function classeMagasin(m) { return 'magasin-' + String(m || 'inconnu').normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').toLowerCase().replace(/[^a-z0-9-]+/g,'-'); }
 function couleurMagasin(id) { return magasinsTous.find(s => s.id === id)?.couleur || '#8FA3C7'; }
 
@@ -290,7 +290,7 @@ async function vueReglages() {
       if(action==='restaurer') await restaurerMagasin(magasin.id);
       if(action==='supprimer') await supprimerMagasin(magasin.id);
       await actualiserMagasins();
-      magasinCourant=await lireReglage('magasinCourant',magasinsDisponibles[0]?.id||'leclerc');
+      magasinCourant=await lireReglage('magasinCourant',magasinsDisponibles[0]?.id||'');
       await afficher();
     } catch(e) { afficherMessageMagasins(e.message||'Action impossible.'); }
   }
@@ -1063,7 +1063,7 @@ function vueHistorique(typeId, integre = false) {
     const row=el('div',{class:'ligne ligne-releve','data-id':o.id},
       el('div',{class:'ligne-releve-contenu'},
         el('div',{class:'ligne-releve-haut'},
-          el('span',{class:'puce '+classeMagasin(o.magasin),text:libelleMagasin(o.magasin)}),
+          el('span',{class:'puce '+classeMagasin(o.magasin),text:libelleMagasin(o.magasin),style:'border-color:'+couleurMagasin(o.magasin)+';color:'+couleurMagasin(o.magasin)}),
           el('span',{class:'releve-date',text:dateAffichee(o.date)})),
         el('div',{class:'ligne-releve-bas'},
           el('strong',{text:formaterPrixNormalise(prixNormalise(o.prixCentimes,o.format,type.unite).centimesParUnite,type.unite)}),
@@ -1416,7 +1416,7 @@ async function vueHistoriqueAchats(typeId) {
     const ligne = el('article',{class:'ligne-achat', 'data-achat-id':String(achat.id)},
       el('div',{class:'ligne-achat-infos'},
         el('strong',{text:dateAffichee(achat.date)}),
-        el('span',{text:libelleMagasin(achat.magasin)}),
+        el('span',{text:libelleMagasin(achat.magasin),style:'color:'+couleurMagasin(achat.magasin)}),
         el('span',{class:'achat-statut',text:achat.achete ? 'Acheté' : 'Non acheté'}),
         el('div',{class:'achat-resume-valeurs'},
           el('span',{class:'achat-valeur achat-quantite',text:'Quantité : '+achat.quantite}),

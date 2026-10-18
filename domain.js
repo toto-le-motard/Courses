@@ -3,7 +3,6 @@
 // Conventions : prix en centimes ; formats en unités de base entières (g, ml, unit) ;
 // dates AAAA-MM-JJ ; prix normalisé calculé, jamais stocké.
 
-export const MAGASIN = Object.freeze({ LECLERC: 'leclerc', INTERMARCHE: 'intermarche' });
 export const VERDICT = Object.freeze({ ACHETER_ICI: 'acheter ici', ATTENDRE: 'attendre', INDIFFERENT: 'indifférent', INSUFFISANT: 'données insuffisantes' });
 export const SEUIL_DEFAUT_PCT = 5;
 /**
@@ -197,50 +196,10 @@ function dernierConnu(normalises) {
   const d = tri[0];
   return { date: d.date, valeur: d.valeur, promo: d.promo };
 }
-export function referenceLeclerc(observations, typeUnit, aujourdhui) {
-  const tous = normaliserTous(observations, typeUnit, MAGASIN.LECLERC);
-  const retenus = tous.filter((o) => !o.promo && (() => { const j = joursEntre(o.date, aujourdhui); return j >= 0 && j <= FENETRE_JOURS; })());
-  if (retenus.length < MIN_RELEVES_REFERENCE) return { ok: false, raison: 'releves-insuffisants', nbReleves: retenus.length, dernierConnu: dernierConnu(tous) };
-  return { ok: true, magasin: MAGASIN.LECLERC, type: 'mediane', valeur: mediane(retenus.map((o) => o.valeur)), nbReleves: retenus.length, fenetreJours: FENETRE_JOURS };
-}
-export function habituelIntermarche(observations, typeUnit) {
-  const tous = normaliserTous(observations, typeUnit, MAGASIN.INTERMARCHE), horsPromo = tous.filter((o) => !o.promo);
-  if (!horsPromo.length) return { ok: false, raison: 'aucun-releve-hors-promo', nbReleves: 0, dernierConnu: dernierConnu(tous) };
-  const d = [...horsPromo].sort((x, y) => x.date !== y.date ? (x.date < y.date ? 1 : -1) : x.valeur - y.valeur)[0];
-  return { ok: true, magasin: MAGASIN.INTERMARCHE, type: 'dernier', valeur: d.valeur, date: d.date };
-}
-export function autreMagasin(magasin) {
-  if (magasin === MAGASIN.LECLERC) return MAGASIN.INTERMARCHE;
-  if (magasin === MAGASIN.INTERMARCHE) return MAGASIN.LECLERC;
-  return null;
-}
-export function prixHabituel(observations, magasin, typeUnit, aujourdhui) {
-  if (magasin === MAGASIN.LECLERC) return referenceLeclerc(observations, typeUnit, aujourdhui);
-  if (magasin === MAGASIN.INTERMARCHE) return habituelIntermarche(observations, typeUnit);
-  return { ok: false, raison: 'magasin-inconnu', nbReleves: 0, dernierConnu: null };
-}
-export function prixHabituelAutreMagasin(observations, magasinCourant, typeUnit, aujourdhui) {
-  return prixHabituel(observations, autreMagasin(magasinCourant), typeUnit, aujourdhui);
-}
 function seuilFraction(seuilPct) {
   const s = typeof seuilPct === 'number' && Number.isFinite(seuilPct) && seuilPct >= 0 ? seuilPct : SEUIL_DEFAUT_PCT;
   return s / 100;
 }
-export function calculerVerdict({ prixCentimes, formatBase, typeUnit, magasin, observations, aujourdhui, seuilPct, promo = false }) {
-  const autre = autreMagasin(magasin), base = { magasin, autreMagasin: autre, promo: Boolean(promo) };
-  const jour = prixNormalise(prixCentimes, formatBase, typeUnit);
-  if (!autre || !jour.ok) return { ...base, resultat: VERDICT.INSUFFISANT, raison: autre ? 'saisie-invalide' : 'magasin-inconnu', erreur: jour.ok ? null : jour.erreur, dernierConnu: null };
-  const habituel = prixHabituel(observations, autre, typeUnit, aujourdhui);
-  if (!habituel.ok || !(habituel.valeur > 0)) return { ...base, resultat: VERDICT.INSUFFISANT, raison: habituel.raison ?? 'releves-insuffisants', nbReleves: habituel.nbReleves ?? 0, dernierConnu: habituel.dernierConnu ?? null };
-  const seuil = seuilFraction(seuilPct), ecart = (jour.centimesParUnite - habituel.valeur) / habituel.valeur;
-  let resultat = VERDICT.INDIFFERENT;
-  if (ecart <= -seuil + EPSILON) resultat = VERDICT.ACHETER_ICI;
-  else if (ecart >= seuil - EPSILON) resultat = VERDICT.ATTENDRE;
-  const diffUnite = jour.centimesParUnite - habituel.valeur;
-  const diffFormat = (diffUnite * formatBase) / DIVISEUR[typeUnit];
-  return { ...base, resultat, ecart, seuil, prixJourNormalise: jour.centimesParUnite, habituelAutre: habituel, differenceUniteCentimes: arrondirCentimes(diffUnite), differenceFormatCentimes: arrondirCentimes(diffFormat) };
-}
-
 // FR26 / E7.4 — économie estimée à partir des prix figés dans l’achat, sans relire l’historique courant.
 export function calculerEconomieRealisee(achat, typeUnit) {
   const base = { ok: false, compte: false, exclu: false, raison: 'donnees-invalides', economieCentimes: null, gainPromoCentimes: null };
@@ -282,40 +241,6 @@ export function frequencePromos(observations, magasin) {
 
 
 // FR22 / Story 5.3 — liste comparative avant les courses.
-export function listeAvantCourses(types, observations, seuil, dateCourante) {
-  const actifs = (Array.isArray(types) ? types : []).filter(type => type && !type.archive);
-  const releves = Array.isArray(observations) ? observations : [];
-  return actifs.map(type => {
-    const historique = releves.filter(o => o && o.type === type.id);
-    const leclerc = referenceLeclerc(historique, type.unite, dateCourante);
-    const intermarche = habituelIntermarche(historique, type.unite);
-    const derniers = [leclerc.dernierConnu, intermarche.dernierConnu].filter(Boolean).map(o => o.date).sort();
-    const dateDernierPrix = derniers.length ? derniers[derniers.length - 1] : null;
-    const prixDisponibles = [leclerc.ok ? leclerc.valeur : null, intermarche.ok ? intermarche.valeur : null]
-      .filter(v => Number.isFinite(v) && v > 0);
-    if (!leclerc.ok || !intermarche.ok) return {
-      typeId: type.id, resultat: 'donnees-insuffisantes',
-      prixNormaliseCentimes: prixDisponibles.length ? arrondirCentimes(Math.min(...prixDisponibles)) : null,
-      economiePourcent: null, dateDernierPrix
-    };
-    const formatBase = type.unite === 'unit' ? 1 : 1000;
-    const verdict = calculerVerdict({
-      prixCentimes: arrondirCentimes(leclerc.valeur), formatBase, typeUnit: type.unite,
-      magasin: MAGASIN.LECLERC, observations: historique, aujourdhui: dateCourante, seuilPct: seuil
-    });
-    const moinsCher = Math.min(leclerc.valeur, intermarche.valeur);
-    const plusCher = Math.max(leclerc.valeur, intermarche.valeur);
-    const resultat = verdict.resultat === VERDICT.ACHETER_ICI ? 'leclerc'
-      : verdict.resultat === VERDICT.ATTENDRE ? 'intermarche' : 'indifferent';
-    return {
-      typeId: type.id, resultat, prixNormaliseCentimes: arrondirCentimes(moinsCher),
-      economiePourcent: plusCher > 0 ? Math.round(((plusCher - moinsCher) / plusCher) * 10000) / 100 : null,
-      dateDernierPrix: null
-    };
-  });
-}
-
-
 // FR10 / FR11 / FR14 / FR18 — prix habituels et comparaison pour des magasins configurables.
 // Cette API reçoit les magasins depuis l'appelant ; aucun identifiant de magasin n'y est codé en dur.
 export function prixHabituelMagasin(observations, magasin, typeUnit, aujourdhui) {
