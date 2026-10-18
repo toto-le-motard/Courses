@@ -1031,8 +1031,7 @@ async function vueMagasin() {
         return;
       }
       entete.hidden = false;
-      entete.className = 'selecteur-magasin ' + classeMagasin(magasinCourant);
-      boutonsMagasin.forEach((b) => { b.setAttribute('aria-pressed', String(b.textContent === libelleMagasin(magasinCourant))); });
+      actualiserEnteteMagasin();
       suggestions.replaceChildren();
       if (typeChoisi && !formulaireModifie) chargerDernierEtFormat();
       verifier();

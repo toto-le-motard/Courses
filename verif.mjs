@@ -207,7 +207,7 @@ if (playwright) {
     try {
       await page.goto(base);
       if (erreurs.length) throw new Error('chargement de l’appli : ' + erreurs[0]);
-      await page.waitForSelector('#vue .carte', { timeout: 10000 });
+      try { await page.waitForSelector('#vue .carte', { timeout: 10000 }); } catch (e) { const diag=await page.evaluate(()=>({titre:document.getElementById('titre-ecran')?.textContent,vue:document.getElementById('vue')?.innerText,base:document.body?.innerText?.slice(0,900)})); throw new Error(e.message+' ; diagnostic='+JSON.stringify(diag)+' ; erreurs='+erreurs.join(' | ')); }
       ok('l\u2019appli s\u2019affiche');
       for (const [route, titre] of [['liste', 'Liste'], ['types', 'Types'], ['bilan', 'Bilan'], ['magasin', 'Magasin']]) {
         await page.click('.tabs a[data-route="' + route + '"]');
