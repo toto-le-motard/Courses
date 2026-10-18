@@ -940,7 +940,98 @@ if (playwright) {
         await scannerCtx.close();
 
        
-// service worker actif et page contrôlée, puis test hors ligne
+
+      // E9 / stories 9-1 à 9-6 : parcours réel des magasins configurables.
+      etapeParcours = 'E9 magasins configurables';
+      await aller('#/reglages/magasins');
+      await page.waitForSelector('#reglages-magasins',{timeout:5000});
+      const creerMagasinUI = async (nom, enseigne, localisation) => {
+        await page.click('#reglages-magasins button:has-text("+ Nouveau magasin")');
+        await page.waitForSelector('dialog.formulaire-magasin[open]',{timeout:5000});
+        await page.fill('dialog.formulaire-magasin input[aria-label="Nom du magasin"]',nom);
+        await page.fill('dialog.formulaire-magasin input[aria-label="Enseigne"]',enseigne);
+        await page.fill('dialog.formulaire-magasin input[aria-label="Localisation"]',localisation);
+        await page.selectOption('dialog.formulaire-magasin select[aria-label="Prix habituel"]','dernier');
+        await page.click('dialog.formulaire-magasin button:has-text("Enregistrer")');
+        await page.waitForFunction(n=>[...document.querySelectorAll('#reglages-magasins .magasin-details strong')].some(e=>e.textContent===n),nom,{timeout:5000});
+      };
+      await creerMagasinUI('Leclerc Vannes','Leclerc','Vannes');
+      await creerMagasinUI('Leclerc Rennes','Leclerc','Rennes');
+      const storesApresCreation = await page.evaluate(async()=>{const db=await import('/db.js');return db.listerMagasins();});
+      if(storesApresCreation.length!==4 || storesApresCreation.filter(m=>m.enseigne==='Leclerc').length<2 || !storesApresCreation.some(m=>m.id==='leclerc-vannes') || !storesApresCreation.some(m=>m.id==='leclerc-rennes')) throw new Error('E9 : création des quatre magasins ou identifiants générés incorrects');
+      await aller('#/magasin');
+      await page.click('.selecteur-magasin-bouton');
+      await page.waitForSelector('.feuille-magasins[open]',{timeout:5000});
+      await page.click('.feuille-magasins button:has-text("Leclerc Vannes")');
+      const verdictMultiMagasins = await page.evaluate(async()=>{
+        const db=await import('/db.js'),d=await import('/domain.js'),b=await import('/backup.js');
+        const type=(await db.listerTypes()).find(t=>!t.archive);
+        if(!type)throw new Error('aucun type actif pour tester les magasins');
+        const format=type.unite==='unit'?1:1000;
+        const releves=[
+          {type:type.id,magasin:'leclerc',date:'2031-03-01',prixCentimes:1100,format,promo:0},
+          {type:type.id,magasin:'leclerc',date:'2031-03-08',prixCentimes:1100,format,promo:0},
+          {type:type.id,magasin:'leclerc',date:'2031-03-15',prixCentimes:1100,format,promo:0},
+          {type:type.id,magasin:'intermarche',date:'2031-03-20',prixCentimes:1000,format,promo:0},
+          {type:type.id,magasin:'leclerc-rennes',date:'2031-03-20',prixCentimes:700,format,promo:0},
+          {type:type.id,magasin:'leclerc-vannes',date:'2031-04-01',prixCentimes:650,format,promo:0}
+        ];
+        await db.enregistrerReleves(releves);
+        const observations=await db.lireObservations(type.id),magasins=await db.listerMagasins();
+        const verdict=d.calculerVerdictMagasins({prixCentimes:650,formatBase:format,typeUnit:type.unite,magasinCourant:'leclerc-vannes',magasins,observations,aujourdhui:'2031-04-01',seuilPct:5});
+        const snapshot0=await db.exporterCollections();
+        for(const a of snapshot0.achats)if(!Object.prototype.hasOwnProperty.call(a,'magasinComparaison'))await db.mettre('Purchase',{...a,magasinComparaison:''});
+        const avant=await db.exporterCollections();
+        const payload=b.creerSauvegarde({schemaVersion:db.VERSION_SCHEMA,...avant,dateExport:'2031-04-01'});
+        const validation=b.validerSauvegarde(payload,db.VERSION_SCHEMA);
+        if(!validation.ok)throw new Error('sauvegarde quatre magasins refusée : '+validation.erreur);
+        await db.remplacerCollections(validation.valeur);
+        const apres=await db.exporterCollections();
+        const differences=['types','articles','releves','achats','reglages','magasins'].filter(k=>JSON.stringify(avant[k])!==JSON.stringify(apres[k]));
+        if(differences.length)throw new Error('aller-retour sauvegarde magasins différent : '+differences.join(','));
+        return {typeId:type.id,magasinComparaison:verdict.magasinComparaison,resultat:verdict.resultat,magasins:apres.magasins.length};
+      });
+      if(verdictMultiMagasins.magasinComparaison!=='leclerc-rennes' || verdictMultiMagasins.resultat!=='acheter-ici' || verdictMultiMagasins.magasins!==4) throw new Error('E9 : le verdict ne retient pas le moins cher ou sauvegarde non fidèle : '+JSON.stringify(verdictMultiMagasins));
+      ok('E9 : quatre magasins, deux magasins de même enseigne, verdict contre le moins cher et export/import fidèles');
+      const archiverViaUI = async nom => {
+        await page.locator('#reglages-magasins button[aria-label="Options '+nom+'"]').click();
+        await page.waitForSelector('dialog.menu-magasin[open]',{timeout:5000});
+        await page.click('dialog.menu-magasin button:has-text("Archiver")');
+        await page.waitForFunction(n=>![...document.querySelectorAll('#reglages-magasins > .liste-magasins .magasin-details strong')].some(e=>e.textContent===n),nom,{timeout:5000});
+      };
+      await aller('#/reglages/magasins');
+      await archiverViaUI('Leclerc Rennes');
+      await aller('#/magasin');
+      await page.click('.selecteur-magasin-bouton');
+      await page.waitForSelector('.feuille-magasins[open]',{timeout:5000});
+      const choixActifs = await page.locator('.feuille-magasins .magasin-btn').allTextContents();
+      if(choixActifs.some(t=>t.includes('Leclerc Rennes')))throw new Error('E9 : magasin archivé encore présent dans le sélecteur');
+      await page.click('.feuille-magasins button:has-text("Leclerc Vannes")');
+      await aller('#/reglages/magasins');
+      await page.locator('#reglages-magasins .magasins-archives summary').click();
+      await page.click('#reglages-magasins .magasins-archives button:has-text("Restaurer")');
+      await page.waitForFunction(()=>[...document.querySelectorAll('#reglages-magasins > .liste-magasins .magasin-details strong')].some(e=>e.textContent==='Leclerc Rennes'),null,{timeout:5000});
+      await page.locator('#reglages-magasins button[aria-label="Options Leclerc Rennes"]').click();
+      await page.click('dialog.menu-magasin button:has-text("Supprimer")');
+      await page.waitForFunction(()=>/prix constatés ou des achats/.test(document.querySelector('#reglages-magasins .message-sauvegarde')?.textContent||''),null,{timeout:5000});
+      ok('E9 : archivage/masquage, restauration et refus de suppression avec prix constatés');
+      await archiverViaUI('Leclerc');
+      await archiverViaUI('Intermarché');
+      await archiverViaUI('Leclerc Rennes');
+      await page.locator('#reglages-magasins button[aria-label="Options Leclerc Vannes"]').click();
+      await page.click('dialog.menu-magasin button:has-text("Archiver")');
+      await page.waitForFunction(()=>/dernier magasin actif/.test(document.querySelector('#reglages-magasins .message-sauvegarde')?.textContent||''),null,{timeout:5000});
+      await aller('#/magasin');
+      for(const hauteur of [844,500]){
+        await page.setViewportSize({width:390,height:hauteur});
+        await page.waitForSelector('#dock-magasin',{timeout:5000});
+        const geometrie=await page.evaluate(()=>{const b=s=>{const e=document.querySelector(s);if(!e)return null;const r=e.getBoundingClientRect();return {top:Math.round(r.top),bottom:Math.round(r.bottom),height:Math.round(r.height)}};return {dock:b('#dock-magasin'),tabs:b('.tabs'),type:b('#champ-type'),prix:b('#champ-prix'),format:b('#champ-format'),largeur:document.documentElement.scrollWidth};});
+        if(!geometrie.dock||!geometrie.tabs||geometrie.dock.top<0||geometrie.dock.bottom>geometrie.tabs.top+1||geometrie.tabs.bottom>hauteur||geometrie.largeur>390)throw new Error('E9 : recouvrement dock à 390x'+hauteur+' '+JSON.stringify(geometrie));
+      }
+      await page.setViewportSize({width:390,height:844});
+      ok('E9 : dernier magasin actif protégé et dock sans recouvrement à 390×844 et 390×500');
+
+      // service worker actif et page contrôlée, puis test hors ligne
       await page.evaluate(() => navigator.serviceWorker.ready);
       if (!(await page.evaluate(() => !!navigator.serviceWorker.controller))) { await page.reload(); await page.waitForSelector('#vue .carte'); }
       const controle = await page.evaluate(() => !!navigator.serviceWorker.controller);
