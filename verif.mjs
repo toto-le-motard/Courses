@@ -1124,6 +1124,7 @@ if (playwright) {
       await page.locator('dialog.feuille-reference-magasin button').filter({hasText:'Leclerc Vannes'}).click();
       await page.waitForFunction(()=>document.querySelector('#reglages-magasins .reference-magasin-reglage button')?.textContent.includes('Leclerc Vannes'),null,{timeout:5000});
       if((await page.locator('body').innerText()).includes('Participe aux comparaisons'))throw new Error('11-3 : texte de participation encore visible dans les réglages');
+      ok('FR33 / Story 11-3 : référence unique, aide, badge, champ retiré et garde-fous d’archivage/suppression');
 
       // Story 11-4 : le Bilan utilise la référence actuelle et signale les achats figés avec l’ancienne référence.
       const dateBilanReference = await page.evaluate(()=>{const d=new Date();return [d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-');});
@@ -1148,6 +1149,7 @@ if (playwright) {
       const bilanReferenceTexte=await page.locator('.bilan-economies').innerText();
       if(!bilanReferenceTexte.includes('Par rapport à Leclerc Vannes')||!bilanReferenceTexte.includes('Depuis le début :')||!bilanReferenceTexte.includes('Dont gains liés aux promos')||!bilanReferenceTexte.includes('100 € sur 12 mois'))throw new Error('11-4 : mention de référence, cumul depuis le début ou cible annuelle absente : '+bilanReferenceTexte);
       if(!/\d+ achat(s)? calculé(s)? avec un autre magasin de référence/.test(bilanReferenceTexte))throw new Error('11-4 : achats calculés avec une ancienne référence non signalés');
+      ok('FR26 / Story 11-4 : Bilan 12 mois, référence actuelle, cumul depuis le début et ancien achat signalé');
       await page.evaluate(async({achatId,dateBilanReference,veilleBilanReference})=>{const db=await import('/db.js');await db.supprimerAchat(achatId);const observations=await db.lireObservations(9992);for(const o of observations.filter(o=>o.magasin==='leclerc-vannes'&&(o.date===dateBilanReference||o.date===veilleBilanReference)))await db.supprimerReleve(o.id);const rq=indexedDB.open('appli-courses');await new Promise((resolve,reject)=>{rq.onsuccess=()=>{const d=rq.result,tx=d.transaction('Purchase','readwrite');tx.objectStore('Purchase').delete(9910);tx.oncomplete=()=>{d.close();resolve();};tx.onerror=()=>reject(tx.error);};rq.onerror=()=>reject(rq.error);});}, {achatId:nouvelAchatReference,dateBilanReference,veilleBilanReference});
       await aller('#/magasin');
       await page.click('.selecteur-magasin-bouton');
@@ -1230,7 +1232,7 @@ if (playwright) {
         if(!geometrie.dock||!geometrie.tabs||geometrie.dock.top<0||geometrie.dock.bottom>geometrie.tabs.top+1||geometrie.tabs.bottom>hauteur||geometrie.largeur>390)throw new Error('E9 : recouvrement dock à 390x'+hauteur+' '+JSON.stringify(geometrie));
       }
       await page.setViewportSize({width:390,height:844});
-      ok('E9 : dernier magasin actif protégé et dock sans recouvrement à 390×844 et 390×500');
+      ok('E9 : magasin de référence protégé et dock sans recouvrement à 390×844 et 390×500');
 
       // service worker actif et page contrôlée, puis test hors ligne
       await page.evaluate(() => navigator.serviceWorker.ready);
