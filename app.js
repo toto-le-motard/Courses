@@ -1378,8 +1378,8 @@ async function vueFicheType(typeId, ongletInitial = null, observationInitiale = 
     if(onglet==='prix')contenuOnglet.append(vueHistorique(typeId,true,observationInitiale));
     else contenuOnglet.append(await vueHistoriqueAchats(typeId,true));
   }
-  boutonPrix.addEventListener('click',()=>{void afficherOnglet('prix');});
-  boutonAchats.addEventListener('click',()=>{void afficherOnglet('achats');});
+  boutonPrix.addEventListener('click',()=>{if(ongletActif!=='prix')location.hash='#/fiche/'+typeId+'/prix';});
+  boutonAchats.addEventListener('click',()=>{if(ongletActif!=='achats')location.hash='#/fiche/'+typeId+'/achats';});
   onglets.append(boutonPrix,boutonAchats);
   racine.append(el('h2',{text:type.nom}),...cartes.map(x=>x.carte),onglets,definition,contenuOnglet,barres);
   if(cartesArchive.length)racine.append(el('details',{class:'carte magasins-archives'},el('summary',{text:'Magasins archivés ('+cartesArchive.length+')'}),...cartesArchive.map(x=>x.carte)));
