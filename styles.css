@@ -450,3 +450,7 @@ svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width:
 .magasins-archives { margin-top:14px; }
 .magasins-archives summary { min-height:48px; display:flex; align-items:center; cursor:pointer; font-weight:600; }
 @media (prefers-reduced-motion:reduce) { .selecteur-magasin-bouton,.magasin-btn { transition:none!important; } }
+
+.choix-mode-prix { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+.choix-mode-prix button { min-height:48px; padding:8px; }
+.choix-mode-prix button[aria-pressed="true"] { border-color:var(--accent,#5B8CFF); box-shadow:inset 0 0 0 1px var(--accent,#5B8CFF); font-weight:700; }

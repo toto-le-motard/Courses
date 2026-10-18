@@ -263,10 +263,12 @@ async function vueReglages() {
     const nom=el('input',{class:'champ',type:'text',required:true,maxlength:'60',value:magasin?.nom||'',placeholder:'Nom du magasin','aria-label':'Nom du magasin'});
     const enseigne=el('input',{class:'champ',type:'text',value:magasin?.enseigne||'',placeholder:'Enseigne','aria-label':'Enseigne'});
     const localisation=el('input',{class:'champ',type:'text',value:magasin?.localisation||'',placeholder:'Ville ou adresse facultative','aria-label':'Localisation'});
-    const mode=el('select',{class:'champ','aria-label':'Prix habituel'},el('option',{value:'dernier',text:'Dernier relevé'}),el('option',{value:'mediane',text:'Médiane 8 semaines'}));
-    mode.value=magasin?.modePrixHabituel||'dernier';
-    const aide=el('p',{class:'aide-magasin',text:mode.value==='mediane'?'Médiane des relevés hors promo des 8 dernières semaines (3 minimum).':'Dernier relevé hors promo, avec sa date.'});
-    mode.addEventListener('change',()=>{aide.textContent=mode.value==='mediane'?'Médiane des relevés hors promo des 8 dernières semaines (3 minimum).':'Dernier relevé hors promo, avec sa date.';});
+    const modeChoisi={value:magasin?.modePrixHabituel||'dernier'};
+    const aide=el('p',{class:'aide-magasin',text:modeChoisi.value==='mediane'?'Médiane des relevés hors promo des 8 dernières semaines (3 minimum).':'Dernier relevé hors promo, avec sa date.'});
+    const modeDernier=el('button',{type:'button',class:'btn btn-secondaire','aria-pressed':modeChoisi.value==='dernier',text:'Dernier relevé',onclick:()=>{modeChoisi.value='dernier';actualiserMode();}});
+    const modeMediane=el('button',{type:'button',class:'btn btn-secondaire','aria-pressed':modeChoisi.value==='mediane',text:'Médiane 8 semaines',onclick:()=>{modeChoisi.value='mediane';actualiserMode();}});
+    const mode=el('div',{class:'choix-mode-prix'},modeDernier,modeMediane);
+    function actualiserMode(){modeDernier.setAttribute('aria-pressed',String(modeChoisi.value==='dernier'));modeMediane.setAttribute('aria-pressed',String(modeChoisi.value==='mediane'));aide.textContent=modeChoisi.value==='mediane'?'Médiane des relevés hors promo des 8 dernières semaines (3 minimum).':'Dernier relevé hors promo, avec sa date.';}
     const comparable=el('input',{type:'checkbox',checked:magasin?magasin.comparable:true,'aria-label':'Participe aux comparaisons'});
     const palette=el('div',{class:'palette-couleurs'},...couleurs.map(c=>el('button',{type:'button',class:'choix-couleur','aria-label':'Choisir '+c,'aria-pressed':c===couleurChoisie.value,style:'background:'+c,onclick:()=>{couleurChoisie.value=c;palette.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(b.getAttribute('aria-label')==='Choisir '+c)));}})));
     const erreur=el('p',{class:'erreur',role:'alert',hidden:true});
@@ -277,7 +279,7 @@ async function vueReglages() {
       el('label',{class:'option-comparable'},comparable,el('span',{text:'Participe aux comparaisons'})),
       erreur,
       el('div',{class:'feuille-actions'},
-        el('button',{type:'button',class:'btn btn-primaire',text:'Enregistrer',onclick:async()=>{try{const champs={nom:nom.value,enseigne:enseigne.value,localisation:localisation.value,couleur:couleurChoisie.value,modePrixHabituel:mode.value,comparable:comparable.checked};if(magasin)await modifierMagasin(magasin.id,champs);else await creerMagasin(champs);dialogue.close();await actualiserMagasins();magasinCourant=await lireReglage('magasinCourant',magasinsDisponibles[0]?.id||'');await afficher();}catch(e){erreur.textContent=e.message||'Enregistrement impossible.';erreur.hidden=false;}}}),
+        el('button',{type:'button',class:'btn btn-primaire',text:'Enregistrer',onclick:async()=>{try{const champs={nom:nom.value,enseigne:enseigne.value,localisation:localisation.value,couleur:couleurChoisie.value,modePrixHabituel:modeChoisi.value,comparable:comparable.checked};if(magasin)await modifierMagasin(magasin.id,champs);else await creerMagasin(champs);dialogue.close();await actualiserMagasins();magasinCourant=await lireReglage('magasinCourant',magasinsDisponibles[0]?.id||'');await afficher();}catch(e){erreur.textContent=e.message||'Enregistrement impossible.';erreur.hidden=false;}}}),
         el('button',{type:'button',class:'btn btn-secondaire',text:'Annuler',onclick:()=>dialogue.close()})
       )
     );
@@ -384,6 +386,7 @@ async function vueMagasin() {
     entete.className = 'selecteur-magasin ' + classeMagasin(magasinCourant);
     entete.style.background = couleurMagasin(magasinCourant) + '20';
     entete.style.borderColor = couleurMagasin(magasinCourant);
+    entete.style.boxShadow = '0 0 22px ' + couleurMagasin(magasinCourant) + '33';
     boutonSelectionMagasin.textContent = libelleMagasin(magasinCourant) + ' ▾';
   }
   function ouvrirFeuilleMagasins() {

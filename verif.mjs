@@ -951,12 +951,31 @@ if (playwright) {
         await page.fill('dialog.formulaire-magasin input[aria-label="Nom du magasin"]',nom);
         await page.fill('dialog.formulaire-magasin input[aria-label="Enseigne"]',enseigne);
         await page.fill('dialog.formulaire-magasin input[aria-label="Localisation"]',localisation);
-        await page.selectOption('dialog.formulaire-magasin select[aria-label="Prix habituel"]','dernier');
+        await page.click('dialog.formulaire-magasin button:has-text("Dernier relevé")');
         await page.click('dialog.formulaire-magasin button:has-text("Enregistrer")');
         await page.waitForFunction(n=>[...document.querySelectorAll('#reglages-magasins .magasin-details strong')].some(e=>e.textContent===n),nom,{timeout:5000});
       };
       await creerMagasinUI('Leclerc Vannes','Leclerc','Vannes');
       await creerMagasinUI('Leclerc Rennes','Leclerc','Rennes');
+      // Modification : l'identifiant généré ne change pas au renommage.
+      await page.locator('#reglages-magasins button[aria-label="Options Leclerc Vannes"]').click();
+      await page.click('dialog.menu-magasin button:has-text("Modifier")');
+      await page.fill('dialog.formulaire-magasin input[aria-label="Nom du magasin"]','Leclerc Vannes Temporaire');
+      await page.click('dialog.formulaire-magasin button:has-text("Enregistrer")');
+      await page.waitForFunction(()=>[...document.querySelectorAll('#reglages-magasins .magasin-details strong')].some(e=>e.textContent==='Leclerc Vannes Temporaire'),null,{timeout:5000});
+      const idApresRenommage=await page.evaluate(async()=>{const db=await import('/db.js');return (await db.lireMagasin('leclerc-vannes'))?.id;});
+      if(idApresRenommage!=='leclerc-vannes')throw new Error('E9 : l’identifiant a changé après renommage');
+      await page.locator('#reglages-magasins button[aria-label="Options Leclerc Vannes Temporaire"]').click();
+      await page.click('dialog.menu-magasin button:has-text("Modifier")');
+      await page.fill('dialog.formulaire-magasin input[aria-label="Nom du magasin"]','Leclerc Vannes');
+      await page.click('dialog.formulaire-magasin button:has-text("Enregistrer")');
+      await page.waitForFunction(()=>[...document.querySelectorAll('#reglages-magasins .magasin-details strong')].some(e=>e.textContent==='Leclerc Vannes'),null,{timeout:5000});
+      // Le nom est unique sans tenir compte de la casse.
+      await page.click('#reglages-magasins button:has-text("+ Nouveau magasin")');
+      await page.fill('dialog.formulaire-magasin input[aria-label="Nom du magasin"]','leclerc vannes');
+      await page.click('dialog.formulaire-magasin button:has-text("Enregistrer")');
+      await page.waitForFunction(()=>/porte déjà ce nom/.test(document.querySelector('dialog.formulaire-magasin [role="alert"]')?.textContent||''),null,{timeout:5000});
+      await page.click('dialog.formulaire-magasin button:has-text("Annuler")');
       const storesApresCreation = await page.evaluate(async()=>{const db=await import('/db.js');return db.listerMagasins();});
       if(storesApresCreation.length!==4 || storesApresCreation.filter(m=>m.enseigne==='Leclerc').length<2 || !storesApresCreation.some(m=>m.id==='leclerc-vannes') || !storesApresCreation.some(m=>m.id==='leclerc-rennes')) throw new Error('E9 : création des quatre magasins ou identifiants générés incorrects');
       await aller('#/magasin');
