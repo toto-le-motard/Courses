@@ -728,6 +728,13 @@ if (playwright) {
        await page.waitForFunction(()=>{const e=document.querySelector('#rappel-type');return e&&!e.hidden&&e.textContent.includes('Dernier prix constaté')&&e.textContent.includes('Dernier achat');},null,{timeout:5000});
        const partiesRappel=page.locator('#rappel-type .rappel-type-partie');
        if(await partiesRappel.count()!==2||await page.locator('#rappel-type').evaluate(e=>e.getBoundingClientRect().height>36))throw new Error('E10-3 : rappel rapide absent, incomplet ou sur plusieurs lignes');
+       await page.setViewportSize({width:390,height:844});await page.evaluate(()=>window.scrollTo(0,0));await page.waitForTimeout(50);
+       const geoRappel844=await page.evaluate(()=>{const r=s=>{const e=document.querySelector(s);if(!e)return null;const b=e.getBoundingClientRect();return {top:Math.round(b.top),bottom:Math.round(b.bottom)};};return {scrollY:Math.round(scrollY),type:r('#champ-type'),prix:r('#champ-prix'),format:r('#champ-format'),rappel:r('#rappel-type'),dock:r('#dock-magasin'),tabs:r('.tabs')};});
+       if(geoRappel844.scrollY!==0||!geoRappel844.type||!geoRappel844.prix||!geoRappel844.format||!geoRappel844.rappel||geoRappel844.type.top<0||geoRappel844.prix.bottom>geoRappel844.dock.top||geoRappel844.format.bottom>geoRappel844.dock.top||geoRappel844.dock.bottom>geoRappel844.tabs.top)throw new Error('E10-3 : champs et dock avec rappel hors zone à 390x844 '+JSON.stringify(geoRappel844));
+       await page.setViewportSize({width:390,height:500});await page.waitForTimeout(50);
+       const geoRappel500=await page.evaluate(()=>{const r=s=>{const e=document.querySelector(s);if(!e)return null;const b=e.getBoundingClientRect();return {top:Math.round(b.top),bottom:Math.round(b.bottom)};};return {type:r('#champ-type'),prix:r('#champ-prix'),format:r('#champ-format'),rappel:r('#rappel-type'),dock:r('#dock-magasin'),tabs:r('.tabs')};});
+       if(!geoRappel500.type||!geoRappel500.prix||!geoRappel500.format||!geoRappel500.dock||!geoRappel500.tabs||geoRappel500.type.top<0||geoRappel500.prix.bottom>geoRappel500.dock.top||geoRappel500.format.bottom>geoRappel500.dock.top||geoRappel500.dock.bottom>geoRappel500.tabs.top||geoRappel500.tabs.bottom>500)throw new Error('E10-3 : champs et dock avec rappel se chevauchent à 390x500 '+JSON.stringify(geoRappel500));
+       await page.setViewportSize({width:390,height:844});
        await partiesRappel.nth(0).click();
        await page.waitForFunction(()=>document.querySelector('#titre-ecran')?.textContent==='Fiche du type',null,{timeout:5000});
        if(await page.getByRole('tab',{name:/Prix constatés \(\d+\)/}).getAttribute('aria-selected')!=='true'||!(await page.locator('.ligne-releve-highlight').count()))throw new Error('E10-3 : rappel prix n’ouvre pas le bon onglet/relevé');
@@ -914,7 +921,7 @@ if (playwright) {
        if (!(await page.evaluate(() => !!navigator.serviceWorker.controller))) throw new Error('service worker absent avant le parcours hors ligne');
        await ctx.setOffline(true);
        const routesViewport=[
-         ['#/magasin','Magasin'],['#/types','Types'],['#/liste','Liste'],['#/bilan','Bilan'],
+         ['#/magasin','Magasin'],['#/types','Types'],['#/liste','Liste'],['#/bilan','Bilan'],['#/tous-achats','Tous mes achats'],
          ['#/reglages','Réglages'],['#/reglages/magasins','Réglages'],['#/releve-mensuel','Relevé mensuel'],['#/type-nouveau','Nouveau type'],
          ['#/type-edit/'+idCafe,'Modifier le type'],['#/fiche/'+idCafe,'Fiche du type'],
          ['#/historique/'+idCafe,'Prix constatés'],['#/achats/'+idCafe,'Achats']

@@ -492,3 +492,14 @@ svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width:
   .ecran-magasin .promo-ligne { min-height:40px; }
   body { overflow-anchor:none; }
 }
+
+/* E10-3 — rappel rapide visible sans pousser le formulaire sous le dock sur petits écrans. */
+@media (max-height:600px) and (max-width:600px) {
+  .ecran-magasin .selecteur-magasin { margin-bottom:4px; padding:2px; }
+  .ecran-magasin .formulaire-releve { padding:6px 10px 4px; margin-bottom:4px; gap:2px; }
+  .ecran-magasin .formulaire-releve .etiquette { margin-top:0; margin-bottom:0; }
+  .ecran-magasin .prix-zone { margin-bottom:2px; }
+  .ecran-magasin .date-promo-ligne,
+  .ecran-magasin .date-ligne,
+  .ecran-magasin .promo-ligne { min-height:34px; }
+}
