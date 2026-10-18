@@ -14,6 +14,7 @@ let diagnostic = { base: 'ouverture…', persistant: '…', lancements: '…', c
 let magasinCourant = '';
 let magasinsTous = [];
 let magasinsDisponibles = [];
+const ongletsFicheActifs = new Map();
 async function actualiserMagasins() { magasinsTous = await listerMagasins(); magasinsDisponibles = magasinsTous.filter(m => !m.archive); return magasinsTous; }
 let annulationActive = null;
 let annulationTimer = null;
@@ -423,6 +424,20 @@ async function vueMagasin() {
   const boutonScanner = el('button', { type: 'button', class: 'btn btn-secondaire btn-scanner', id: 'btn-scanner', text: 'Scanner un code-barres', onclick: () => ouvrirScanner() });
   const recherche = el('input', { type: 'search', class: 'champ', id: 'champ-type', enterkeyhint: 'next', placeholder: 'Type de produit', autocomplete: 'off', 'aria-label': 'Type de produit' });
   const suggestions = el('div', { class: 'suggestions', id: 'suggestions-types' });
+  const rappelType = el('div', { class:'rappel-type', id:'rappel-type', hidden:true, 'aria-label':'Derniers prix et achats du type' });
+  async function actualiserRappelType(){
+    const type=typeChoisi;
+    if(!type){rappelType.replaceChildren();rappelType.hidden=true;return;}
+    try{
+      const [observations,achats]=await Promise.all([lireObservations(type.id),toutLire('Purchase')]);
+      const dernierPrix=[...observations].sort((a,b)=>a.date!==b.date?(a.date<b.date?1:-1):(b.id||0)-(a.id||0))[0]||null;
+      const dernierAchat=achats.filter(a=>Number(a.type)===Number(type.id)&&(a.achete===1||a.achete===true)).sort((a,b)=>a.date!==b.date?(a.date<b.date?1:-1):(b.id||0)-(a.id||0))[0]||null;
+      const parties=[];
+      if(dernierPrix){const n=prixNormalise(dernierPrix.prixCentimes,dernierPrix.format,type.unite);const texte='Dernier prix constaté '+(n.ok?formaterPrixNormalise(n.centimesParUnite,type.unite):'indisponible')+' · '+libelleMagasin(dernierPrix.magasin)+', '+dateAffichee(dernierPrix.date).slice(0,5);parties.push(el('button',{type:'button',class:'rappel-type-partie',title:texte,'aria-label':texte,text:texte,onclick:()=>{location.hash='#/fiche/'+type.id+'/prix/'+dernierPrix.id;}}));}
+      if(dernierAchat){const texte='Dernier achat '+dateAffichee(dernierAchat.date).slice(0,5);if(parties.length)parties.push(el('span',{class:'rappel-type-separateur',text:' · '}));parties.push(el('button',{type:'button',class:'rappel-type-partie',title:texte,'aria-label':texte,text:texte,onclick:()=>{location.hash='#/fiche/'+type.id+'/achats';}}));}
+      rappelType.replaceChildren(...parties);rappelType.hidden=!parties.length;
+    }catch{rappelType.replaceChildren();rappelType.hidden=true;}
+  }
   const prix = el('input', { type: 'text', class: 'champ champ-prix', id: 'champ-prix', inputmode: 'decimal', autocomplete: 'off', 'aria-label': 'Prix en euros', placeholder: '0,00', enterkeyhint: 'next' });
   const prixSuffixe = el('span', { class: 'suffixe-euro', text: '€' });
   const prixZone = el('div', { class: 'prix-zone' }, prix, prixSuffixe);
@@ -450,12 +465,13 @@ async function vueMagasin() {
     prix.value = '';
     recherche.value = typeChoisi ? typeChoisi.nom : '';
     suggestions.replaceChildren();
+    void actualiserRappelType();
     chargerDernierEtFormat();
     verifier();
   });
 
   recherche.addEventListener('input', () => {
-    typeChoisi = null;
+    typeChoisi = null; void actualiserRappelType();
     const q = recherche.value.trim() ? recherche.value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim() : '';
     const visibles = types.filter((x) => x.type.nomNormalise.includes(q)).slice(0, 8);
     suggestions.replaceChildren(...visibles.map((x) => el('button', { type: 'button', class: 'suggestion-type', 'data-id': x.type.id, text: x.type.nom })));
@@ -1002,7 +1018,7 @@ async function vueMagasin() {
   const prixNormaliseAffiche = el('p', { class: 'prix-normalise' });
   const formatBloc = el('div', { class: 'format-ligne' }, valeurFormat, uniteFormat);
   formulaire.append(
-    el('div', { class: 'type-entete' }, el('label', { class: 'etiquette', for: 'champ-type', text: 'Type' }), boutonScanner), recherche, suggestions,
+    el('div', { class: 'type-entete' }, el('label', { class: 'etiquette', for: 'champ-type', text: 'Type' }), boutonScanner), recherche, suggestions, rappelType,
     el('label', { class: 'etiquette', for: 'champ-prix', text: 'Prix' }), prixZone,
     el('label', { class: 'etiquette', for: 'champ-format', text: 'Format' }), formatBloc, formatErreur, prixNormaliseAffiche,
     el('div', { class: 'date-promo-ligne' },
@@ -1046,31 +1062,33 @@ async function vueMagasin() {
 
 
 // ---- Historique des relevés (FR8 / FR9) -----------------------------------------------------
-function vueHistorique(typeId, integre = false) {
+function vueHistorique(typeId, integre = false, observationInitiale = null) {
   const racine=el('div',{class:'historique'});
   const liste=el('div',{class:'liste-historique'});
   if (integre) racine.append(liste); else racine.append(el('a',{href:'#/types',class:'btn btn-secondaire btn-bloc'},'← Retour aux types'),liste);
   async function charger(){
     const type=await dbPrete.then(()=>lireTypeSafe(typeId));
-    if(!type) { liste.replaceChildren(carte('Historique','Type introuvable.')); return; }
+    if(!type) { liste.replaceChildren(carte('Prix constatés','Type introuvable.')); return; }
     async function dessiner(){
-    const rows=await listerReleves(typeId); liste.replaceChildren();
+    const rows=await listerReleves(typeId); const achats=await toutLire('Purchase'); const compteParReleve=new Map(); for(const a of achats)if(Number(a.type)===Number(typeId)&&(a.achete===1||a.achete===true)&&a.observation!=null)compteParReleve.set(Number(a.observation),(compteParReleve.get(Number(a.observation))||0)+1); liste.replaceChildren();
     if(!rows.length){
       liste.append(carte('Aucun relevé','Aucun relevé pour ce type.'),
         el('a',{href:'#/magasin',class:'btn btn-primaire btn-bloc'},'Saisir un relevé'));
       return;
     }
-    for(const o of rows) liste.append(ligneHistorique(o));
+    for(const o of rows) liste.append(ligneHistorique(o,compteParReleve.get(Number(o.id))||0));
+    if(observationInitiale){const ligne=liste.querySelector('[data-id="'+observationInitiale+'"]');if(ligne)ligne.classList.add('ligne-releve-highlight');}
   }
-  function ligneHistorique(o){
-    const row=el('div',{class:'ligne ligne-releve','data-id':o.id},
+  function ligneHistorique(o, nombreAchats=0){
+    const row=el('div',{class:'ligne ligne-releve'+(Number(observationInitiale)===Number(o.id)?' ligne-releve-highlight':''),'data-id':o.id},
       el('div',{class:'ligne-releve-contenu'},
         el('div',{class:'ligne-releve-haut'},
           el('span',{class:'puce '+classeMagasin(o.magasin),text:libelleMagasin(o.magasin),style:'border-color:'+couleurMagasin(o.magasin)+';color:'+couleurMagasin(o.magasin)}),
           el('span',{class:'releve-date',text:dateAffichee(o.date)})),
         el('div',{class:'ligne-releve-bas'},
           el('strong',{text:formaterPrixNormalise(prixNormalise(o.prixCentimes,o.format,type.unite).centimesParUnite,type.unite)}),
-          o.promo?el('span',{class:'badge-promo',text:'Promo'}):null)),
+          o.promo?el('span',{class:'badge-promo',text:'Promo'}):null,
+          nombreAchats?el('a',{class:'achat-associe',href:'#/fiche/'+typeId+'/achats',text:'Acheté × '+nombreAchats}):null)),
       el('button',{type:'button',class:'btn-icone',text:'⋯','aria-label':'Actions du relevé',onclick:()=>menuReleve(o)})
     );
     let x=0,timer=null;
@@ -1118,7 +1136,7 @@ function vueHistorique(typeId, integre = false) {
   }
     await dessiner();
   }
-  charger().catch((e) => { console.error('Chargement impossible', e); liste.replaceChildren(carte('Historique', 'Chargement impossible')); });
+  charger().catch((e) => { console.error('Chargement impossible', e); liste.replaceChildren(carte('Prix constatés', 'Chargement impossible')); });
   return racine;
 }
 
@@ -1300,7 +1318,7 @@ async function vueReleveMensuel() {
   return racine;
 }
 
-async function vueFicheType(typeId) {
+async function vueFicheType(typeId, ongletInitial = null, observationInitiale = null) {
   await dbPrete; await actualiserMagasins();
   const type = await lireTypeSafe(typeId);
   if (!type) return carte('Fiche du type', 'Type introuvable.');
@@ -1344,11 +1362,29 @@ async function vueFicheType(typeId) {
     }
   };
   sectionCodes.append(listeCodes); await actualiserCodes();
-  racine.append(el('h2',{text:type.nom}),...cartes.map(x=>x.carte),barres);
+  const relevesType=await listerReleves(typeId);
+  const achatsType=(await toutLire('Purchase')).filter(a=>Number(a.type)===Number(typeId)&&(a.achete===1||a.achete===true));
+  const onglets=el('div',{class:'onglets-fiche',role:'tablist','aria-label':'Prix constatés et achats'});
+  const boutonPrix=el('button',{type:'button',class:'onglet-fiche','role':'tab','aria-selected':'false',text:'Prix constatés ('+relevesType.length+')'});
+  const boutonAchats=el('button',{type:'button',class:'onglet-fiche','role':'tab','aria-selected':'false',text:'Achats ('+achatsType.length+')'});
+  const definition=el('p',{class:'definition-onglet',id:'definition-onglet'});
+  const contenuOnglet=el('div',{class:'contenu-onglet-fiche'});
+  let ongletActif=observationInitiale?'prix':(ongletInitial||ongletsFicheActifs.get(Number(typeId))||'prix');
+  async function afficherOnglet(onglet){
+    ongletActif=onglet;ongletsFicheActifs.set(Number(typeId),onglet);
+    boutonPrix.setAttribute('aria-selected',String(onglet==='prix'));boutonAchats.setAttribute('aria-selected',String(onglet==='achats'));
+    definition.textContent=onglet==='prix'?'Prix vus en rayon, achetés ou non':'Ce que j’ai acheté et payé';
+    contenuOnglet.replaceChildren();
+    if(onglet==='prix')contenuOnglet.append(vueHistorique(typeId,true,observationInitiale));
+    else contenuOnglet.append(await vueHistoriqueAchats(typeId,true));
+  }
+  boutonPrix.addEventListener('click',()=>{void afficherOnglet('prix');});
+  boutonAchats.addEventListener('click',()=>{void afficherOnglet('achats');});
+  onglets.append(boutonPrix,boutonAchats);
+  racine.append(el('h2',{text:type.nom}),...cartes.map(x=>x.carte),onglets,definition,contenuOnglet,barres);
   if(cartesArchive.length)racine.append(el('details',{class:'carte magasins-archives'},el('summary',{text:'Magasins archivés ('+cartesArchive.length+')'}),...cartesArchive.map(x=>x.carte)));
-  racine.append(el('p',{class:'aide note-biais-promo',text:'Attention : si vos relevés sont surtout effectués en promotion, la fréquence affichée peut être biaisée.'}),
-    el('a',{href:'#/achats/'+typeId,class:'btn btn-secondaire btn-bloc',text:'Historique des achats'}),sectionCodes,
-    el('h3',{text:'Historique des relevés'}),vueHistorique(typeId,true));
+  racine.append(el('p',{class:'aide note-biais-promo',text:'Attention : si vos relevés sont surtout effectués en promotion, la fréquence affichée peut être biaisée.'}),sectionCodes);
+  await afficherOnglet(ongletActif);
   return racine;
 }
 
@@ -1384,6 +1420,7 @@ async function vueBilan() {
     el('p',{class:'bilan-gains-promo',text:'Dont gains liés aux promos : '+formaterPrixEuros(gainsPromoCentimes)}),
     el('p',{class:'bilan-achats-exclus',text:achatsExclus+' achat'+(achatsExclus===1?'':'s')+' exclu'+(achatsExclus===1?'':'s')+' (données insuffisantes à l’époque).'})
   ));
+  racine.append(el('a',{href:'#/tous-achats',class:'btn btn-secondaire btn-bloc',text:'Tous mes achats'}));
   if (!achatsComptes) {
     racine.append(el('p',{class:'aide',text:achatsExclus ? 'Aucun achat avec comparaison disponible pour le moment.' : 'Aucun achat enregistré. En magasin, utilisez « J’achète » pour commencer.'}),
       el('a',{href:'#/magasin',class:'btn btn-primaire btn-bloc',text:'Aller en magasin'}));
@@ -1392,7 +1429,7 @@ async function vueBilan() {
   const liste = el('section',{class:'liste-bilan-types'},el('h2',{text:'Par type de produit'}));
   const entrees=[...parType.values()].sort((a,b)=>a.type.nom.localeCompare(b.type.nom,'fr'));
   for(const entree of entrees) {
-    liste.append(el('a',{href:'#/achats/'+entree.type.id,class:'ligne-bilan-type'},
+    liste.append(el('a',{href:'#/fiche/'+entree.type.id+'/achats',class:'ligne-bilan-type'},
       el('strong',{text:entree.type.nom}),
       el('span',{text:'Cumul : '+formaterPrixEuros(entree.cumul)}),
       el('span',{text:entree.nombre+' achat'+(entree.nombre===1?'':'s')})
@@ -1402,39 +1439,54 @@ async function vueBilan() {
   return racine;
 }
 
-async function vueHistoriqueAchats(typeId) {
+async function vueHistoriqueAchats(typeId, integre = false) {
   await dbPrete;
-  const type = await lireTypeSafe(typeId);
-  if (!type) return carte('Historique des achats', 'Type introuvable.');
+  const type = typeId==null?null:await lireTypeSafe(typeId);
+  if (typeId!=null&&!type) return carte('Achats', 'Type introuvable.');
   const racine = el('div', { class:'historique-achats' });
-  racine.append(el('a',{href:'#/fiche/'+typeId,class:'btn btn-secondaire btn-bloc',text:'← Retour à la fiche'}),el('h2',{text:type.nom}));
-  // L’historique des achats ne présente que les achats réellement effectués.
-  const achats = (await listerAchats(typeId)).filter(achat => achat.achete === 1 || achat.achete === true);
+  if(!integre)racine.append(el('a',{href:typeId==null?'#/bilan':'#/fiche/'+typeId,class:'btn btn-secondaire btn-bloc',text:typeId==null?'← Retour au bilan':'← Retour à la fiche'},),...(type?[el('h2',{text:type.nom})]:[]));
+  const achats = (await toutLire('Purchase')).filter(achat => (typeId==null||Number(achat.type)===Number(typeId))&&(achat.achete === 1 || achat.achete === true)).sort((a,b)=>a.date!==b.date?(a.date<b.date?1:-1):(b.id||0)-(a.id||0));
   if (!achats.length) {
-    racine.append(el('p',{class:'aide',text:'Aucun achat enregistré pour ce type.'}));
+    racine.append(el('p',{class:'aide',text:typeId==null?'Aucun achat enregistré. En magasin, utilisez « J’achète » pour commencer.':'Aucun achat enregistré pour ce type.'}));
+    if(!integre)racine.append(el('a',{href:'#/magasin',class:'btn btn-primaire btn-bloc',text:'Aller en magasin'}));
     return racine;
   }
+  const typesConnus=await listerTypes();
   for (const achat of achats) {
-    const uniteBase = type.unite === 'kg' ? 'g' : type.unite === 'l' ? 'ml' : 'unités';
+    const typeAchat=type||typesConnus.find(t=>Number(t.id)===Number(achat.type)); if(!typeAchat)continue;
+    const uniteBase = typeAchat.unite === 'kg' ? 'g' : typeAchat.unite === 'l' ? 'ml' : 'unités';
     const ligne = el('article',{class:'ligne-achat', 'data-achat-id':String(achat.id)},
       el('div',{class:'ligne-achat-infos'},
         el('strong',{text:dateAffichee(achat.date)}),
+        typeId==null?el('a',{href:'#/fiche/'+typeAchat.id+'/achats',class:'type-achat-lien',text:typeAchat.nom}):null,
         el('span',{text:libelleMagasin(achat.magasin),style:'color:'+couleurMagasin(achat.magasin)}),
-        el('span',{class:'achat-statut',text:achat.achete ? 'Acheté' : 'Non acheté'}),
         el('div',{class:'achat-resume-valeurs'},
-          el('span',{class:'achat-valeur achat-quantite',text:'Quantité : '+achat.quantite}),
+          el('span',{class:'achat-valeur achat-quantite',text:'× '+achat.quantite}),
           el('span',{class:'achat-valeur achat-prix',text:'Prix payé : '+formaterPrixEuros(achat.prixPayeCentimes)}),
           el('span',{class:'achat-valeur achat-format',text:'Format unitaire : '+achat.format+' '+uniteBase})
         )
       ),
       el('div',{class:'ligne-achat-actions'},
+        achat.observation!=null?el('a',{class:'btn btn-secondaire',href:'#/fiche/'+typeAchat.id+'/prix/'+achat.observation,text:'Voir le prix constaté'}):null,
         el('button',{type:'button',class:'btn btn-secondaire',text:'Corriger l’achat', 'aria-label':'Corriger le prix, la quantité ou le format de cet achat',onclick:()=>ouvrirEditionAchat(achat,type)}),
-        el('button',{type:'button',class:'btn btn-secondaire',text:'Supprimer','aria-label':'Supprimer cet achat',onclick:()=>confirmerSuppressionAchat(achat,typeId)})
+        el('button',{type:'button',class:'btn btn-secondaire',text:'Supprimer','aria-label':'Supprimer cet achat',onclick:()=>confirmerSuppressionAchat(achat,typeAchat.id)})
       )
     );
     racine.append(ligne);
   }
   return racine;
+}
+
+async function vueTousAchats(){
+  await dbPrete;
+  const racine=el('div',{class:'tous-achats'});
+  const filtre=el('select',{class:'champ','aria-label':'Filtrer les achats par type'},el('option',{value:'',text:'Tous les types'}));
+  const types=(await listerTypes()).sort((a,b)=>a.nom.localeCompare(b.nom,'fr'));
+  filtre.append(...types.map(t=>el('option',{value:String(t.id),text:t.nom+(t.archive?' (archivé)':'')})));
+  const liste=el('div',{class:'liste-achats-chronologique'});
+  racine.append(el('h2',{text:'Tous mes achats'}),filtre,liste);
+  async function dessiner(){const choix=filtre.value;const achats=(await toutLire('Purchase')).filter(a=>(a.achete===1||a.achete===true)&&(!choix||Number(a.type)===Number(choix))).sort((a,b)=>a.date!==b.date?(a.date<b.date?1:-1):(b.id||0)-(a.id||0));liste.replaceChildren();if(!achats.length){liste.append(el('p',{class:'aide',text:choix?'Aucun achat pour ce type.':'Aucun achat enregistré. En magasin, utilisez « J’achète » pour commencer.'}));return;}for(const achat of achats){const type=types.find(t=>Number(t.id)===Number(achat.type));if(!type)continue;const uniteBase=type.unite==='kg'?'g':type.unite==='l'?'ml':'unités';liste.append(el('article',{class:'ligne-achat','data-achat-id':String(achat.id)},el('div',{class:'ligne-achat-infos'},el('strong',{text:dateAffichee(achat.date)}),el('a',{class:'type-achat-lien',href:'#/fiche/'+type.id+'/achats',text:type.nom}),el('span',{text:libelleMagasin(achat.magasin),style:'color:'+couleurMagasin(achat.magasin)}),el('div',{class:'achat-resume-valeurs'},el('span',{class:'achat-valeur achat-quantite',text:'× '+achat.quantite}),el('span',{class:'achat-valeur achat-prix',text:'Prix payé : '+formaterPrixEuros(achat.prixPayeCentimes)}),el('span',{class:'achat-valeur achat-format',text:'Format unitaire : '+achat.format+' '+uniteBase})),el('div',{class:'ligne-achat-actions'},achat.observation!=null?el('a',{class:'btn btn-secondaire',href:'#/fiche/'+type.id+'/prix/'+achat.observation,text:'Voir le prix constaté'}):null,el('button',{type:'button',class:'btn btn-secondaire',text:'Corriger l’achat',onclick:()=>ouvrirEditionAchat(achat,type)}),el('button',{type:'button',class:'btn btn-secondaire',text:'Supprimer',onclick:()=>confirmerSuppressionAchat(achat,type.id)}))));}}
+  filtre.addEventListener('change',()=>{void dessiner();});await dessiner();return racine;
 }
 
 function ouvrirEditionAchat(achat,type) {
@@ -1476,23 +1528,25 @@ const ROUTES = {
   'type-nouveau': { titre: 'Nouveau type', onglet: 'types', vue: () => vueTypeForm(null) },
   'type-edit': { titre: 'Modifier le type', onglet: 'types', vue: (p) => vueTypeForm(Number(p)) },
   bilan: { titre: 'Bilan', onglet: 'bilan', vue: vueBilan },
-  achats: { titre: 'Historique des achats', onglet: 'types', vue: (p) => vueHistoriqueAchats(Number(p)) },
+  achats: { titre: 'Achats', onglet: 'types', vue: (p) => vueHistoriqueAchats(Number(p)) },
+  'tous-achats': { titre: 'Tous mes achats', onglet: 'bilan', vue: vueTousAchats },
   reglages: { titre: 'Réglages', onglet: null, vue: vueReglages },
-  historique: { titre: 'Historique', onglet: 'types', vue: (p) => vueHistorique(Number(p)) },
-  fiche: { titre: 'Fiche du type', onglet: 'types', vue: (p) => vueFicheType(Number(p)) },
+  historique: { titre: 'Prix constatés', onglet: 'types', vue: (p) => vueHistorique(Number(p)) },
+  fiche: { titre: 'Fiche du type', onglet: 'types', vue: (p,tab,obs) => vueFicheType(Number(p),tab,obs==null?null:Number(obs)) },
   'releve-mensuel': { titre: 'Relevé mensuel', onglet: 'types', vue: vueReleveMensuel }
 };
 
 async function afficher() {
   const sequence = ++sequenceAffichage;
-  const [nom, param] = (location.hash.replace('#/', '') || 'magasin').split('/');
+  const [nom, param, sousParam, detailParam] = (location.hash.replace('#/', '') || 'magasin').split('/');
   if (nom !== 'releve-mensuel') { window.__releveMensuelCleanup?.(); window.__releveMensuelCleanup=null; }
   if (nom !== 'magasin') { document.getElementById('dock-magasin')?.remove(); dockResizeObserver?.disconnect(); document.documentElement.style.setProperty('--dock-hauteur', '0px'); }
   const r = ROUTES[nom] || ROUTES.magasin;
   titre.textContent = r.titre; document.title = r.titre + ' · Appli Courses';
-  const contenu = await r.vue(param);
+  const contenu = await r.vue(param,sousParam,detailParam);
   if (sequence !== sequenceAffichage) return;
   vue.replaceChildren(contenu);
+  if(nom==='fiche'&&detailParam)requestAnimationFrame(()=>document.querySelector('.ligne-releve-highlight')?.scrollIntoView({block:'center',behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'}));
   if (nom === 'reglages' && param === 'magasins') requestAnimationFrame(() => document.getElementById('reglages-magasins')?.scrollIntoView({block:'start'}));
   if (nom === 'magasin' && !rappelMasqueSession) {
     try {

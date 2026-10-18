@@ -454,3 +454,28 @@ svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width:
 .choix-mode-prix { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
 .choix-mode-prix button { min-height:48px; padding:8px; }
 .choix-mode-prix button[aria-pressed="true"] { border-color:var(--accent,#5B8CFF); box-shadow:inset 0 0 0 1px var(--accent,#5B8CFF); font-weight:700; }
+
+/* E10 — onglets de fiche, rappels rapides et liste globale des achats. */
+.onglets-fiche { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:12px 0 0; }
+.onglet-fiche { min-height:48px; border:1px solid var(--bordure,#394150); border-radius:12px; background:transparent; color:inherit; font:inherit; font-weight:600; padding:8px; }
+.onglet-fiche[aria-selected="true"] { background:var(--surface-active,#253249); border-color:var(--accent,#5B8CFF); box-shadow:inset 0 -3px 0 var(--accent,#5B8CFF); }
+.definition-onglet { margin:8px 0; color:var(--texte-secondaire,#A4ACBD); font-size:13px; }
+.ligne-releve-highlight { outline:3px solid var(--accent,#5B8CFF); outline-offset:2px; background:rgba(91,140,255,.12); }
+.achat-associe { display:inline-flex; align-items:center; min-height:32px; padding:0 8px; border-radius:8px; font-size:12px; font-weight:700; color:var(--accent,#5B8CFF); }
+.rappel-type { display:flex; align-items:center; gap:4px; min-width:0; max-width:100%; min-height:32px; overflow:hidden; white-space:nowrap; color:var(--texte-secondaire,#A4ACBD); }
+.rappel-type[hidden] { display:none; }
+.rappel-type-partie { position:relative; min-width:0; height:32px; flex:0 1 auto; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; padding:0 2px; border:0; background:transparent; color:var(--texte-secondaire,#A4ACBD); text-align:left; font:inherit; font-size:12px; }
+.rappel-type-partie::before { content:''; position:absolute; inset:-8px 0; }
+.rappel-type-partie:focus-visible { outline:2px solid var(--accent,#5B8CFF); outline-offset:1px; }
+.rappel-type-separateur { flex:0 0 auto; font-size:12px; }
+.tous-achats { display:grid; gap:12px; }
+.liste-achats-chronologique { display:grid; gap:10px; }
+.type-achat-lien { font-weight:700; color:var(--accent,#5B8CFF); }
+@media (max-height:600px) and (max-width:600px) {
+  .ecran-magasin .formulaire-releve { gap:4px; }
+  .ecran-magasin .formulaire-releve .etiquette { margin-top:2px; margin-bottom:0; }
+  .ecran-magasin .formulaire-releve .champ { min-height:38px; padding-top:4px; padding-bottom:4px; }
+  .rappel-type { min-height:28px; }
+  .rappel-type-partie { height:28px; }
+}
+@media (prefers-reduced-motion:reduce) { .ligne-releve-highlight { scroll-behavior:auto; } }
